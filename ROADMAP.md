@@ -6,7 +6,7 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 - **`--against <url>`** — audit a preview deployment and diff it against production directly, no baseline file. The natural shape for a pull-request check.
 - **Wait for the edge** — a `--settle` flag that polls until a site serves consistent HTML before crawling. Auditing during a Cloudflare rollout produces a snapshot that is wrong in a confusing way; this has now bitten three separate verifications on one project.
-- **Alt-text quality**, not just presence. Nine images all reading "Tantric Massage" pass every existing check and help nobody.
+- **Alt-text quality**, not just presence. Nine images on one page all sharing the same alt text pass every existing check and help nobody.
 - **`--psi` for a whole section** — sample N pages of a path rather than naming each. Needs care: 12s per URL adds up fast.
 
 ## Shipped

@@ -121,7 +121,7 @@ Drop a `seo-audit.config.json` next to where you run it:
   "psi": ["/", "/pricing/"],
   "ignore": [
     "img-srcset",
-    { "id": "thin-content", "urls": ["/contact/", "**/find-the-right-session/"] },
+    { "id": "thin-content", "urls": ["/contact/", "/thanks/", "**/legal/**"] },
     { "id": "no-editorial-links", "urls": ["**/privacy-policy/", "**/terms-of-use/"] }
   ],
   "expect": [
@@ -242,19 +242,24 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 
 ```
   https://example.com
-  42 pages · 64 requests · 4.2s
+  31 pages · 71 requests · 12.9s
 
-  ✗ Link to a page that does not exist ×4
-    /journal/iskusstvo-chuvstvovat-glubzhe/ — linked from /ru/journal/iskusstvo-…
-    · https://example.com/ru/journal/iskusstvo-chuvstvovat-glubzhe/
+  ✗ No <h1> ×17
+    The page has no headline.
+    · https://example.com/schedule/
+    · https://example.com/teacher-trainings/
     …
 
-  ! Thin page ×12
-    112 words. Under ~300 rarely ranks for anything competitive.
-    · https://example.com/contact/
+  ✗ Sitemap URL redirects
+    301 → https://example.com/summer-offer/. A sitemap should list final URLs only.
+    · https://example.com/spring-into-summer/
+
+  ! og:image is WebP ×17
+    LinkedIn does not render WebP previews and WhatsApp is unreliable with it.
+    · https://example.com/reformer-classes/
     …
 
-  4 error  12 warning  11 note
+  20 error  91 warning  12 note
 ```
 
 Findings are grouped by check, not by page, because the fix is usually one change applied everywhere.
