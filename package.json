@@ -1,6 +1,6 @@
 {
   "name": "seo-audit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Crawl a site's sitemap and check every page for the SEO and metadata problems single-page graders miss",
   "type": "module",
   "bin": {
@@ -12,6 +12,7 @@
   "files": [
     "bin",
     "src",
+    "action.yml",
     "README.md"
   ],
   "engines": {

@@ -1,0 +1,22 @@
+# The tool auditing a site on every push, as a working example of itself.
+name: self-check
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: seo
+        with:
+          url: https://olgahansika.com
+          fail-on: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seo-audit
+          path: seo-audit.html

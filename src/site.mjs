@@ -83,6 +83,20 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     }
   });
 
+  // Linked, reachable, and absent from the sitemap — the mirror image of an
+  // orphan, and just as easy to ship by accident when a route is added.
+  const missing = new Map();
+  for (const [target, sources] of seen) {
+    const res = await fetcher.get(target);
+    if (res.status === 200 && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
+      missing.set(target, sources);
+    }
+  }
+  for (const [target, sources] of [...missing].slice(0, 20)) {
+    out.push(f('warn', 'missing-from-sitemap', 'Page is linked but not in the sitemap',
+      `${target} — linked from ${sources.slice(0, 2).join(', ')}`, target));
+  }
+
   // --- Social images actually load ---------------------------------------
   const ogImages = new Map();
   for (const page of pages) {

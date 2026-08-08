@@ -1,30 +1,32 @@
 // The checks.
 //
 // Scope: correctness that holds across every page of a site. Performance is
-// deliberately out — PageSpeed Insights and WebPageTest measure that with real
-// browsers, and a fetch-based tool guessing at it would only be wrong with
-// confidence. What this covers is the layer those tools skip: they audit one
-// URL, and the problems that matter usually live on page 23.
+// never *estimated* here — see src/psi.mjs, which asks Google for the real
+// measurement instead. What this covers is the layer single-page graders skip:
+// they audit one URL, and the problems that matter usually live on page 23.
 //
 // A finding is { id, level, title, detail, url }.
 //   error — wrong, and costs traffic or breaks something
 //   warn  — worth fixing, judgement involved
 //   info  — worth knowing, may be deliberate
 
-const LIMITS = {
+// Defaults, overridable per site under `limits` in the config file. A
+// documentation site and a shop disagree about what "thin" means, and the tool
+// should not hold the opinion.
+export const DEFAULT_LIMITS = {
   titleMin: 15,
   titleMax: 60,
   descMin: 70,
   descMax: 160,
   thinWords: 300,
   slowMs: 800,
-  bigImageKb: 250,
 };
 
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
 /** Checks that only need the page itself. */
-export function pageChecks(page) {
+export function pageChecks(page, limits = DEFAULT_LIMITS) {
+  const LIMITS = { ...DEFAULT_LIMITS, ...limits };
   const { url, res, doc } = page;
   const out = [];
 
@@ -189,6 +191,21 @@ export function crossPageChecks(pages) {
       `${urls.length} pages: ${urls.slice(0, 4).join(', ')}`, urls[0]));
   }
 
+  // A page nothing links to is a page Google reaches only because the sitemap
+  // mentions it — it inherits no internal authority and reads as an
+  // afterthought. Home is exempt: it is linked from outside, not from within.
+  const linkedTo = new Set();
+  for (const p of live) {
+    for (const href of p.doc.links.internal) linkedTo.add(href.split('#')[0].replace(/\/$/, ''));
+  }
+  for (const p of live) {
+    const isHome = new URL(p.url).pathname.replace(/\/$/, '') === '';
+    if (!isHome && !linkedTo.has(p.url.replace(/\/$/, ''))) {
+      out.push(f('warn', 'orphan-page', 'Nothing links to this page',
+        'It is in the sitemap, but no other page links to it — so it collects no internal authority.', p.url));
+    }
+  }
+
   // hreflang has to point both ways, or Google ignores the pair.
   const byUrl = new Map(live.map((p) => [p.url.replace(/\/$/, ''), p]));
   for (const p of live) {
@@ -208,5 +225,3 @@ export function crossPageChecks(pages) {
 
   return out;
 }
-
-export { LIMITS };

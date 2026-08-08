@@ -1,0 +1,82 @@
+name: SEO audit
+description: Crawl a site's sitemap and check every page for SEO and metadata problems
+author: nurkamol
+
+branding:
+  icon: search
+  color: orange
+
+inputs:
+  url:
+    description: Site to audit, or a sitemap URL
+    required: true
+  baseline:
+    description: >
+      Path to a committed baseline file. When set, only findings new since that
+      baseline fail the run — the backlog you already know about is tolerated.
+    required: false
+  fail-on:
+    description: 'error | warn | new | never'
+    required: false
+    default: error
+  config:
+    description: Path to seo-audit.config.json
+    required: false
+  limit:
+    description: Maximum pages to crawl
+    required: false
+  psi:
+    description: Comma-separated pages to measure with PageSpeed Insights
+    required: false
+  report:
+    description: Where to write the HTML report (uploaded as an artifact by your workflow)
+    required: false
+    default: seo-audit.html
+
+outputs:
+  errors:
+    description: Number of error-level findings
+    value: ${{ steps.run.outputs.errors }}
+  warnings:
+    description: Number of warning-level findings
+    value: ${{ steps.run.outputs.warnings }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - id: run
+      shell: bash
+      # PSI_API_KEY is optional; pass it as an env var from your workflow's
+      # secrets if you use --psi, to lift the anonymous quota.
+      run: |
+        set -o pipefail
+        args=("${{ inputs.url }}" --html "${{ inputs.report }}" --json seo-audit.json)
+        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
+        [ -n "${{ inputs.config }}" ]   && args+=(--config "${{ inputs.config }}")
+        [ -n "${{ inputs.limit }}" ]    && args+=(--limit "${{ inputs.limit }}")
+        [ -n "${{ inputs.psi }}" ]      && args+=(--psi "${{ inputs.psi }}")
+        args+=(--fail-on "${{ inputs.fail-on }}")
+
+        set +e
+        npx --yes github:nurkamol/seo-audit "${args[@]}"
+        status=$?
+        set -e
+
+        node -e '
+          const d = require("./seo-audit.json");
+          const n = (l) => d.findings.filter((f) => f.level === l).length;
+          const out = process.env.GITHUB_OUTPUT;
+          require("fs").appendFileSync(out, `errors=${n("error")}\nwarnings=${n("warn")}\n`);
+          const sum = require("fs");
+          if (process.env.GITHUB_STEP_SUMMARY) {
+            const rows = d.findings.map((f) => `| ${f.level} | ${f.title} | ${f.url ?? ""} |`).join("\n");
+            sum.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              `## SEO audit — ${d.meta.origin}\n\n${d.meta.pages} pages · ${n("error")} errors · ${n("warn")} warnings\n\n` +
+              (d.findings.length ? `| Level | Finding | URL |\n|---|---|---|\n${rows}\n` : "Nothing to report.\n"));
+          }
+        '
+        exit $status

@@ -4,12 +4,17 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-- **A GitHub Action** — `uses: nurkamol/seo-audit@v1` with the baseline committed in the repo, so adding this to a project is one file rather than a remembered command.
 - **`--against <url>`** — audit a preview deployment and diff it against production directly, no baseline file. The natural shape for a pull-request check.
-- **Per-check thresholds in config** — `thinWords`, title and description bounds. A documentation site and a shop disagree about what "thin" means, and the tool should not have the opinion.
-- **Sitemap hygiene** — URLs in the sitemap that no page links to (orphans), and pages linked everywhere that the sitemap omits. Both are cheap to find once the crawl exists.
+- **Wait for the edge** — a `--settle` flag that polls until a site serves consistent HTML before crawling. Auditing during a Cloudflare rollout produces a snapshot that is wrong in a confusing way; this has now bitten three separate verifications on one project.
+- **Alt-text quality**, not just presence. Nine images all reading "Tantric Massage" pass every existing check and help nobody.
+- **`--psi` for a whole section** — sample N pages of a path rather than naming each. Needs care: 12s per URL adds up fast.
 
 ## Shipped
+
+- **`--html`** (0.3.0) — a self-contained report to send a client.
+- **`--psi`** (0.3.0) — performance measured by Google, never estimated here.
+- **GitHub Action** (0.3.0) — one file to add this to a project.
+- **Configurable thresholds** (0.3.0), and **orphan / sitemap-gap detection** (0.3.0).
 
 - **`--json`, `--baseline`, `--update-baseline`** (0.2.0) — regression guard rather than a report.
 - **Config file with `ignore` rules** (0.2.0), scoped by check id and URL glob.
@@ -20,7 +25,6 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 - **Crawl by following links** when no sitemap exists, instead of stopping. Orphan pages — reachable but not in the sitemap — are worth finding too.
 - **Image weight** — flag images that are heavy for their rendered size. Needs the layout, so it means either a headless browser or a `sizes` heuristic; the honest version is not cheap.
-- **Alt-text quality**, not just presence. Nine images all reading "Tantric Massage" pass every existing check and help nobody.
 - **Redirect map validation** — take a list of old URLs (a migration's `_redirects`) and confirm each still lands somewhere sensible, in one hop. Migrations rot quietly.
 - **Multi-site runs** — one command over an agency's whole portfolio, one summary table. The reason this repo is standalone.
 

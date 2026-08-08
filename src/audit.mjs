@@ -4,6 +4,7 @@ import { parseHtml, parseSitemap } from './parse.mjs';
 import { pageChecks, crossPageChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
+import { psiChecks } from './psi.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -96,10 +97,16 @@ export async function audit(target, opts = {}) {
     };
   });
 
-  for (const page of pages) findings.push(...pageChecks(page));
+  for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   findings.push(...crossPageChecks(pages));
   findings.push(...expectationChecks(pages, opts.expect));
   findings.push(...(await siteChecks(origin, fetcher, pages, opts)));
+
+  // Performance, measured by Google rather than guessed at here. Slow and
+  // rate-limited, so only on request and only for the pages named.
+  if (opts.psi?.length) {
+    findings.push(...(await psiChecks(opts.psi, { strategy: opts.psiStrategy })));
+  }
 
   if (truncated > 0) {
     findings.push({

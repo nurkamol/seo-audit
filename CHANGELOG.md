@@ -5,6 +5,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-08
+
+### Added
+- `--html <file>` — a self-contained HTML report. One file, no assets, light
+  and dark aware, prints cleanly: the format you send to a client.
+- `--psi <urls>` — performance, measured by Google rather than estimated here.
+  Returns the performance score, LCP and CLS against Google's own good/poor
+  thresholds, every opportunity worth 250ms or more in Google's words, and the
+  Chrome field data when a site has enough traffic — which is the number that
+  actually counts for ranking. ~12s per URL, so it takes a list of pages, never
+  the sitemap, and never runs by default. Key read from `PSI_API_KEY` or
+  `~/.config/seo-audit/.env`.
+- `--psi-strategy mobile|desktop`.
+- **GitHub Action** (`uses: nurkamol/seo-audit@main`) — writes a job summary
+  table, exposes `errors` and `warnings` as outputs, leaves the HTML report as
+  an artifact. Adding this to a project is now one file.
+- `limits` in the config: `titleMin`, `titleMax`, `descMin`, `descMax`,
+  `thinWords`, `slowMs`. A documentation site and a shop disagree about what
+  "thin" means and the tool should not hold the opinion.
+- Orphan detection — pages in the sitemap that nothing links to, so they
+  collect no internal authority.
+- The mirror image: pages linked from the site but missing from the sitemap.
+
 ## [0.2.0] — 2026-08-08
 
 Turns the report into a regression guard.
@@ -60,6 +83,7 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/nurkamol/seo-audit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nurkamol/seo-audit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nurkamol/seo-audit/releases/tag/v0.1.0

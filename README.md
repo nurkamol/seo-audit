@@ -40,6 +40,7 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 | Option | Default | |
 |---|---|---|
 | `--md <file>` | — | Write a Markdown report |
+| `--html <file>` | — | Write a self-contained HTML report — one file, no assets |
 | `--json <file>` | — | Write a JSON report — also usable as a baseline |
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
 | `--update-baseline` | — | Rewrite the baseline after comparing |
@@ -48,6 +49,8 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
+| `--psi <urls>` | — | Measure these pages with PageSpeed Insights (see below) |
+| `--psi-strategy` | `mobile` | `mobile` or `desktop` |
 | `--fail-on <level>` | `error` | Exit 1 at `error`, `warn`, `new`, or `never` |
 | `--quiet` | — | Print nothing; use the exit code and the files |
 
@@ -66,6 +69,8 @@ Drop a `seo-audit.config.json` next to where you run it:
 {
   "limit": 200,
   "failOn": "error",
+  "limits": { "thinWords": 250 },
+  "psi": ["/", "/pricing/"],
   "ignore": [
     "img-srcset",
     { "id": "thin-content", "urls": ["/contact/", "**/find-the-right-session/"] },
@@ -79,6 +84,9 @@ Drop a `seo-audit.config.json` next to where you run it:
 }
 ```
 
+- **`limits`** — thresholds this site disagrees with: `titleMin`, `titleMax`,
+  `descMin`, `descMax`, `thinWords`, `slowMs`.
+- **`psi`** — pages to measure with PageSpeed Insights, as paths.
 - **`ignore`** — a bare check id silences it everywhere; `{ id, urls }` silences
   it only where it is intended. `*` stops at a slash, `**` does not. The id is
   printed with every finding.
@@ -166,6 +174,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No two pages share a meta description | warning |
 | `hreflang` is reciprocal — Google drops one-way pairs | error |
 | Pages carry the schema types `expect` says they should | error |
+| No page is an orphan — in the sitemap but linked from nowhere | warning |
 
 ### Whole site
 
@@ -176,6 +185,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `http://`, `www.` and `https://www.` each reach the canonical host in one hop | warning |
 | HSTS, `X-Content-Type-Options`, `Referrer-Policy`, CSP headers | warning / note |
 | Every internal link resolves — the site-wide 404 sweep | error |
+| No page is linked but missing from the sitemap | warning |
 | Every `og:image` actually loads, and isn't too heavy to scrape | error / warning |
 
 ---

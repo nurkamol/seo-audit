@@ -166,3 +166,136 @@ export function diffReport({ added, fixed, unchanged, previousDate }) {
 
   return lines.join('\n');
 }
+
+/** Self-contained HTML — one file, no assets, safe to email or attach. */
+export function html(findings, meta) {
+  const n = counts(findings);
+  const esc = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  const LABEL = { error: 'Error', warn: 'Warning', info: 'Note' };
+  const entries = group(findings);
+
+  const section = (level) => {
+    const list = entries.filter((e) => e.level === level);
+    if (!list.length) return '';
+    return `
+    <h2 id="${level}">${{ error: 'Errors', warn: 'Warnings', info: 'Notes' }[level]}</h2>
+    ${list
+      .map(
+        (entry) => `
+    <section class="finding ${entry.level}">
+      <h3>${esc(entry.title)}${entry.items.length > 1 ? ` <span class="count">${entry.items.length} pages</span>` : ''}</h3>
+      <p class="id">${esc(entry.id)}</p>
+      <ul>
+        ${entry.items
+          .map(
+            (item) => `<li>
+          ${item.url ? `<a href="${esc(item.url)}">${esc(item.url)}</a>` : ''}
+          <span class="detail">${esc(item.detail)}</span>
+        </li>`,
+          )
+          .join('')}
+      </ul>
+    </section>`,
+      )
+      .join('')}`;
+  };
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO audit — ${esc(meta.origin)}</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fff; --fg: #1a1a1a; --muted: #6b7280; --line: #e5e7eb; --card: #fafafa;
+    --error: #b91c1c; --warn: #b45309; --info: #1d4ed8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --fg: #e8e8ea; --muted: #9096a2; --line: #262b36; --card: #161a22;
+            --error: #f87171; --warn: #fbbf24; --info: #7dd3fc; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 2.5rem 1.5rem 5rem; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 60rem; margin-inline: auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .3rem; }
+  h1 a { color: inherit; }
+  .meta { color: var(--muted); font-size: .9rem; margin: 0 0 2rem; }
+  .tally { display: flex; gap: .6rem; flex-wrap: wrap; margin: 0 0 2.5rem; }
+  .tally b { display: block; font-size: 1.5rem; line-height: 1.2; }
+  .tally div { flex: 1 1 8rem; border: 1px solid var(--line); border-radius: .6rem;
+               padding: .8rem 1rem; background: var(--card); }
+  .tally .e b { color: var(--error); } .tally .w b { color: var(--warn); } .tally .i b { color: var(--info); }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 3rem; font-size: .93rem; }
+  th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .pill { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .pill.error { color: var(--error); } .pill.warn { color: var(--warn); } .pill.info { color: var(--info); }
+  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       margin: 3rem 0 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--line); }
+  .finding { border-left: 3px solid var(--line); padding: 0 0 0 1.1rem; margin: 0 0 2rem; }
+  .finding.error { border-color: var(--error); } .finding.warn { border-color: var(--warn); }
+  .finding.info { border-color: var(--info); }
+  .finding h3 { font-size: 1.02rem; margin: 0 0 .15rem; }
+  .count { font-size: .78rem; font-weight: 500; color: var(--muted); }
+  .id { font: .74rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); margin: 0 0 .7rem; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: .4rem 0; border-top: 1px dashed var(--line); font-size: .9rem; }
+  li a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); word-break: break-all; }
+  li a:hover { border-color: currentColor; }
+  .detail { display: block; color: var(--muted); font-size: .85rem; }
+  footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: .85rem; }
+  footer a { color: inherit; }
+  @media print { body { padding: 0; } .finding { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>SEO audit — <a href="${esc(meta.origin)}">${esc(meta.origin)}</a></h1>
+  <p class="meta">${esc(meta.date)} · ${meta.pages} pages crawled${
+    meta.ignored ? ` · ${meta.ignored} findings ignored by config` : ''
+  }</p>
+
+  <div class="tally">
+    <div class="e"><b>${n.error}</b> ${n.error === 1 ? 'error' : 'errors'}</div>
+    <div class="w"><b>${n.warn}</b> ${n.warn === 1 ? 'warning' : 'warnings'}</div>
+    <div class="i"><b>${n.info}</b> ${n.info === 1 ? 'note' : 'notes'}</div>
+  </div>
+
+  ${
+    findings.length
+      ? `<table>
+    <thead><tr><th>Level</th><th>Finding</th><th class="n">Pages</th></tr></thead>
+    <tbody>${entries
+      .map(
+        (e) =>
+          `<tr><td><span class="pill ${e.level}">${LABEL[e.level]}</span></td><td>${esc(
+            e.title,
+          )}</td><td class="n">${e.items.length}</td></tr>`,
+      )
+      .join('')}</tbody>
+  </table>
+  ${section('error')}${section('warn')}${section('info')}`
+      : '<p>Nothing to report.</p>'
+  }
+
+  <footer>
+    Correctness across every page. Performance is measured by Google via
+    <a href="https://pagespeed.web.dev">PageSpeed Insights</a> when <code>--psi</code> is used, never estimated here.
+    Generated by <a href="https://github.com/nurkamol/seo-audit">seo-audit</a>.
+  </footer>
+</main>
+</body>
+</html>
+`;
+}
