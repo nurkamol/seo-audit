@@ -99,8 +99,24 @@ test('both report formats render the run without throwing', () => {
   assert.ok(page.includes(site.origin));
 });
 
-test('a site with no sitemap says so instead of crashing', async () => {
-  const empty = await audit('http://127.0.0.1:1/', { concurrency: 1 });
-  assert.deepEqual(empty.findings.map((f) => f.id), ['no-sitemap']);
-  assert.equal(empty.meta.pages, 0);
+test('a site that answers but has no sitemap says exactly that', async () => {
+  const bare = await startFixtureSite({ withSitemap: false });
+  try {
+    const result = await audit(bare.origin, { concurrency: 1 });
+    const finding = result.findings.find((f) => f.id === 'no-sitemap');
+    assert.ok(finding, 'expected a no-sitemap finding');
+    // It should say what it tried, so the fix is obvious.
+    assert.match(finding.detail, /sitemap\.xml/);
+    assert.equal(result.meta.pages, 0);
+  } finally {
+    await bare.stop();
+  }
+});
+
+test('a host that never answers is reported as unreachable, not as missing a sitemap', async () => {
+  // Nothing listens on port 1. A refused connection is not a sitemap problem,
+  // and calling it one sends people looking in the wrong place.
+  const dead = await audit('http://127.0.0.1:1/', { concurrency: 1 });
+  assert.deepEqual(dead.findings.map((f) => f.id), ['unreachable']);
+  assert.match(dead.findings[0].detail, /bot-protection|not answering|no response/i);
 });

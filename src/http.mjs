@@ -2,12 +2,19 @@
 // so a small site is not hammered, and a cache so the same URL is never
 // fetched twice across checks.
 
-const UA = 'seo-audit (+https://github.com/nurkamol/seo-audit)';
+const DEFAULT_UA = 'seo-audit (+https://github.com/nurkamol/seo-audit)';
 
 export class Fetcher {
   /** @param {{concurrency?: number, timeout?: number}} opts */
-  constructor({ concurrency = 6, timeout = 20000 } = {}) {
+  constructor({ concurrency = 6, timeout = 20000, userAgent = DEFAULT_UA } = {}) {
     this.timeout = timeout;
+    this.userAgent = userAgent;
+    /** Consecutive timeouts. Some hosts accept the TLS handshake and then
+     *  never answer — Cloudflare's bot management does this to clients whose
+     *  TLS fingerprint is not a browser. Retrying that is 20 seconds of
+     *  nothing, per attempt, per URL. */
+    this.timeouts = 0;
+    this.reachable = false;
     this.cache = new Map();
     this.queue = [];
     this.active = 0;
@@ -55,12 +62,14 @@ export class Fetcher {
           method,
           redirect: 'manual',
           signal: controller.signal,
-          headers: { 'User-Agent': UA, Accept: '*/*' },
+          headers: { 'User-Agent': this.userAgent, Accept: '*/*' },
         });
         const type = res.headers.get('content-type') ?? '';
         // Only read a body worth parsing; a 40MB video would stall the run.
         const body = method === 'GET' && /text|json|xml/.test(type) ? await res.text() : '';
         this.count++;
+        this.timeouts = 0;
+        this.reachable = true;
         return {
           url,
           status: res.status,
@@ -97,7 +106,16 @@ export class Fetcher {
     const promise = this.#schedule(async () => {
       let last;
       for (let i = 0; i <= retries; i++) {
+        // Once a host has timed out repeatedly and never once answered, stop
+        // paying 20 seconds a go to confirm it. Reported as unreachable.
+        if (this.timeouts >= 3 && !this.reachable) {
+          return {
+            url, status: 0, ok: false, headers: new Headers(), body: '',
+            location: null, ms: 0, error: 'host is not answering', permanent: true,
+          };
+        }
         last = await attempt();
+        if (last.error === 'timed out') this.timeouts++;
         if (last.permanent) return last;
         if (last.status !== 0 && last.status < 500) return last;
         if (i < retries) await new Promise((r) => setTimeout(r, 300 * (i + 1)));

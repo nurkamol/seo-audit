@@ -5,6 +5,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- A host that accepts the TLS handshake and then never answers is now reported
+  as **unreachable**, with the likely cause, instead of "No sitemap found".
+  Bot protection stalling non-browser clients is a completely different
+  problem from a missing sitemap, and the old message sent people to look in
+  the wrong place.
+- Discovery gives up after three timeouts against a host that has never once
+  answered, rather than paying the full timeout for every candidate. A
+  tarpitting host now fails in about a minute instead of four.
+- "No sitemap found" lists every location that was actually tried, so the fix
+  is obvious.
+
+### Added
+- `--user-agent <ua>`, for hosts that block on the user agent.
+
 ## [1.0.0] — 2026-08-08
 
 The first version meant for other people's projects.

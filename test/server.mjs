@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, 'fixtures', 'site', name), 'utf8');
 
-export async function startFixtureSite() {
+export async function startFixtureSite({ withSitemap = true } = {}) {
   const server = createServer((req, res) => {
     const host = req.headers.host;
     const send = (body, type = 'text/html; charset=utf-8', status = 200) => {
@@ -22,8 +22,14 @@ export async function startFixtureSite() {
 
     switch (req.url) {
       case '/robots.txt':
-        return send(`User-agent: *\nAllow: /\n\nSitemap: http://${host}/sitemap.xml\n`, 'text/plain');
+        return send(
+          withSitemap
+            ? `User-agent: *\nAllow: /\n\nSitemap: http://${host}/sitemap.xml\n`
+            : 'User-agent: *\nAllow: /\n',
+          'text/plain',
+        );
       case '/sitemap.xml':
+        if (!withSitemap) return send('not found', 'text/plain', 404);
         return send(
           `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
             ['/', '/about/', '/ru/', '/hidden/']

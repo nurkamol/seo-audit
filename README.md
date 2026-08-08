@@ -92,6 +92,7 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 | `--limit <n>` | 200 | Maximum pages to check |
 | `--concurrency <n>` | 6 | Parallel requests |
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path |
+| `--user-agent <ua>` | `seo-audit …` | Identify as something else |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
 | `--psi <urls>` | — | Measure these pages with PageSpeed Insights (see below) |

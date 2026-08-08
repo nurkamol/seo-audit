@@ -13,6 +13,7 @@ import { psiChecks } from './psi.mjs';
  *  of — Yoast writes `/sitemap_index.xml`, Astro writes `/sitemap-index.xml`,
  *  and both are wrong to assume. */
 async function discover(origin, fetcher, explicit) {
+  const tried = [];
   let candidates = [explicit];
 
   if (!explicit) {
@@ -31,19 +32,20 @@ async function discover(origin, fetcher, explicit) {
   for (const candidate of candidates) {
     // A sitemap may itself redirect (http→https, or /sitemap.xml → the index).
     const res = (await fetcher.chain(candidate)).final;
+    tried.push(`${candidate} → ${res.error ?? res.status}`);
     if (!res.ok || !/<(urlset|sitemapindex)/i.test(res.body)) continue;
 
     const { urls, sitemaps } = parseSitemap(res.body);
-    if (urls.length) return { urls, source: candidate };
+    if (urls.length) return { urls, source: candidate, tried };
 
     const nested = await mapLimit(sitemaps, 4, async (child) => {
       const sub = (await fetcher.chain(child)).final;
       return sub.ok ? parseSitemap(sub.body).urls : [];
     });
     const all = nested.flat();
-    if (all.length) return { urls: all, source: candidate };
+    if (all.length) return { urls: all, source: candidate, tried };
   }
-  return { urls: [], source: null };
+  return { urls: [], source: null, tried };
 }
 
 /**
@@ -52,7 +54,7 @@ async function discover(origin, fetcher, explicit) {
  */
 export async function audit(target, opts = {}) {
   const started = Date.now();
-  const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6 });
+  const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6, userAgent: opts.userAgent });
 
   const url = new URL(target);
   const origin = url.origin;
@@ -64,20 +66,38 @@ export async function audit(target, opts = {}) {
       opts.onNote(`still serving inconsistent HTML after ${opts.settle}s — crawling anyway`);
     }
   }
-  const { urls, source } = await discover(origin, fetcher, opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null));
+  const { urls, source, tried } = await discover(
+    origin,
+    fetcher,
+    opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null),
+  );
 
   const findings = [];
 
   if (!urls.length) {
-    findings.push({
-      level: 'error',
-      id: 'no-sitemap',
-      title: 'No sitemap found',
-      detail:
-        'Tried /sitemap-index.xml and /sitemap.xml. Without one, crawlers discover pages by ' +
-        'following links only — and this tool has nothing to audit. Pass --sitemap <url> if it lives elsewhere.',
-      url: origin,
-    });
+    findings.push(
+      fetcher.reachable
+        ? {
+            level: 'error',
+            id: 'no-sitemap',
+            title: 'No sitemap found',
+            detail:
+              `Tried: ${tried.join(', ')}. Without a sitemap, crawlers discover pages by following ` +
+              'links only, and this tool has nothing to audit. Pass --sitemap <url> if it lives elsewhere.',
+            url: origin,
+          }
+        : {
+            level: 'error',
+            id: 'unreachable',
+            title: 'The site did not answer a single request',
+            detail:
+              `Tried: ${tried.join(', ')}. The TLS connection succeeds but no response arrives, which ` +
+              'usually means a bot-protection rule is stalling non-browser clients — Cloudflare Bot ' +
+              "Fight Mode does exactly this. If it is your site, allow this crawler's user agent, or " +
+              'pass --user-agent to present a different one.',
+            url: origin,
+          },
+    );
     return {
       findings,
       meta: {

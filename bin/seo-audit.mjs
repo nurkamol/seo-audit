@@ -36,6 +36,8 @@ const HELP = `
     --limit <n>        maximum pages to check (default 200)
     --concurrency <n>  parallel requests (default 6)
     --sitemap <url>    sitemap location, if not declared in robots.txt
+    --user-agent <ua>  identify as something else. Some hosts stall clients
+                       that do not look like a browser
 
   Filtering
     --config <file>    default: seo-audit.config.json in the working directory
@@ -80,6 +82,7 @@ function parseArgs(argv) {
     else if (arg === '--limit') opts.limit = Number(value());
     else if (arg === '--concurrency') opts.concurrency = Number(value());
     else if (arg === '--sitemap') opts.sitemap = value();
+    else if (arg === '--user-agent') opts.userAgent = value();
     else if (arg === '--config') opts.config = value();
     else if (arg === '--ignore') opts.ignore = value().split(',').map((s) => s.trim()).filter(Boolean);
     else if (arg === '--fail-on') opts.failOn = value();
