@@ -227,6 +227,21 @@ Some warnings are meant to be lived with. A contact page is *supposed* to be sho
 
 ---
 
+## Versioning
+
+Releases follow [semver](https://semver.org). Three ways to pin, in order of
+how much you value stability over freshness:
+
+| Reference | Gets you |
+|---|---|
+| `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
+| `@v0.3.0` | Exactly that release, forever |
+| `@main` | Whatever was last pushed, including work in progress |
+
+The same applies to `npx github:nurkamol/seo-audit#v1`.
+
+---
+
 ## Contributing
 
 Adding a check means one entry in `src/checks.mjs` (per page), `src/checks.mjs → crossPageChecks` (needs every page), or `src/site.mjs` (once per domain). Each returns `{ level, id, title, detail, url }` and that is the whole contract.
