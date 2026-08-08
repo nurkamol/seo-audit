@@ -56,6 +56,14 @@ export async function audit(target, opts = {}) {
 
   const url = new URL(target);
   const origin = url.origin;
+
+  // Give a rolling deploy time to reach every edge before judging it.
+  if (opts.settle) {
+    const settled = await fetcher.settle(origin + '/', opts.settle);
+    if (!settled && opts.onNote) {
+      opts.onNote(`still serving inconsistent HTML after ${opts.settle}s — crawling anyway`);
+    }
+  }
   const { urls, source } = await discover(origin, fetcher, opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null));
 
   const findings = [];
@@ -100,7 +108,7 @@ export async function audit(target, opts = {}) {
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   findings.push(...crossPageChecks(pages));
   findings.push(...expectationChecks(pages, opts.expect));
-  findings.push(...(await siteChecks(origin, fetcher, pages, opts)));
+  findings.push(...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls })));
 
   // Performance, measured by Google rather than guessed at here. Slow and
   // rate-limited, so only on request and only for the pages named.

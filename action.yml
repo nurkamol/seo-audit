@@ -1,5 +1,5 @@
-name: SEO audit
-description: Crawl a site's sitemap and check every page for SEO and metadata problems
+name: Full-site SEO Audit
+description: Crawl a sitemap and check every page for SEO, metadata and structured-data problems that single-page graders miss
 author: nurkamol
 
 branding:
@@ -26,12 +26,32 @@ inputs:
     description: Maximum pages to crawl
     required: false
   psi:
-    description: Comma-separated pages to measure with PageSpeed Insights
+    description: >
+      Comma-separated pages to measure with PageSpeed Insights. Slow (~12s
+      each). Set the PSI_API_KEY env var from a secret to lift the quota.
+    required: false
+  settle:
+    description: >
+      Seconds to wait for a deploy to reach every edge before crawling. A CDN
+      serves a fresh deploy unevenly for a minute or two, and auditing during
+      the rollout produces a snapshot that is wrong in a confusing way.
     required: false
   report:
-    description: Where to write the HTML report (uploaded as an artifact by your workflow)
+    description: Where to write the HTML report
     required: false
     default: seo-audit.html
+  json:
+    description: Where to write the JSON report
+    required: false
+    default: seo-audit.json
+  comment:
+    description: Post the findings as a sticky comment on the pull request
+    required: false
+    default: 'false'
+  github-token:
+    description: Token used to post the PR comment
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   errors:
@@ -40,6 +60,15 @@ outputs:
   warnings:
     description: Number of warning-level findings
     value: ${{ steps.run.outputs.warnings }}
+  notes:
+    description: Number of info-level findings
+    value: ${{ steps.run.outputs.notes }}
+  pages:
+    description: Number of pages crawled
+    value: ${{ steps.run.outputs.pages }}
+  report:
+    description: Path to the HTML report
+    value: ${{ inputs.report }}
 
 runs:
   using: composite
@@ -50,33 +79,66 @@ runs:
 
     - id: run
       shell: bash
-      # PSI_API_KEY is optional; pass it as an env var from your workflow's
-      # secrets if you use --psi, to lift the anonymous quota.
+      env:
+        # Runs the code shipped with *this* version of the action, not whatever
+        # is on main — otherwise pinning @v1 would pin nothing.
+        SEO_AUDIT_BIN: ${{ github.action_path }}/bin/seo-audit.mjs
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_LIMIT: ${{ inputs.limit }}
+        INPUT_PSI: ${{ inputs.psi }}
+        INPUT_SETTLE: ${{ inputs.settle }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_REPORT: ${{ inputs.report }}
+        INPUT_JSON: ${{ inputs.json }}
       run: |
-        set -o pipefail
-        args=("${{ inputs.url }}" --html "${{ inputs.report }}" --json seo-audit.json)
-        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
-        [ -n "${{ inputs.config }}" ]   && args+=(--config "${{ inputs.config }}")
-        [ -n "${{ inputs.limit }}" ]    && args+=(--limit "${{ inputs.limit }}")
-        [ -n "${{ inputs.psi }}" ]      && args+=(--psi "${{ inputs.psi }}")
-        args+=(--fail-on "${{ inputs.fail-on }}")
+        args=("$INPUT_URL" --html "$INPUT_REPORT" --json "$INPUT_JSON" --fail-on "$INPUT_FAIL_ON")
+        [ -n "$INPUT_BASELINE" ] && args+=(--baseline "$INPUT_BASELINE")
+        [ -n "$INPUT_CONFIG" ]   && args+=(--config "$INPUT_CONFIG")
+        [ -n "$INPUT_LIMIT" ]    && args+=(--limit "$INPUT_LIMIT")
+        [ -n "$INPUT_PSI" ]      && args+=(--psi "$INPUT_PSI")
+        [ -n "$INPUT_SETTLE" ]   && args+=(--settle "$INPUT_SETTLE")
 
-        set +e
-        npx --yes github:nurkamol/seo-audit "${args[@]}"
+        node "$SEO_AUDIT_BIN" "${args[@]}"
         status=$?
-        set -e
 
         node -e '
-          const d = require("./seo-audit.json");
+          const fs = require("fs");
+          const d = JSON.parse(fs.readFileSync(process.env.INPUT_JSON, "utf8"));
           const n = (l) => d.findings.filter((f) => f.level === l).length;
-          const out = process.env.GITHUB_OUTPUT;
-          require("fs").appendFileSync(out, `errors=${n("error")}\nwarnings=${n("warn")}\n`);
-          const sum = require("fs");
-          if (process.env.GITHUB_STEP_SUMMARY) {
-            const rows = d.findings.map((f) => `| ${f.level} | ${f.title} | ${f.url ?? ""} |`).join("\n");
-            sum.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-              `## SEO audit — ${d.meta.origin}\n\n${d.meta.pages} pages · ${n("error")} errors · ${n("warn")} warnings\n\n` +
-              (d.findings.length ? `| Level | Finding | URL |\n|---|---|---|\n${rows}\n` : "Nothing to report.\n"));
-          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,
+            `errors=${n("error")}\nwarnings=${n("warn")}\nnotes=${n("info")}\npages=${d.meta.pages}\n`);
+
+          const icon = { error: "🔴", warn: "🟡", info: "🔵" };
+          const rows = d.findings
+            .map((f) => `| ${icon[f.level]} | ${f.title} | ${f.url ? `<${f.url}>` : ""} |`)
+            .join("\n");
+          const body =
+            `## SEO audit — ${d.meta.origin}\n\n` +
+            `**${n("error")}** errors · **${n("warn")}** warnings · **${n("info")}** notes ` +
+            `across ${d.meta.pages} pages\n\n` +
+            (d.findings.length ? `| | Finding | Page |\n|:-:|---|---|\n${rows}\n` : "Nothing to report. ✅\n");
+
+          fs.writeFileSync("seo-audit-comment.md", body);
+          if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, body);
         '
         exit $status
+
+    # Sticky: edits its own previous comment instead of adding one per push.
+    - if: ${{ always() && inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        marker="<!-- seo-audit -->"
+        body="$marker"$'\n'"$(cat seo-audit-comment.md)"
+        existing=$(gh api "repos/$REPO/issues/$PR/comments" --jq \
+          "[.[] | select(.body | startswith(\"$marker\")) | .id] | first // empty")
+        if [ -n "$existing" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" >/dev/null
+        else
+          gh api -X POST "repos/$REPO/issues/$PR/comments" -f body="$body" >/dev/null
+        fi

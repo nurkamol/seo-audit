@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="150" viewBox="0 0 640 150" role="img" aria-label="seo-audit">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+  <!-- a sitemap: one root, many pages, one of them flagged -->
+  <g transform="translate(34,30)" fill="none" stroke="url(#g)" stroke-width="3" stroke-linecap="round">
+    <path d="M22 14 V34 M22 34 H4 V52 M22 34 H40 V52 M22 34 H22 V52"/>
+    <rect x="10" y="0" width="24" height="16" rx="3" fill="url(#g)" stroke="none"/>
+    <rect x="-4" y="52" width="16" height="12" rx="2"/>
+    <rect x="14" y="52" width="16" height="12" rx="2"/>
+    <rect x="32" y="52" width="16" height="12" rx="2" fill="url(#g)" stroke="none"/>
+  </g>
+  <circle cx="86" cy="96" r="15" fill="none" stroke="url(#g)" stroke-width="3.5"/>
+  <path d="M97 107 L108 118" stroke="url(#g)" stroke-width="4" stroke-linecap="round"/>
+  <text x="140" y="76" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="46" font-weight="700" fill="#111827">seo<tspan fill="#f97316">-</tspan>audit</text>
+  <text x="142" y="106" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="17" fill="#6b7280">every page, not just the homepage</text>
+</svg>

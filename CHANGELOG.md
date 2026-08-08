@@ -5,6 +5,47 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-08-08
+
+The first version meant for other people's projects.
+
+### Added
+- **A test suite** — 42 tests over `node:test`, no install, serving their own
+  fixture site on localhost so they run offline and cannot be broken by a real
+  site changing. Writing them immediately found a parsing bug: `\b` treats the
+  hyphen in `data-src` as a word boundary, so a lazy-loading site had its
+  `data-src` read as `src`.
+- CI on Node 18, 20 and 22.
+- `--against <url>` — compare two deployments directly, hosts ignored. A
+  preview against production, without a baseline file.
+- `--settle <seconds>` — wait until a site serves consistent HTML before
+  crawling. A CDN rolls a deploy out unevenly, and a crawl during that window
+  produces a snapshot that is wrong in a way nobody can reproduce. This misled
+  three verifications on one project before it became a feature.
+- `--version`.
+- Retries for transient failures, and deliberately none for a refused
+  connection or an unknown host, which are answers rather than blips.
+- New checks: heading hierarchy (scoped to `<main>`, so footer furniture does
+  not count), canonical targets that redirect or 404, trailing-slash
+  inconsistency, URL hygiene (uppercase, underscores, spaces), and a missing
+  charset declaration.
+- Action: sticky pull-request comments, `notes` and `pages` outputs, and a
+  `settle` input.
+- `CONTRIBUTING.md`, `SECURITY.md`, issue templates, and a README written for
+  someone who has never seen the tool.
+
+### Fixed
+- **The Action ran `main` regardless of the version referenced**, so pinning
+  `@v1` pinned nothing. It now runs the code shipped with that version.
+- `--limit` made every uncrawled page look like it was missing from the
+  sitemap. The check now compares against the full sitemap, not the subset
+  that was crawled.
+- Attribute matching no longer confuses `data-src` with `src`.
+
+### Notes
+- `v1` is a compatibility promise: flags, exit codes, the JSON shape and the
+  config format will not change under it.
+
 ## [0.3.0] — 2026-08-08
 
 ### Added
@@ -83,7 +124,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/nurkamol/seo-audit/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/nurkamol/seo-audit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nurkamol/seo-audit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nurkamol/seo-audit/releases/tag/v0.1.0

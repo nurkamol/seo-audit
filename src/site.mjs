@@ -5,6 +5,10 @@ import { mapLimit } from './http.mjs';
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
 export async function siteChecks(origin, fetcher, pages, opts = {}) {
+  // Every URL the sitemap listed, not only the ones this run crawled — with
+  // --limit in play they are not the same set, and treating them as the same
+  // reports every uncrawled page as missing from the sitemap.
+  const inSitemap = new Set((opts.sitemapUrls ?? []).map((u) => u.replace(/\/$/, '')));
   const out = [];
   const base = new URL(origin);
 
@@ -70,7 +74,8 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   for (const page of pages) {
     for (const href of page.doc?.links.internal ?? []) {
       const clean = href.split('#')[0];
-      if (known.has(clean.replace(/\/$/, '')) || notReallyBroken.test(clean)) continue;
+      const bare = clean.replace(/\/$/, '');
+      if (known.has(bare) || inSitemap.has(bare) || notReallyBroken.test(clean)) continue;
       seen.set(clean, [...(seen.get(clean) ?? []), page.url]);
     }
   }
@@ -95,6 +100,46 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   for (const [target, sources] of [...missing].slice(0, 20)) {
     out.push(f('warn', 'missing-from-sitemap', 'Page is linked but not in the sitemap',
       `${target} — linked from ${sources.slice(0, 2).join(', ')}`, target));
+  }
+
+  // --- Canonical targets --------------------------------------------------
+  // A canonical pointing at a redirect or a 404 is worse than none: Google is
+  // told the real page lives somewhere that does not answer.
+  const canonicals = new Map();
+  for (const page of pages) {
+    const target = page.doc?.canonical?.[0];
+    if (!target) continue;
+    if (target.replace(/\/$/, '') === page.url.replace(/\/$/, '')) continue;
+    canonicals.set(target, page.url);
+  }
+  await mapLimit([...canonicals.keys()], 4, async (target) => {
+    const res = await fetcher.get(target);
+    if (res.status >= 300 && res.status < 400) {
+      out.push(f('error', 'canonical-redirects', 'Canonical points at a redirect',
+        `${target} answers ${res.status}. Point it at the final URL.`, canonicals.get(target)));
+    } else if (!res.ok) {
+      out.push(f('error', 'canonical-dead', 'Canonical points at a page that does not load',
+        `${target} answers ${res.status}.`, canonicals.get(target)));
+    }
+  });
+
+  // --- Trailing slashes ---------------------------------------------------
+  // Both forms serving 200 is two URLs for one page, and Google will pick one
+  // for you. A redirect between them is correct; two live copies are not.
+  const sample = pages.filter((p) => p.res.ok && new URL(p.url).pathname !== '/').slice(0, 12);
+  let inconsistent = 0;
+  await mapLimit(sample, 4, async (page) => {
+    const url = new URL(page.url);
+    const flipped = url.pathname.endsWith('/')
+      ? page.url.replace(/\/$/, '')
+      : `${page.url}/`;
+    const res = await fetcher.get(flipped);
+    if (res.status === 200) inconsistent++;
+  });
+  if (inconsistent) {
+    out.push(f('warn', 'trailing-slash', 'Pages answer with and without a trailing slash',
+      `${inconsistent} of ${sample.length} sampled pages load both ways, which is two URLs for one page. ` +
+        'One form should redirect to the other.', origin));
   }
 
   // --- Social images actually load ---------------------------------------

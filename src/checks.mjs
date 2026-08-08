@@ -148,7 +148,39 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       'Only navigation links out of this page — nothing passes authority to related pages.', url));
   }
 
-  // --- Mixed content ------------------------------------------------------
+  // --- Heading order ------------------------------------------------------
+  // A jump from h1 to h3 is how a screen-reader user loses the shape of a
+  // page, and how a search engine loses the outline of the argument.
+  const levels = doc.headingLevels ?? [];
+  for (let i = 1; i < levels.length; i++) {
+    if (levels[i] - levels[i - 1] > 1) {
+      out.push(f('warn', 'heading-skip', `Heading level jumps from h${levels[i - 1]} to h${levels[i]}`,
+        'Headings should descend one level at a time — the outline is a structure, not a size chart.', url));
+      break;
+    }
+  }
+
+  // --- URL hygiene --------------------------------------------------------
+  const path = new URL(url).pathname;
+  if (/[A-Z]/.test(path)) {
+    out.push(f('warn', 'url-uppercase', 'URL contains uppercase letters',
+      `${path} — servers usually treat case as significant, so this invites duplicate URLs.`, url));
+  }
+  if (path.includes('_')) {
+    out.push(f('info', 'url-underscore', 'URL uses underscores',
+      `${path} — Google reads hyphens as word separators and underscores as joins.`, url));
+  }
+  if (/%20|\s/.test(path)) {
+    out.push(f('warn', 'url-space', 'URL contains spaces', path, url));
+  }
+
+  // --- Head essentials ----------------------------------------------------
+  if (doc.charset === null) {
+    out.push(f('warn', 'charset-missing', 'No character encoding declared',
+      'Without it the browser guesses, and guesses wrongly on non-Latin text.', url));
+  }
+
+    // --- Mixed content ------------------------------------------------------
   if (url.startsWith('https://')) {
     const insecure = [...(page.html ?? '').matchAll(/(?:src|href)="(http:\/\/[^"]+)"/gi)]
       .map((m) => m[1])

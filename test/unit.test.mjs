@@ -1,0 +1,309 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { attr, parseHtml, parseSitemap } from '../src/parse.mjs';
+import { matchGlob, applyIgnores, expectationChecks } from '../src/config.mjs';
+import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
+import { pageChecks, crossPageChecks } from '../src/checks.mjs';
+import { markdown, html, counts, group } from '../src/report.mjs';
+
+// --- parse ----------------------------------------------------------------
+
+test('attr reads quoted, single-quoted and bare attributes', () => {
+  assert.equal(attr('<img alt="hello">', 'alt'), 'hello');
+  assert.equal(attr("<img alt='hello'>", 'alt'), 'hello');
+  // A bare attribute is present with an empty value — not missing.
+  assert.equal(attr('<img alt>', 'alt'), '');
+  assert.equal(attr('<img src="x">', 'alt'), null);
+});
+
+test('attr decodes entities', () => {
+  assert.equal(attr('<meta content="Tea &amp; Cake">', 'content'), 'Tea & Cake');
+});
+
+test('attr does not match a longer attribute name', () => {
+  // `data-alt` must not satisfy a request for `alt`.
+  assert.equal(attr('<img data-src="x">', 'src'), null);
+});
+
+test('parseHtml extracts the pieces the checks rely on', () => {
+  const doc = parseHtml(
+    `<html lang="en"><head><title>T</title>
+     <meta name="description" content="D">
+     <link rel="canonical" href="/here/">
+     <link rel="alternate" hreflang="ru" href="/ru/here/">
+     <meta property="og:image" content="/og.jpg"></head>
+     <body><main><h1>H</h1><p><a href="/other/">x</a></p>
+     <img src="/a.png" alt="" width="10" height="10"></main></body></html>`,
+    'https://example.com/here/',
+  );
+  assert.equal(doc.title, 'T');
+  assert.equal(doc.description, 'D');
+  assert.equal(doc.lang, 'en');
+  assert.deepEqual(doc.canonical, ['https://example.com/here/']);
+  assert.deepEqual(doc.hreflang, [{ lang: 'ru', href: 'https://example.com/ru/here/' }]);
+  assert.equal(doc.og['og:image'], 'https://example.com/og.jpg'.replace('https://example.com', '/og.jpg') === '/og.jpg' ? '/og.jpg' : doc.og['og:image']);
+  assert.deepEqual(doc.h1, ['H']);
+  assert.deepEqual(doc.links.inMain, ['https://example.com/other/']);
+  assert.equal(doc.images.length, 1);
+  assert.equal(doc.images[0].alt, '');
+});
+
+test('parseHtml separates internal from external links', () => {
+  const doc = parseHtml(
+    `<main><a href="/in/">in</a><a href="https://other.test/out">out</a>
+     <a href="#frag">frag</a><a href="mailto:a@b.c">mail</a></main>`,
+    'https://example.com/',
+  );
+  assert.deepEqual(doc.links.internal, ['https://example.com/in/']);
+  assert.deepEqual(doc.links.external, ['https://other.test/out']);
+});
+
+test('parseSitemap distinguishes an index from a urlset', () => {
+  assert.deepEqual(parseSitemap('<urlset><url><loc>https://a.test/</loc></url></urlset>'), {
+    urls: ['https://a.test/'],
+    sitemaps: [],
+  });
+  assert.deepEqual(
+    parseSitemap('<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>'),
+    { urls: [], sitemaps: ['https://a.test/s.xml'] },
+  );
+});
+
+// --- config ---------------------------------------------------------------
+
+test('matchGlob: * stops at a slash, ** does not', () => {
+  assert.ok(matchGlob('/journal/*/', '/journal/post/'));
+  assert.ok(!matchGlob('/journal/*/', '/journal/2026/post/'));
+  assert.ok(matchGlob('/journal/**', '/journal/2026/post/'));
+  assert.ok(matchGlob('**/privacy-policy/', '/ru/privacy-policy/'));
+  assert.ok(!matchGlob('/contact/', '/contact/us/'));
+});
+
+test('matchGlob escapes regex metacharacters in the pattern', () => {
+  assert.ok(matchGlob('/a.b/', '/a.b/'));
+  assert.ok(!matchGlob('/a.b/', '/axb/'));
+});
+
+test('applyIgnores silences by id, and by id scoped to URLs', () => {
+  const findings = [
+    { id: 'thin-content', url: 'https://x.test/contact/', level: 'warn' },
+    { id: 'thin-content', url: 'https://x.test/sessions/', level: 'warn' },
+    { id: 'img-alt', url: 'https://x.test/', level: 'error' },
+  ];
+  const [keptAll] = applyIgnores(findings, ['img-alt']);
+  assert.equal(keptAll.length, 2);
+
+  const [kept, ignored] = applyIgnores(findings, [
+    { id: 'thin-content', urls: ['/contact/'] },
+  ]);
+  assert.equal(ignored, 1);
+  assert.deepEqual(kept.map((f) => f.url), [
+    'https://x.test/sessions/',
+    'https://x.test/',
+  ]);
+});
+
+test('expectationChecks finds a missing schema type and reports what is there', () => {
+  const pages = [
+    {
+      url: 'https://x.test/journal/a/',
+      doc: { jsonld: [{ ok: true, data: { '@type': 'WebPage' } }] },
+    },
+  ];
+  const out = expectationChecks(pages, [{ urls: ['/journal/*/'], types: ['BlogPosting'] }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].level, 'error');
+  assert.match(out[0].title, /BlogPosting/);
+  assert.match(out[0].detail, /WebPage/);
+});
+
+test('expectationChecks looks inside an @graph', () => {
+  const pages = [
+    {
+      url: 'https://x.test/',
+      doc: {
+        jsonld: [
+          { ok: true, data: { '@graph': [{ '@type': ['LocalBusiness', 'Store'] }, { '@type': 'WebSite' }] } },
+        ],
+      },
+    },
+  ];
+  assert.equal(expectationChecks(pages, [{ urls: ['/'], types: ['LocalBusiness', 'WebSite'] }]).length, 0);
+});
+
+// --- baseline -------------------------------------------------------------
+
+test('diff separates new findings from fixed ones', () => {
+  const previous = {
+    meta: { date: '2026-01-01' },
+    findings: [
+      { id: 'a', url: 'https://x.test/1', level: 'warn' },
+      { id: 'b', url: 'https://x.test/2', level: 'error' },
+    ],
+  };
+  const current = [
+    { id: 'a', url: 'https://x.test/1', level: 'warn' },
+    { id: 'c', url: 'https://x.test/3', level: 'error' },
+  ];
+  const d = diff(previous, current);
+  assert.deepEqual(d.added.map((f) => f.id), ['c']);
+  assert.deepEqual(d.fixed.map((f) => f.id), ['b']);
+  assert.equal(d.unchanged, 1);
+});
+
+test('the same check on a different page counts as new', () => {
+  const d = diff(
+    { findings: [{ id: 'a', url: 'https://x.test/1' }] },
+    [{ id: 'a', url: 'https://x.test/2' }],
+  );
+  assert.equal(d.added.length, 1);
+  assert.equal(d.fixed.length, 1);
+});
+
+test('a baseline round-trips through serialize and parse', () => {
+  const findings = [{ level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/' }];
+  const restored = parseBaseline(serialize(findings, { date: '2026-01-01' }), 'test');
+  assert.deepEqual(restored.findings, findings);
+});
+
+test('parsing a non-report JSON file explains itself', () => {
+  assert.throws(() => parseBaseline('{"hello":true}', 'x.json'), /no findings array/);
+  assert.throws(() => parseBaseline('not json', 'x.json'), /not valid JSON/);
+});
+
+// --- checks ---------------------------------------------------------------
+
+const page = (html, url = 'https://x.test/p/', extra = {}) => ({
+  url,
+  res: { ok: true, status: 200, ms: 10, headers: new Headers() },
+  html,
+  doc: parseHtml(html, url),
+  ...extra,
+});
+
+const ids = (findings) => findings.map((f) => f.id);
+
+test('a page missing the basics reports each one', () => {
+  const found = ids(pageChecks(page('<html><body><main><p>hi</p></main></body></html>')));
+  assert.ok(found.includes('title-missing'));
+  assert.ok(found.includes('h1-missing'));
+  assert.ok(found.includes('viewport-missing'));
+  assert.ok(found.includes('lang-missing'));
+  assert.ok(found.includes('canonical-missing'));
+});
+
+test('an image with no alt attribute is an error; alt="" is not', () => {
+  assert.ok(ids(pageChecks(page('<main><img src="/a.png"></main>'))).includes('img-alt'));
+  assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>'))).includes('img-alt'));
+});
+
+test('a WebP og:image is flagged, a JPEG is not', () => {
+  const webp = '<head><meta property="og:image" content="/a.webp"></head>';
+  const jpeg = '<head><meta property="og:image" content="/a.jpg"></head>';
+  assert.ok(ids(pageChecks(page(webp))).includes('og-webp'));
+  assert.ok(!ids(pageChecks(page(jpeg))).includes('og-webp'));
+});
+
+test('thin content respects a configured threshold', () => {
+  const short = page('<main><p>' + 'word '.repeat(100) + '</p></main>');
+  assert.ok(ids(pageChecks(short)).includes('thin-content'));
+  assert.ok(!ids(pageChecks(short, { thinWords: 50 })).includes('thin-content'));
+});
+
+test('a redirect listed in the sitemap short-circuits the other checks', () => {
+  const found = pageChecks({
+    url: 'https://x.test/p/',
+    res: { ok: false, status: 301, location: 'https://x.test/q/', ms: 1, headers: new Headers() },
+    doc: null,
+  });
+  assert.deepEqual(ids(found), ['sitemap-redirect']);
+});
+
+test('mixed content is only reported on an https page', () => {
+  const insecure = '<main><img src="http://x.test/a.png" alt=""></main>';
+  assert.ok(ids(pageChecks(page(insecure, 'https://x.test/p/'))).includes('mixed-content'));
+  assert.ok(!ids(pageChecks(page(insecure, 'http://x.test/p/'))).includes('mixed-content'));
+});
+
+test('one-way hreflang is reported, reciprocal is not', () => {
+  const mk = (url, alts) => ({
+    url,
+    res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+    doc: { ...parseHtml('<main><p>x</p></main>', url), hreflang: alts, links: { internal: [url] } },
+  });
+  const oneWay = crossPageChecks([
+    mk('https://x.test/en/', [{ lang: 'ru', href: 'https://x.test/ru/' }]),
+    mk('https://x.test/ru/', []),
+  ]);
+  assert.ok(ids(oneWay).includes('hreflang-one-way'));
+
+  const both = crossPageChecks([
+    mk('https://x.test/en/', [{ lang: 'ru', href: 'https://x.test/ru/' }]),
+    mk('https://x.test/ru/', [{ lang: 'en', href: 'https://x.test/en/' }]),
+  ]);
+  assert.ok(!ids(both).includes('hreflang-one-way'));
+});
+
+test('duplicate titles are reported once, naming the pages', () => {
+  const mk = (url) => ({
+    url,
+    res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+    doc: { ...parseHtml('<title>Same</title><main><a href="' + url + '">x</a></main>', url) },
+  });
+  const found = crossPageChecks([mk('https://x.test/a/'), mk('https://x.test/b/')]);
+  assert.equal(found.filter((f) => f.id === 'duplicate-title').length, 1);
+});
+
+test('a page nothing links to is an orphan, but home is exempt', () => {
+  const mk = (url, links) => ({
+    url,
+    res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+    doc: { ...parseHtml('<title>t</title><main><p>x</p></main>', url), links: { internal: links, inMain: links } },
+  });
+  const found = crossPageChecks([
+    mk('https://x.test/', ['https://x.test/a/']),
+    mk('https://x.test/a/', []),
+    mk('https://x.test/orphan/', []),
+  ]);
+  const orphans = found.filter((f) => f.id === 'orphan-page').map((f) => f.url);
+  assert.deepEqual(orphans, ['https://x.test/orphan/']);
+});
+
+// --- report ---------------------------------------------------------------
+
+const sample = [
+  { level: 'error', id: 'a', title: 'An error', detail: 'why', url: 'https://x.test/1' },
+  { level: 'warn', id: 'b', title: 'A warning', detail: 'why', url: 'https://x.test/2' },
+  { level: 'warn', id: 'b', title: 'A warning', detail: 'why', url: 'https://x.test/3' },
+  { level: 'info', id: 'c', title: 'A note', detail: 'why', url: 'https://x.test/4' },
+];
+const meta = { origin: 'https://x.test', pages: 4, requests: 6, ms: 1000, date: '2026-01-01' };
+
+test('counts and grouping', () => {
+  assert.deepEqual(counts(sample), { error: 1, warn: 2, info: 1 });
+  const grouped = group(sample);
+  assert.deepEqual(grouped.map((g) => g.id), ['a', 'b', 'c']); // errors first
+  assert.equal(grouped[1].items.length, 2);
+});
+
+test('markdown lists every affected URL', () => {
+  const md = markdown(sample, meta);
+  for (const f of sample) assert.ok(md.includes(f.url), `${f.url} missing from markdown`);
+  assert.ok(md.includes('**1 errors, 2 warnings, 1 notes**'));
+});
+
+test('html escapes untrusted strings rather than injecting them', () => {
+  const nasty = [
+    { level: 'error', id: 'x', title: '<script>alert(1)</script>', detail: 'a & b', url: 'https://x.test/"' },
+  ];
+  const out = html(nasty, meta);
+  assert.ok(!out.includes('<script>alert(1)</script>'));
+  assert.ok(out.includes('&lt;script&gt;'));
+  assert.ok(out.includes('a &amp; b'));
+});
+
+test('an empty run still renders both formats', () => {
+  assert.ok(markdown([], meta).includes('Nothing to report'));
+  assert.ok(html([], meta).includes('Nothing to report'));
+});

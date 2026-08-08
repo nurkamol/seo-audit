@@ -1,0 +1,22 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 18 is the floor the README promises; 22 is what most runners have.
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # No install step: the tool has no dependencies, and the test suite
+      # serves its own fixture site over localhost.
+      - run: npm test

@@ -16,14 +16,19 @@ const decode = (s) =>
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ');
 
-/** Attribute value from a tag string: attr(`<img alt="x">`, 'alt') → 'x' */
+/** Attribute value from a tag string: attr(`<img alt="x">`, 'alt') → 'x'
+ *
+ *  The lookbehind matters: `\b` treats the hyphen in `data-src` as a boundary,
+ *  so a plain word-boundary match reads a lazy-loading site's `data-src` as
+ *  its `src` and reports images that are not there. */
 export function attr(tag, name) {
+  const start = `(?<![-\\w])${name}`;
   const m =
-    tag.match(new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i')) ??
-    tag.match(new RegExp(`\\b${name}\\s*=\\s*'([^']*)'`, 'i'));
+    tag.match(new RegExp(`${start}\\s*=\\s*"([^"]*)"`, 'i')) ??
+    tag.match(new RegExp(`${start}\\s*=\\s*'([^']*)'`, 'i'));
   if (m) return decode(m[1]);
-  // Bare boolean attribute (`<img alt>`) — present, empty value.
-  return new RegExp(`\\b${name}(?=[\\s/>])`, 'i').test(tag) ? '' : null;
+  // Bare boolean attribute (`<img alt>`) — present, with an empty value.
+  return new RegExp(`${start}(?=[\\s/>])`, 'i').test(tag) ? '' : null;
 }
 
 export function parseHtml(html, pageUrl) {
@@ -93,6 +98,12 @@ export function parseHtml(html, pageUrl) {
       stripTags(m[1]),
     );
 
+  // Heading levels in document order, so a skipped level is visible — read
+  // from <main> only. The footer's column headings are furniture repeated on
+  // every page, not part of this page's outline, and counting them reports a
+  // jump on exactly the pages whose content happens to have no h2.
+  const headingLevels = [...main.matchAll(/<h([1-6])\b/gi)].map((m) => Number(m[1]));
+
   const bodyText = stripTags(
     main
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -121,6 +132,14 @@ export function parseHtml(html, pageUrl) {
     ),
     h1: headings(1),
     h2: headings(2),
+    headingLevels,
+    charset:
+      metaBy('charset', undefined) ??
+      (metas.some((t) => attr(t, 'charset') !== null)
+        ? attr(metas.find((t) => attr(t, 'charset') !== null), 'charset')
+        : /charset=/i.test(head)
+          ? 'declared'
+          : null),
     images,
     jsonld,
     links: {

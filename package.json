@@ -1,7 +1,7 @@
 {
   "name": "seo-audit",
-  "version": "0.3.0",
-  "description": "Crawl a site's sitemap and check every page for the SEO and metadata problems single-page graders miss",
+  "version": "1.0.0",
+  "description": "Crawl a site's sitemap and check every page for SEO, metadata and structured-data problems that single-page graders miss. Zero dependencies.",
   "type": "module",
   "bin": {
     "seo-audit": "bin/seo-audit.mjs"
@@ -13,12 +13,14 @@
     "bin",
     "src",
     "action.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "audit": "node bin/seo-audit.mjs"
   },
   "keywords": [

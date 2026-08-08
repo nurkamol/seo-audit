@@ -3,6 +3,9 @@ import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { audit } from '../src/audit.mjs';
 import { terminal, markdown, html, diffReport, counts } from '../src/report.mjs';
 import { loadConfig } from '../src/config.mjs';
+import { readFileSync as read } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { serialize, parse, diff } from '../src/baseline.mjs';
 
 const HELP = `
@@ -22,8 +25,14 @@ const HELP = `
                        what changed. With --fail-on new, a build fails on a
                        regression but tolerates findings you already knew about
     --update-baseline  write the baseline file after comparing
+    --against <url>    compare against another deployment right now — a
+                       preview against production, say. Hosts are ignored, so
+                       only genuine differences show up
 
   Crawling
+    --settle <seconds> wait until the site serves consistent HTML before
+                       crawling. A CDN rolls a deploy out unevenly, and a crawl
+                       during that window is wrong in a confusing way
     --limit <n>        maximum pages to check (default 200)
     --concurrency <n>  parallel requests (default 6)
     --sitemap <url>    sitemap location, if not declared in robots.txt
@@ -59,6 +68,9 @@ function parseArgs(argv) {
     const arg = argv[i];
     const value = () => argv[++i];
     if (arg === '--help' || arg === '-h') opts.help = true;
+    else if (arg === '--version' || arg === '-v') opts.version = true;
+    else if (arg === '--against') opts.against = value();
+    else if (arg === '--settle') opts.settle = Number(value());
     else if (arg === '--quiet' || arg === '-q') opts.quiet = true;
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
@@ -83,6 +95,12 @@ function parseArgs(argv) {
 }
 
 const cli = parseArgs(process.argv.slice(2));
+
+if (cli.version) {
+  const here = dirname(fileURLToPath(import.meta.url));
+  console.log(JSON.parse(read(join(here, '..', 'package.json'), 'utf8')).version);
+  process.exit(0);
+}
 
 if (cli.help || !cli.target) {
   console.log(HELP);
@@ -131,11 +149,28 @@ if (!opts.quiet) {
   process.stderr.write(`  crawling ${target} …${file.source ? ` (${file.source})` : ''}\n`);
 }
 
-const { findings, meta } = await audit(target, opts);
+if (!opts.quiet && opts.settle) {
+  process.stderr.write(`  waiting up to ${opts.settle}s for the site to serve consistent HTML …\n`);
+}
 
-// --- Compare, if asked --------------------------------------------------
-let comparison = null;
-if (opts.baseline) {
+const { findings, meta } = await audit(target, {
+  ...opts,
+  onNote: (m) => !opts.quiet && process.stderr.write(`  ${m}\n`),
+});
+
+// --- Compare against another deployment, if asked -----------------------
+let against = null;
+if (opts.against) {
+  const reference = /^https?:\/\//i.test(opts.against) ? opts.against : `https://${opts.against}`;
+  if (!opts.quiet) process.stderr.write(`  crawling ${reference} to compare …\n`);
+  const other = await audit(reference, { ...opts, against: undefined, settle: undefined });
+  against = diff({ findings: other.findings, meta: other.meta }, findings, { ignoreHost: true });
+  against.previousDate = reference;
+}
+
+// --- Compare against a stored baseline, if asked ------------------------
+let comparison = against;
+if (opts.baseline && !against) {
   if (existsSync(opts.baseline)) {
     try {
       comparison = diff(parse(readFileSync(opts.baseline, 'utf8'), opts.baseline), findings);

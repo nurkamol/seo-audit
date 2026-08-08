@@ -42,11 +42,11 @@ export class Fetcher {
    * @returns {Promise<{url: string, status: number, ok: boolean, headers: Headers,
    *                    body: string, location: string|null, ms: number, error?: string}>}
    */
-  async get(url, { method = 'GET' } = {}) {
+  async get(url, { method = 'GET', retries = 2 } = {}) {
     const key = `${method} ${url}`;
     if (this.cache.has(key)) return this.cache.get(key);
 
-    const promise = this.#schedule(async () => {
+    const attempt = async () => {
       const started = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), this.timeout);
@@ -80,14 +80,57 @@ export class Fetcher {
           location: null,
           ms: Date.now() - started,
           error: err.name === 'AbortError' ? 'timed out' : err.message,
+          // A refused connection or an unknown host is an answer, not a blip:
+          // retrying cannot change it, and doing so makes a dead site slow to
+          // report instead of fast.
+          permanent: /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ERR_INVALID_URL/.test(
+            `${err.code ?? ''} ${err.cause?.code ?? ''} ${err.message}`,
+          ),
         };
       } finally {
         clearTimeout(timer);
       }
+    };
+
+    // One blip in a 200-page crawl should not be reported as a broken page.
+    // Only transport failures and 5xx are retried; a 404 is an answer.
+    const promise = this.#schedule(async () => {
+      let last;
+      for (let i = 0; i <= retries; i++) {
+        last = await attempt();
+        if (last.permanent) return last;
+        if (last.status !== 0 && last.status < 500) return last;
+        if (i < retries) await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+      }
+      return last;
     });
 
     this.cache.set(key, promise);
     return promise;
+  }
+
+  /**
+   * Wait until a URL serves the same bytes several times in a row.
+   *
+   * A CDN rolls a deploy out unevenly: for a minute or two one edge answers
+   * with the new page and another with the old, and a crawl during that window
+   * produces a snapshot that is wrong in a way nobody can reproduce later.
+   */
+  async settle(url, seconds) {
+    const deadline = Date.now() + seconds * 1000;
+    const wanted = 3;
+    let previous = null;
+    let same = 0;
+    while (Date.now() < deadline) {
+      this.cache.delete(`GET ${url}`);
+      const res = await this.get(url, { retries: 0 });
+      const fingerprint = `${res.status}:${res.body.length}:${res.headers.get('etag') ?? ''}`;
+      same = fingerprint === previous ? same + 1 : 0;
+      previous = fingerprint;
+      if (same >= wanted - 1) return true;
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    return false;
   }
 
   /** Follow a chain by hand so the number of hops can be reported. */
