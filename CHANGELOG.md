@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-08
+
 ### Fixed
 - A host that accepts the TLS handshake and then never answers is now reported
   as **unreachable**, with the likely cause, instead of "No sitemap found".
@@ -139,7 +141,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/nurkamol/seo-audit/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nurkamol/seo-audit/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/nurkamol/seo-audit/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nurkamol/seo-audit/compare/v0.1.0...v0.2.0
