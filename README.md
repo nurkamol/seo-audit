@@ -66,6 +66,36 @@ real measurement instead.
 
 ---
 
+## The playbook
+
+The tool verifies about two thirds of what a site needs. The rest is judgement,
+content and off-site work, and it is written down:
+
+### 📋 [docs/SEO-PLAYBOOK.md](docs/SEO-PLAYBOOK.md)
+
+A checklist for taking a site from "probably fine" to genuinely clean —
+crawlability, internal linking, multilingual, images, social previews,
+structured data, performance, credibility and local search. Ordered by impact
+and written from what was actually broken on real projects, including the traps
+that only show up once you have hit them.
+
+```bash
+# In a new project
+curl -o docs/SEO-PLAYBOOK.md \
+  https://raw.githubusercontent.com/nurkamol/seo-audit/main/docs/SEO-PLAYBOOK.md
+curl -o seo-audit.config.json \
+  https://raw.githubusercontent.com/nurkamol/seo-audit/main/docs/seo-audit.config.example.json
+
+npx github:nurkamol/seo-audit@v1 https://example.com --html audit.html
+```
+
+Then work down the checklist. It ends with a prompt for handing the whole
+thing to an AI agent, including the two instructions that keep an enthusiastic
+pass from doing damage: don't invent business facts, and don't declare success
+against a stale cache.
+
+---
+
 ## Usage
 
 ```bash

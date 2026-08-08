@@ -1,0 +1,15 @@
+{
+  "limit": 200,
+  "failOn": "error",
+  "limits": { "thinWords": 300 },
+  "psi": ["/"],
+  "ignore": [
+    { "id": "thin-content", "urls": ["/contact/", "/thanks/", "**/legal/**"] },
+    { "id": "no-editorial-links", "urls": ["**/privacy-policy/", "**/terms-of-use/", "**/cookie-policy/"] }
+  ],
+  "expect": [
+    { "urls": ["/"], "types": ["Organization", "WebSite"] },
+    { "urls": ["/blog/*/"], "types": ["BlogPosting"] },
+    { "urls": ["/faq/"], "types": ["FAQPage"] }
+  ]
+}
