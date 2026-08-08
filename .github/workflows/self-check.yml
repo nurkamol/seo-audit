@@ -1,4 +1,10 @@
-# The tool auditing a site on every push, as a working example of itself.
+# The action auditing a real site on every push — a working example of itself,
+# and the only test that exercises the composite action end to end.
+#
+# fail-on: never on purpose. This proves the action runs, not that somebody
+# else's site is perfect; gating on their findings would paint this repository
+# red for reasons outside it. Projects auditing their own site should gate —
+# see the README.
 name: self-check
 on:
   push:
@@ -14,7 +20,14 @@ jobs:
         id: seo
         with:
           url: https://fitculturepilates.com
-          fail-on: error
+          limit: 15
+          fail-on: never
+      - name: Show what it found
+        run: |
+          echo "errors:   ${{ steps.seo.outputs.errors }}"
+          echo "warnings: ${{ steps.seo.outputs.warnings }}"
+          echo "pages:    ${{ steps.seo.outputs.pages }}"
+          test -s seo-audit.html || { echo "no HTML report produced"; exit 1; }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
