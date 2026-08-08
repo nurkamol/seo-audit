@@ -77,8 +77,11 @@ key, and never paste one into an issue or a report.
 
 ## Context
 
-Written for a bilingual EN/RU Astro site (olgahansika.com) after three
-commercial graders all reported the homepage as healthy while the language
-switcher on every translated article linked to a 404. That bug is the
-tool's reason to exist; keep it in mind when weighing whether a proposed
-check is worth the noise it will make.
+Written after three commercial graders all reported a client site's homepage
+as healthy while the language switcher on every translated article linked to
+a 404 — a bug none of them could see, because it was only wrong on pages they
+never opened. That is the tool's reason to exist; keep it in mind when
+weighing whether a proposed check is worth the noise it will make.
+
+Client URLs do not belong in this repository. The example in the README and
+the self-check workflow point at sites chosen for that purpose.

@@ -13,7 +13,7 @@ jobs:
       - uses: ./
         id: seo
         with:
-          url: https://olgahansika.com
+          url: https://fitculturepilates.com
           fail-on: error
       - uses: actions/upload-artifact@v4
         if: always()
