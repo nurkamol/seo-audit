@@ -39,20 +39,94 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 
 | Option | Default | |
 |---|---|---|
-| `--md <file>` | — | Also write a Markdown report |
+| `--md <file>` | — | Write a Markdown report |
+| `--json <file>` | — | Write a JSON report — also usable as a baseline |
+| `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
+| `--update-baseline` | — | Rewrite the baseline after comparing |
 | `--limit <n>` | 200 | Maximum pages to check |
 | `--concurrency <n>` | 6 | Parallel requests |
-| `--sitemap <url>` | auto | If it isn't at `/sitemap-index.xml` or `/sitemap.xml` |
-| `--fail-on <level>` | `error` | Exit 1 at `error`, `warn`, or `never` |
-| `--quiet` | — | Print nothing; use the exit code and `--md` |
+| `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path |
+| `--config <file>` | `seo-audit.config.json` | Per-site configuration |
+| `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
+| `--fail-on <level>` | `error` | Exit 1 at `error`, `warn`, `new`, or `never` |
+| `--quiet` | — | Print nothing; use the exit code and the files |
+
+---
+
+## Configuration
+
+Every site has findings that are true and deliberate. A contact page is *meant*
+to be short; a privacy policy has no business carrying editorial links. Left
+unsaid, those fill the report with noise nobody reads, and the one new finding
+that matters gets lost.
+
+Drop a `seo-audit.config.json` next to where you run it:
+
+```json
+{
+  "limit": 200,
+  "failOn": "error",
+  "ignore": [
+    "img-srcset",
+    { "id": "thin-content", "urls": ["/contact/", "**/find-the-right-session/"] },
+    { "id": "no-editorial-links", "urls": ["**/privacy-policy/", "**/terms-of-use/"] }
+  ],
+  "expect": [
+    { "urls": ["/journal/*/"], "types": ["BlogPosting"] },
+    { "urls": ["/"], "types": ["LocalBusiness", "WebSite"] },
+    { "urls": ["/faq/"], "types": ["FAQPage"] }
+  ]
+}
+```
+
+- **`ignore`** — a bare check id silences it everywhere; `{ id, urls }` silences
+  it only where it is intended. `*` stops at a slash, `**` does not. The id is
+  printed with every finding.
+- **`expect`** — which schema types a group of pages must carry. This is the
+  difference between "the JSON-LD parses" and "this article is actually marked
+  up as an article", and it is the check that catches a template quietly
+  dropping its structured data.
+
+---
+
+## Catching regressions
+
+The useful question after the first run is not "how many warnings" — that
+number stops moving. It is "did this deploy break something that worked
+yesterday".
+
+```bash
+# First run writes the baseline
+seo-audit https://example.com --baseline seo-baseline.json
+
+# Later runs report only the difference
+seo-audit https://example.com --baseline seo-baseline.json
+```
+
+```
+  ✓ 3 fixed since 2026-08-08
+    · Link to a page that does not exist  https://example.com/ru/journal/…
+
+  ✗ 1 new since 2026-08-08
+    ✗ Missing expected structured data: BlogPosting
+      Page declares WebSite.
+      · https://example.com/journal/new-article/
+
+  12 unchanged
+```
+
+Commit the baseline. `--fail-on new` then fails a build on a regression while
+tolerating the backlog you already know about — which is what makes the check
+survivable in CI instead of being switched off in week two.
 
 ### In CI
 
-Exit code is 1 when findings reach `--fail-on`, so a regression fails the build:
-
 ```yaml
-- run: npx github:nurkamol/seo-audit https://example.com --fail-on error --md audit.md
+- run: |
+    npx github:nurkamol/seo-audit https://example.com \
+      --baseline seo-baseline.json --fail-on new --md audit.md
 - uses: actions/upload-artifact@v4
+  if: always()
   with: { name: seo-audit, path: audit.md }
 ```
 
@@ -91,6 +165,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No two pages share a title | warning |
 | No two pages share a meta description | warning |
 | `hreflang` is reciprocal — Google drops one-way pairs | error |
+| Pages carry the schema types `expect` says they should | error |
 
 ### Whole site
 

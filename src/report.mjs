@@ -42,7 +42,10 @@ export function terminal(findings, meta) {
   lines.push('');
   lines.push(bold(`  ${meta.origin}`));
   lines.push(
-    dim(`  ${meta.pages} pages · ${meta.requests} requests · ${(meta.ms / 1000).toFixed(1)}s`),
+    dim(
+      `  ${meta.pages} pages · ${meta.requests} requests · ${(meta.ms / 1000).toFixed(1)}s` +
+        (meta.ignored ? ` · ${meta.ignored} ignored` : ''),
+    ),
   );
   lines.push('');
 
@@ -128,4 +131,38 @@ export function markdown(findings, meta) {
   );
   out.push('');
   return out.join('\n');
+}
+
+/** Baseline comparison: what changed since the last run, and nothing else. */
+export function diffReport({ added, fixed, unchanged, previousDate }) {
+  const lines = [''];
+
+  if (fixed.length) {
+    lines.push(`  ${c('32', `✓ ${fixed.length} fixed since ${previousDate}`)}`);
+    for (const item of fixed.slice(0, 10)) {
+      lines.push(`    ${dim('·')} ${item.title} ${dim(item.url ?? '')}`);
+    }
+    if (fixed.length > 10) lines.push(`    ${dim(`… and ${fixed.length - 10} more`)}`);
+    lines.push('');
+  }
+
+  if (added.length) {
+    lines.push(`  ${red(`✗ ${added.length} new since ${previousDate}`)}`);
+    for (const entry of group(added)) {
+      lines.push(`    ${PAINT[entry.level](MARK[entry.level])} ${bold(entry.title)}`);
+      lines.push(`      ${dim(entry.items[0].detail)}`);
+      for (const item of entry.items.slice(0, 6)) lines.push(`      ${dim('·')} ${item.url ?? ''}`);
+    }
+    lines.push('');
+  }
+
+  if (!added.length && !fixed.length) {
+    lines.push(`  ${c('32', '✓')} no change since ${previousDate} ${dim(`(${unchanged} known)`)}`);
+    lines.push('');
+  } else {
+    lines.push(dim(`  ${unchanged} unchanged`));
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }

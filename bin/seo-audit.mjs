@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { audit } from '../src/audit.mjs';
-import { terminal, markdown, counts } from '../src/report.mjs';
+import { terminal, markdown, diffReport, counts } from '../src/report.mjs';
+import { loadConfig } from '../src/config.mjs';
+import { serialize, parse, diff } from '../src/baseline.mjs';
 
 const HELP = `
   seo-audit — crawl a site's sitemap and check every page
@@ -9,27 +11,42 @@ const HELP = `
   Usage
     npx github:nurkamol/seo-audit <url> [options]
 
-  Options
-    --md <file>        also write a Markdown report
+  Reporting
+    --md <file>        write a Markdown report
+    --json <file>      write a JSON report (also usable as a baseline)
+    --quiet            print nothing; rely on the exit code and the files
+
+  Comparing
+    --baseline <file>  compare against a previous --json run and show only
+                       what changed. With --fail-on new, a build fails on a
+                       regression but tolerates findings you already knew about
+    --update-baseline  write the baseline file after comparing
+
+  Crawling
     --limit <n>        maximum pages to check (default 200)
     --concurrency <n>  parallel requests (default 6)
-    --sitemap <url>    sitemap location, if not /sitemap-index.xml or /sitemap.xml
-    --fail-on <level>  exit 1 when findings reach this level: error | warn | never
-                       (default: error)
-    --quiet            print nothing; rely on the exit code and --md
-    --help
+    --sitemap <url>    sitemap location, if not declared in robots.txt
+
+  Filtering
+    --config <file>    default: seo-audit.config.json in the working directory
+    --ignore <ids>     comma-separated check ids to silence for this run
+
+  Exit code
+    --fail-on <level>  error (default) | warn | new | never
+                       "new" needs --baseline
 
   Examples
     npx github:nurkamol/seo-audit https://example.com
     npx github:nurkamol/seo-audit https://example.com --md audit.md
-    npx github:nurkamol/seo-audit http://localhost:4321 --limit 20 --fail-on warn
+    npx github:nurkamol/seo-audit https://example.com \\
+      --baseline seo-baseline.json --fail-on new
 
   Performance is not measured here — use pagespeed.web.dev and webpagetest.org,
   which run real browsers. This checks correctness, on every page.
 `;
 
 function parseArgs(argv) {
-  const opts = { failOn: 'error' };
+  const opts = {};
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -37,9 +54,14 @@ function parseArgs(argv) {
     if (arg === '--help' || arg === '-h') opts.help = true;
     else if (arg === '--quiet' || arg === '-q') opts.quiet = true;
     else if (arg === '--md') opts.md = value();
+    else if (arg === '--json') opts.json = value();
+    else if (arg === '--baseline') opts.baseline = value();
+    else if (arg === '--update-baseline') opts.updateBaseline = true;
     else if (arg === '--limit') opts.limit = Number(value());
     else if (arg === '--concurrency') opts.concurrency = Number(value());
     else if (arg === '--sitemap') opts.sitemap = value();
+    else if (arg === '--config') opts.config = value();
+    else if (arg === '--ignore') opts.ignore = value().split(',').map((s) => s.trim()).filter(Boolean);
     else if (arg === '--fail-on') opts.failOn = value();
     else if (arg.startsWith('-')) {
       console.error(`Unknown option: ${arg}`);
@@ -50,11 +72,33 @@ function parseArgs(argv) {
   return opts;
 }
 
-const opts = parseArgs(process.argv.slice(2));
+const cli = parseArgs(process.argv.slice(2));
 
-if (opts.help || !opts.target) {
+if (cli.help || !cli.target) {
   console.log(HELP);
-  process.exit(opts.target ? 0 : 2);
+  process.exit(cli.target ? 0 : 2);
+}
+
+let file;
+try {
+  file = loadConfig(cli.config);
+} catch (err) {
+  console.error(`  ${err.message}`);
+  process.exit(2);
+}
+
+// CLI wins over the config file; ignore rules from both are combined, since
+// one is "this site always" and the other is "just this run".
+const opts = {
+  ...file,
+  ...Object.fromEntries(Object.entries(cli).filter(([, v]) => v !== undefined)),
+  ignore: [...(file.ignore ?? []), ...(cli.ignore ?? [])],
+  failOn: cli.failOn ?? file.failOn ?? 'error',
+};
+
+if (opts.failOn === 'new' && !opts.baseline) {
+  console.error('  --fail-on new needs --baseline <file> to compare against.');
+  process.exit(2);
 }
 
 let target = opts.target;
@@ -66,19 +110,44 @@ try {
   process.exit(2);
 }
 
-if (!opts.quiet) process.stderr.write(`  crawling ${target} …\n`);
+if (!opts.quiet) {
+  process.stderr.write(`  crawling ${target} …${file.source ? ` (${file.source})` : ''}\n`);
+}
 
 const { findings, meta } = await audit(target, opts);
 
-if (!opts.quiet) console.log(terminal(findings, meta));
-
-if (opts.md) {
-  writeFileSync(opts.md, markdown(findings, meta));
-  if (!opts.quiet) console.log(`  report → ${opts.md}\n`);
+// --- Compare, if asked --------------------------------------------------
+let comparison = null;
+if (opts.baseline) {
+  if (existsSync(opts.baseline)) {
+    try {
+      comparison = diff(parse(readFileSync(opts.baseline, 'utf8'), opts.baseline), findings);
+    } catch (err) {
+      console.error(`  ${err.message}`);
+      process.exit(2);
+    }
+  } else if (!opts.quiet) {
+    process.stderr.write(`  no baseline at ${opts.baseline} yet — writing one\n`);
+  }
+  if (!existsSync(opts.baseline) || opts.updateBaseline) {
+    writeFileSync(opts.baseline, serialize(findings, meta));
+  }
 }
 
+// --- Report -------------------------------------------------------------
+if (!opts.quiet) {
+  console.log(comparison ? diffReport(comparison) : terminal(findings, meta));
+}
+if (opts.md) writeFileSync(opts.md, markdown(findings, meta));
+if (opts.json) writeFileSync(opts.json, serialize(findings, meta));
+if (!opts.quiet && (opts.md || opts.json)) {
+  console.log(`  ${[opts.md, opts.json].filter(Boolean).join('  ')}\n`);
+}
+
+// --- Exit ---------------------------------------------------------------
 const n = counts(findings);
-const shouldFail =
+const failed =
   (opts.failOn === 'error' && n.error > 0) ||
-  (opts.failOn === 'warn' && n.error + n.warn > 0);
-process.exit(shouldFail ? 1 : 0);
+  (opts.failOn === 'warn' && n.error + n.warn > 0) ||
+  (opts.failOn === 'new' && (comparison?.added.length ?? 0) > 0);
+process.exit(failed ? 1 : 0);

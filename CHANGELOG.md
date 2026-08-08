@@ -5,6 +5,36 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-08
+
+Turns the report into a regression guard.
+
+### Added
+- `--json <file>` — machine-readable output, and the format a baseline uses.
+- `--baseline <file>` — compare against a previous run and report only what
+  changed: fixed, new, unchanged. `--fail-on new` fails a build on a
+  regression while tolerating the backlog you already know about, which is
+  what keeps the check from being switched off in week two.
+- `--update-baseline` — rewrite the baseline after comparing.
+- Configuration file (`seo-audit.config.json`, or `--config`): `ignore` rules
+  by check id, optionally scoped to URL globs, so findings a site has decided
+  to live with stop drowning the ones that matter. `*` stops at a slash, `**`
+  does not.
+- `--ignore <ids>` for silencing a check for a single run.
+- `expect` in the config: assert that a group of pages carries the schema
+  types it should. The difference between "the JSON-LD parses" and "this
+  article is actually marked up as an article" — it catches a template
+  quietly dropping its structured data.
+- The run summary reports how many findings were ignored, so a config that
+  hides too much is visible rather than silent.
+
+### Fixed
+- Sitemap discovery reads the `Sitemap:` line in `robots.txt` before guessing
+  filenames, and follows redirects. Guessing alone missed Yoast's
+  `/sitemap_index.xml` on the first WordPress site it met.
+- Cloudflare's `/cdn-cgi/l/email-protection` links are no longer reported as
+  broken. They answer 404 to anything that is not a browser, by design.
+
 ## [0.1.0] — 2026-08-08
 
 First working version.
@@ -30,5 +60,6 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nurkamol/seo-audit/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nurkamol/seo-audit/releases/tag/v0.1.0

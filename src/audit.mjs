@@ -3,6 +3,7 @@ import { Fetcher, mapLimit } from './http.mjs';
 import { parseHtml, parseSitemap } from './parse.mjs';
 import { pageChecks, crossPageChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
+import { applyIgnores, expectationChecks } from './config.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -68,7 +69,17 @@ export async function audit(target, opts = {}) {
         'following links only — and this tool has nothing to audit. Pass --sitemap <url> if it lives elsewhere.',
       url: origin,
     });
-    return { findings, meta: { origin, pages: 0, requests: fetcher.count, ms: Date.now() - started } };
+    return {
+      findings,
+      meta: {
+        origin,
+        pages: 0,
+        ignored: 0,
+        requests: fetcher.count,
+        ms: Date.now() - started,
+        date: new Date().toISOString().slice(0, 10),
+      },
+    };
   }
 
   const list = urls.slice(0, opts.limit ?? 200);
@@ -87,6 +98,7 @@ export async function audit(target, opts = {}) {
 
   for (const page of pages) findings.push(...pageChecks(page));
   findings.push(...crossPageChecks(pages));
+  findings.push(...expectationChecks(pages, opts.expect));
   findings.push(...(await siteChecks(origin, fetcher, pages, opts)));
 
   if (truncated > 0) {
@@ -99,9 +111,14 @@ export async function audit(target, opts = {}) {
     });
   }
 
+  // What the site has decided to live with is dropped last, so an ignore rule
+  // can silence a site-wide check as easily as a per-page one.
+  const [kept, ignored] = applyIgnores(findings, opts.ignore);
+
   return {
-    findings,
+    findings: kept,
     meta: {
+      ignored,
       origin,
       pages: pages.length,
       requests: fetcher.count,

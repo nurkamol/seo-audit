@@ -4,10 +4,17 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-- **`--baseline <file>`** — compare against a previous JSON run and report only what changed. Turns the tool from a report into a regression guard: the useful question is rarely "how many warnings" but "did this deploy break something".
-- **`--json <file>`** — machine-readable output. Needed for the baseline above, and for anyone wanting to graph findings over time.
-- **`--ignore <id,id>` and a config file** — every site has a rule it lives with on purpose (a short contact page, a canonical pointing elsewhere). Silencing those by hand each run is how a report stops being read.
-- **Structured-data expectations** — assert that a page carries the type it should (`Service` on service pages, `BlogPosting` on articles), rather than only checking the JSON parses.
+- **A GitHub Action** — `uses: nurkamol/seo-audit@v1` with the baseline committed in the repo, so adding this to a project is one file rather than a remembered command.
+- **`--against <url>`** — audit a preview deployment and diff it against production directly, no baseline file. The natural shape for a pull-request check.
+- **Per-check thresholds in config** — `thinWords`, title and description bounds. A documentation site and a shop disagree about what "thin" means, and the tool should not have the opinion.
+- **Sitemap hygiene** — URLs in the sitemap that no page links to (orphans), and pages linked everywhere that the sitemap omits. Both are cheap to find once the crawl exists.
+
+## Shipped
+
+- **`--json`, `--baseline`, `--update-baseline`** (0.2.0) — regression guard rather than a report.
+- **Config file with `ignore` rules** (0.2.0), scoped by check id and URL glob.
+- **Structured-data expectations** (0.2.0) — assert a page carries the type it should.
+- **Sitemap discovery via robots.txt** (0.2.0) — guessing filenames only finds the conventions you thought of.
 
 ## Later
 
