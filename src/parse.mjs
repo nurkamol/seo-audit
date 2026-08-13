@@ -18,11 +18,18 @@ const decode = (s) =>
 
 /** Attribute value from a tag string: attr(`<img alt="x">`, 'alt') → 'x'
  *
- *  The lookbehind matters: `\b` treats the hyphen in `data-src` as a boundary,
- *  so a plain word-boundary match reads a lazy-loading site's `data-src` as
- *  its `src` and reports images that are not there. */
+ *  The lookbehind matters, and has been widened twice by real sites:
+ *
+ *  - `\b` treats the hyphen in `data-src` as a boundary, so a plain
+ *    word-boundary match reads a lazy-loading site's `data-src` as its `src`
+ *    and reports images that are not there.
+ *  - `:` and `[` introduce a framework binding — `:src`, `v-bind:src`,
+ *    `x-bind:src`, `[src]` — whose value is a JavaScript expression, not a URL.
+ *    allbirds.com binds `:src="(cardRefs['7205190238288']?.selectedImage…)"`,
+ *    and reading those as real sources reported twenty-four of its images as
+ *    404s that do not exist. */
 export function attr(tag, name) {
-  const start = `(?<![-\\w])${name}`;
+  const start = `(?<![-:\\[\\w])${name}`;
   const m =
     tag.match(new RegExp(`${start}\\s*=\\s*"([^"]*)"`, 'i')) ??
     tag.match(new RegExp(`${start}\\s*=\\s*'([^']*)'`, 'i')) ??
@@ -113,6 +120,10 @@ export function parseHtml(rawHtml, pageUrl) {
       srcset: attr(tag, 'srcset'),
       loading: attr(tag, 'loading'),
       role: attr(tag, 'role'),
+      // `:alt="item.title"` is alt text the framework fills in on render. The
+      // value cannot be read from here, but the author plainly provided one,
+      // and calling that a missing alt is guessing wrong at error level.
+      altBound: /[:[]alt\b/i.test(tag),
       // Inside a <picture> the sibling <source> may carry the srcset instead.
       inPicture: false,
     };

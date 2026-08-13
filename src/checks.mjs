@@ -215,7 +215,9 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   // choice rather than an oversight — mozilla.org's accessibility team ships it
   // — and calling a deliberate choice an error is how a report gets ignored.
   const decorativeByRole = (i) => /^(presentation|none)$/i.test(i.role ?? '');
-  const noAlt = doc.images.filter((i) => i.alt === null && !decorativeByRole(i));
+  const noAlt = doc.images.filter(
+    (i) => i.alt === null && !decorativeByRole(i) && !i.altBound,
+  );
   if (noAlt.length) {
     // An <img> can have no src either — a lazy-loading placeholder, or markup
     // waiting on JavaScript. Saying "First: null" helped nobody find it.

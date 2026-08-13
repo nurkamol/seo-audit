@@ -100,6 +100,22 @@ test('attr does not match a longer attribute name', () => {
   assert.equal(attr('<img data-src="x">', 'src'), null);
 });
 
+test('a framework binding is not the attribute it binds', () => {
+  // allbirds.com binds :src="(cardRefs['7205190238288']?.selectedImage…)" with
+  // Alpine. Reading those as real sources reported twenty-four of its images as
+  // 404s for URLs that were never URLs.
+  for (const bound of [':src', 'v-bind:src', 'x-bind:src', '[src]']) {
+    assert.equal(
+      attr(`<img ${bound}="item.image">`, 'src'),
+      null,
+      `${bound} should not be read as src`,
+    );
+  }
+  assert.equal(attr('<img :alt="item.alt">', 'alt'), null);
+  // The real attribute alongside a binding is still found.
+  assert.equal(attr('<img :alt="item.alt" src="/real.png">', 'src'), '/real.png');
+});
+
 test('parseHtml extracts the pieces the checks rely on', () => {
   const doc = parseHtml(
     `<html lang="en"><head><title>T</title>
@@ -218,6 +234,47 @@ test('the printed one-liner is the command that was actually run', () => {
     invocation('https://example.com', { html: 'seo-audit.html' }),
     'seo-audit https://example.com --html seo-audit.html',
   );
+});
+
+// --- og:image reachability ------------------------------------------------
+
+const ogSite = (origin, src) => bareSite(origin, { og: { 'og:image': src } });
+
+test('an og:image that redirects to https still loads', async () => {
+  // allbirds.com serves http:// og:images that 301 to https. Every scraper
+  // follows that; judging the first hop reported seven of them as blank.
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) =>
+      url.startsWith('http://') ? { status: 301, location: url.replace('http://', 'https://') } : notFound(url),
+    ),
+    ogSite(origin, 'http://x.test/og.png'),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(!out.some((f) => f.id === 'og-image-broken'));
+});
+
+test('an og:image that really is missing is still reported', async () => {
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (url.endsWith('/og.png') ? { status: 404 } : notFound(url))),
+    ogSite(origin, 'https://x.test/og.png'),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(out.some((f) => f.id === 'og-image-broken'));
+});
+
+test('an og:image behind hotlink protection is not called broken', async () => {
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (url.endsWith('/og.png') ? { status: 403 } : notFound(url))),
+    ogSite(origin, 'https://x.test/og.png'),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(!out.some((f) => f.id === 'og-image-broken'));
 });
 
 // --- TLS certificates -----------------------------------------------------
@@ -1064,6 +1121,21 @@ test('a page missing the basics reports each one', () => {
 test('an image with no alt attribute is an error; alt="" is not', () => {
   assert.ok(ids(pageChecks(page('<main><img src="/a.png"></main>'))).includes('img-alt'));
   assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>'))).includes('img-alt'));
+});
+
+test('alt bound by a framework is alt the author provided', () => {
+  // allbirds.com has 43 images: 40 with a real alt, 3 with :alt="item.title",
+  // and none with neither. The value cannot be read without running Alpine, but
+  // the author plainly supplied one, and calling that a missing alt is guessing
+  // wrong at error level.
+  for (const bound of [':alt', 'v-bind:alt', 'x-bind:alt', '[alt]']) {
+    assert.ok(
+      !ids(pageChecks(page(`<main><img src="/a.png" ${bound}="item.title"></main>`))).includes('img-alt'),
+      `${bound} should count as alt provided`,
+    );
+  }
+  // An image with no alt of any kind is still reported.
+  assert.ok(ids(pageChecks(page('<main><img src="/a.png" :src="x"></main>'))).includes('img-alt'));
 });
 
 test('role="presentation" says decorative just as alt="" does', () => {

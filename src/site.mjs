@@ -431,19 +431,29 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     // second, vaguer finding about the same tag.
     if (src && /^(https?:)?\/\//i.test(src)) ogImages.set(src, page.url);
   }
-  await mapLimit([...ogImages.keys()], 4, async (src) => {
-    const res = await fetcher.get(src, { method: 'HEAD' });
-    if (!res.ok) {
+  // The chain is followed and only the final answer judged. An og:image on
+  // http:// that 301s to https loads perfectly well — every scraper follows it —
+  // and allbirds.com had seven of those reported as previewing blank.
+  //
+  // Conservative about what counts as broken, for the same reason as the image
+  // sweep: 403 is hotlink protection working, not a missing file.
+  const ogResults = await mapLimit([...ogImages.keys()], 4, async (src) => {
+    const { final } = await fetcher.chain(src);
+    return { src, final };
+  });
+  for (const { src, final } of ogResults) {
+    if (final.status === 404 || final.status === 410 || final.status === 0) {
       out.push(f('error', 'og-image-broken', 'og:image does not load',
-        `HTTP ${res.status} for ${src} — shared links will preview blank.`, ogImages.get(src)));
-      return;
+        `HTTP ${final.status || final.error} for ${src} — shared links will preview blank.`,
+        ogImages.get(src)));
+      continue;
     }
-    const bytes = Number(res.headers.get('content-length') ?? 0);
+    const bytes = Number(final.headers.get('content-length') ?? 0);
     if (bytes > 5_000_000) {
       out.push(f('warn', 'og-image-heavy', 'og:image is very large',
         `${(bytes / 1e6).toFixed(1)}MB — some scrapers give up before downloading it.`, ogImages.get(src)));
     }
-  });
+  }
 
   return out;
 }

@@ -5,6 +5,36 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+A third sweep, against the shapes the first two missed: WordPress, e-commerce
+and a JavaScript-framework front end — techcrunch.com, allbirds.com,
+wpbeginner.com, linear.app and gymshark.com. 54 errors reported; 35 were the
+tool's fault.
+
+- **Framework bindings were read as the attributes they bind.** `attr()`'s
+  lookbehind excluded `-` (so `data-src` was safe) but not `:` or `[`, so
+  Alpine's `:src`, Vue's `v-bind:src` and Angular's `[src]` were all read as a
+  real `src`. allbirds.com binds
+  `:src="(cardRefs['7205190238288']?.selectedImage…)"`, and twenty-four of its
+  images were reported as 404s for URLs that were never URLs. The same binding
+  on `:href` produced broken links pointing at JavaScript template literals.
+
+- **An `alt` supplied by a binding is an `alt` the author supplied.** With the
+  above fixed, `:alt="item.title"` became invisible and the images started
+  reporting as having no alt at all. The value cannot be read without running
+  the framework, but the intent is plain, and guessing wrong at error level is
+  the failure this tool exists to avoid. allbirds.com has 43 images: 40 with a
+  literal alt, 3 bound, and none with neither.
+
+- **`og:image` judged the first hop.** An og:image on `http://` that 301s to
+  https loads perfectly well — every scraper follows it — and seven of
+  allbirds.com's were reported as previewing blank. The chain is now followed
+  and only the final answer judged, conservatively: 404, 410 or a dead
+  connection, so hotlink protection is not mistaken for a missing file.
+
+That is the third time reading only the first hop has been wrong, after soft
+404s and the link-crawl seed.
+
 ## [1.5.2] — 2026-08-14
 
 ### Fixed
