@@ -113,6 +113,42 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 npx github:nurkamol/seo-audit one.example two.example three.example
 ```
 
+### Checking a migration's redirects
+
+A redirect map is written once, verified once, and then rots quietly: a later
+change to a destination turns an entry into a hop through a 404, and nothing
+tells anyone. The old URLs are the ones carrying the links and the rankings, so
+this is one of the few SEO failures that is both expensive and completely
+silent.
+
+```bash
+npx github:nurkamol/seo-audit https://example.com --redirects _redirects
+```
+
+The file is the Netlify `_redirects` shape, which is also what most people
+write by hand — `#` comments, and `to` and the status both optional:
+
+```
+/old-path        /new-path      301
+/also-old        /new-path
+/just-an-old-url
+```
+
+Every old URL is asked for, and what actually happens is reported:
+
+| | |
+|---|---|
+| `redirect-dead` | error — the old URL 404s. The rule never shipped |
+| `redirect-broken` | error — it redirects, and lands on nothing. Worse than no rule, because it looks handled |
+| `redirect-not-applied` | warning — the old URL still answers 200 |
+| `redirect-hops` | warning — more than one hop to arrive |
+| `redirect-elsewhere` | warning — lands somewhere the map does not expect |
+| `redirect-temporary` | warning — served as 302 where the map says 301 |
+
+Rules with a `*` or a `:placeholder` match a shape rather than a URL, so asking
+for them literally proves nothing. They are counted and reported, never guessed
+at. A rule that works in one hop reports nothing at all.
+
 ### Sites without a sitemap
 
 If no sitemap can be found, the crawl follows links from the homepage instead
@@ -168,6 +204,7 @@ reason.
 | `--limit <n>` | 200 | Maximum pages to check |
 | `--concurrency <n>` | 6 | Parallel requests |
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path. Without any sitemap, the crawl follows links instead |
+| `--redirects <file>` | — | Check a migration's redirect map against the live site (see below) |
 | `--user-agent <ua>` | `seo-audit …` | Identify as something else |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
@@ -232,6 +269,8 @@ Drop a `seo-audit.config.json` next to where you run it:
   quietly describing a fraction of the site.
 - **`maxImageChecks`** — the same bound for the image sweep, default 200. An
   image-heavy site can reference thousands of distinct files.
+- **`redirects`** — path to a redirect map, the same as `--redirects`.
+  **`maxRedirectChecks`** bounds how many of its rules are tested, default 200.
 - **`psi`** — pages to measure with PageSpeed Insights, as paths. A path glob
   names a section: `/journal/**` measures a sample of the crawled pages under
   it, three by default, spread across the section rather than taken off the

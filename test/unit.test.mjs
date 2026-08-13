@@ -9,6 +9,7 @@ import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkd
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
+import { parseRedirectMap, redirectChecks } from '../src/redirects.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -89,6 +90,104 @@ test('lastmod stays attached to its own loc', () => {
     { loc: 'https://a.test/two/', lastmod: null },
     { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00' },
   ]);
+});
+
+// --- redirect maps --------------------------------------------------------
+
+test('a redirect map is read in the shape people actually write it', () => {
+  const rules = parseRedirectMap(
+    `# a migration
+     /old-one    /new-one    301
+     /old-two    /new-two
+     /just-a-path
+     /forced     /new-three  301!
+
+     /pattern/*  /new/:splat 301
+    `,
+  );
+  assert.deepEqual(rules, [
+    { from: '/old-one', to: '/new-one', status: 301 },
+    { from: '/old-two', to: '/new-two', status: null },
+    { from: '/just-a-path', to: null, status: null },
+    { from: '/forced', to: '/new-three', status: 301 },
+    { from: '/pattern/*', to: '/new/:splat', status: 301 },
+  ]);
+});
+
+const redirectIds = async (map, routes) => {
+  const rules = parseRedirectMap(map);
+  const out = await redirectChecks(rules, fakeFetcher(routes), 'https://x.test');
+  return out.map((finding) => finding.id);
+};
+
+test('an old URL that 404s is an error — the rule never shipped', async () => {
+  const ids = await redirectIds('/old /new 301', (url) =>
+    url.endsWith('/old') ? { status: 404 } : undefined,
+  );
+  assert.ok(ids.includes('redirect-dead'));
+});
+
+test('an old URL still answering 200 means the rule is not in effect', async () => {
+  const ids = await redirectIds('/old /new 301', () => ({ status: 200 }));
+  assert.ok(ids.includes('redirect-not-applied'));
+});
+
+test('a redirect landing on a 404 is an error, not a working rule', async () => {
+  const ids = await redirectIds('/old /new 301', (url) =>
+    url.endsWith('/old') ? { status: 301, location: '/new' } : { status: 404 },
+  );
+  assert.ok(ids.includes('redirect-broken'));
+});
+
+test('a redirect that works in one hop reports nothing', async () => {
+  const ids = await redirectIds('/old /new 301', (url) =>
+    url.endsWith('/old') ? { status: 301, location: '/new' } : { status: 200 },
+  );
+  assert.deepEqual(ids, []);
+});
+
+test('a redirect chain is reported by its hop count', async () => {
+  const ids = await redirectIds('/old /final 301', (url) => {
+    if (url.endsWith('/old')) return { status: 301, location: '/middle' };
+    if (url.endsWith('/middle')) return { status: 301, location: '/final' };
+    return { status: 200 };
+  });
+  assert.ok(ids.includes('redirect-hops'));
+});
+
+test('a 302 where the map promises 301 is reported', async () => {
+  const ids = await redirectIds('/old /new 301', (url) =>
+    url.endsWith('/old') ? { status: 302, location: '/new' } : { status: 200 },
+  );
+  assert.ok(ids.includes('redirect-temporary'));
+});
+
+test('a redirect arriving somewhere the map does not expect is reported', async () => {
+  const ids = await redirectIds('/old /new 301', (url) =>
+    url.endsWith('/old') ? { status: 301, location: '/somewhere-else' } : { status: 200 },
+  );
+  assert.ok(ids.includes('redirect-elsewhere'));
+});
+
+test('a trailing slash is not a disagreement about the destination', async () => {
+  const ids = await redirectIds('/old /new 301', (url) =>
+    url.endsWith('/old') ? { status: 301, location: '/new/' } : { status: 200 },
+  );
+  assert.ok(!ids.includes('redirect-elsewhere'));
+});
+
+test('wildcard rules are counted rather than guessed at', async () => {
+  const ids = await redirectIds('/blog/* /news/:splat 301', () => ({ status: 200 }));
+  assert.deepEqual(ids, ['redirect-pattern-skipped']);
+});
+
+test('findings are aggregated, so a big map does not produce a wall', async () => {
+  const map = Array.from({ length: 12 }, (_, i) => `/old-${i} /new-${i} 301`).join('\n');
+  const out = await redirectChecks(parseRedirectMap(map), fakeFetcher(() => ({ status: 404 })), 'https://x.test');
+  const dead = out.filter((finding) => finding.id === 'redirect-dead');
+  assert.equal(dead.length, 1, 'one finding, not twelve');
+  assert.match(dead[0].title, /12 old URL/);
+  assert.match(dead[0].detail, /and 9 more/);
 });
 
 // --- portfolios -----------------------------------------------------------

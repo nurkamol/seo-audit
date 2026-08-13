@@ -7,12 +7,12 @@ Ordered by how much a real project would feel the difference, not by how interes
 The check table is in good shape. What is left is structural — changes to what
 the tool *is*, not to what it looks for.
 
-- **Redirect map validation** — take a migration's `_redirects` and confirm each old URL still lands somewhere sensible in one hop. Migrations rot quietly.
 - **TLS certificate expiring** — a warning under 14 days, zero-dependency via `node:tls`. Not strictly SEO, but nothing else on this list takes a site down completely.
 - **A prompt when run with no arguments** — currently prints help and exits 2. It could ask for a URL and then print the flag invocation it is about to run, so it teaches the CLI rather than hiding it. Gated on `stdin.isTTY`, so CI never sees it.
 
 ## Shipped
 
+- **Redirect map validation** (unreleased) — `--redirects` asks the live site for every old URL and reports what actually happens. Wildcard rules are counted, never guessed at.
 - **Crawl by following links** (unreleased) — no sitemap no longer stops the tool. Obeys robots.txt, follows a redirecting homepage, and took mozilla.org from 0 pages audited to a full crawl.
 - **Multi-site runs** (unreleased) — several URLs, or a `sites` array, and the report becomes one table with the worst site first. Per-site overrides, because a portfolio is not a list of interchangeable sites. `--baseline` and `--against` refuse to run across one and say why.
 

@@ -6,6 +6,24 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--redirects <file>` checks a migration's redirect map** against the live
+  site. A map is written once, verified once, and then rots: a later change to a
+  destination turns an entry into a hop through a 404, and nothing tells anyone.
+  The old URLs carry the links and the rankings, which makes this one of the few
+  SEO failures that is both expensive and completely silent.
+
+  Reads the Netlify `_redirects` shape, which is also what people write by hand,
+  with `to` and the status both optional. Reports `redirect-dead` and
+  `redirect-broken` as errors, and `redirect-not-applied`, `redirect-hops`,
+  `redirect-elsewhere` and `redirect-temporary` as warnings. A rule that works
+  in one hop reports nothing.
+
+  Rules with a `*` or a `:placeholder` match a shape rather than a URL, so
+  asking for them literally proves nothing — they are counted and reported
+  rather than guessed at. Findings are aggregated by outcome, because a
+  migration map runs to hundreds of entries and one finding each would be a wall
+  nobody reads. `maxRedirectChecks` bounds the work and says when it bites.
+
 - **A site with no sitemap is crawled by following links**, instead of stopping
   dead. The sites least likely to have been looked after were exactly the ones
   this refused to look at. `www.mozilla.org` went from 0 pages audited to a full

@@ -2,6 +2,7 @@
 import { Fetcher, mapLimit } from './http.mjs';
 import { parseHtml, parseSitemap } from './parse.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
+import { redirectChecks } from './redirects.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
@@ -236,6 +237,17 @@ export async function audit(target, opts = {}) {
   findings.push(
     ...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls, bySitemap })),
   );
+
+  // A migration's redirect map, checked against the live site. Only when one
+  // is handed over: there is nothing to infer here, and guessing at old URLs
+  // would invent findings.
+  if (opts.redirectRules?.length) {
+    findings.push(
+      ...(await redirectChecks(opts.redirectRules, fetcher, origin, {
+        limit: opts.maxRedirectChecks ?? 200,
+      })),
+    );
+  }
 
   // Performance, measured by Google rather than guessed at here. Slow and
   // rate-limited, so only on request, and for a named page or a sample of a

@@ -10,7 +10,7 @@ node bin/seo-audit.mjs https://example.com               # terminal report
 node bin/seo-audit.mjs https://example.com --html r.html --md r.md --json r.json
 node bin/seo-audit.mjs https://example.com --psi https://example.com/
 node bin/seo-audit.mjs https://example.com --psi "/journal/**" --psi-sample 3
-npm test                                                # 115 tests, no install
+npm test                                                # 126 tests, no install
 ```
 
 Node 22 (`nvm use 22`). There is nothing to install and no build step.
@@ -47,6 +47,7 @@ read as its `src`.
 | `src/parse.mjs` | HTML extraction |
 | `src/checks.mjs` | Per-page checks, and cross-page checks needing every page |
 | `src/site.mjs` | Once-per-domain checks, link sweep, og:image reachability |
+| `src/redirects.mjs` | A migration's redirect map, checked against the live site |
 | `src/robots.mjs` | robots.txt, as Google reads it — `Allow` beats `Disallow` on a longer pattern, and a tie goes to `Allow` |
 | `src/config.mjs` | Config file, ignore rules, URL globs, schema expectations, portfolio resolution |
 | `src/psi.mjs` | PageSpeed Insights |
