@@ -35,6 +35,53 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       'The emerging convention for telling AI assistants what a site is and which pages matter.', llms.url));
   }
 
+  // --- Soft 404s ----------------------------------------------------------
+  // A URL that cannot exist has to answer 404. When it answers 200 instead,
+  // every typo, every stale inbound link and every crawler guess becomes an
+  // indexable page, and the site quietly fills the index with copies of its own
+  // error page. Nothing on the site reveals this — you have to ask for
+  // something missing, which no visitor and no single-page grader ever does.
+  //
+  // A fixed path rather than a random one, so the finding is identical between
+  // runs and --baseline has something stable to compare.
+  // The chain is followed and only the *final* answer judged, because the first
+  // hop says almost nothing. Two real behaviours seen in the wild: wikipedia.org
+  // answers 301 and then 404, which is correct and must stay silent; vercel.com
+  // answers 308 to strip the trailing slash and then 200, which is a soft 404
+  // that reading only the first hop would miss entirely.
+  const probe = new URL('/seo-audit-probe-404/', base).toString();
+  const { hops, final } = await fetcher.chain(probe);
+  const servedHtml = /text\/html/i.test(final.headers.get('content-type') ?? '');
+
+  if (final.status === 200 && servedHtml) {
+    // hops already includes the final response, so it is not appended again.
+    const route =
+      hops.length > 1
+        ? `answers ${hops.map((h) => h.status).join(' → ')}, ending at ${final.url}`
+        : 'answers 200 directly';
+    const landedHome = final.url.replace(/\/$/, '') === base.origin.replace(/\/$/, '');
+    // A 200 that says noindex is a deliberate mitigation rather than an
+    // oversight: still wrong, because Google wants the status code, but the page
+    // will not be indexed and the damage stops there.
+    const metaRobots = final.body.match(/<meta[^>]+name=["']robots["'][^>]*>/i)?.[0] ?? '';
+    const noindexed =
+      /noindex/i.test(metaRobots) || /noindex/i.test(final.headers.get('x-robots-tag') ?? '');
+
+    if (landedHome) {
+      out.push(f('warn', 'soft-404', 'Missing pages end up on the homepage instead of 404ing',
+        `${probe} ${route}. Google treats this as a soft 404 regardless, and a visitor who followed a ` +
+          'broken link lands on the homepage with no idea what went wrong.', probe));
+    } else if (noindexed) {
+      out.push(f('warn', 'soft-404', 'A page that does not exist answers 200, but is noindexed',
+        `${probe} ${route}. The noindex keeps it out of the index, but crawlers still spend budget on ` +
+          'every missing URL, and nothing tells a visitor the link is dead.', probe));
+    } else {
+      out.push(f('error', 'soft-404', 'A page that does not exist answers 200',
+        `${probe} ${route}, with an HTML body. Every mistyped or stale URL is a live, indexable page, ` +
+          'so the index fills with copies of the error page. Return a real 404.', probe));
+    }
+  }
+
   // --- Canonical host and scheme -----------------------------------------
   // One hop is right. Two means every visitor pays for a wasted round trip.
   const host = base.host.replace(/^www\./, '');
@@ -124,6 +171,60 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
         'section never made it into the generator’s sitemap, so look for the pattern rather than fixing them one by one.', origin));
   }
 
+  // An internal link that redirects still works, so it is never urgent — but
+  // every one of them spends a round trip that a visitor and a crawler both
+  // pay for, and they accumulate silently after a URL structure changes.
+  // Aggregated and filed as a note: keeping an old permalink alive on purpose
+  // is a legitimate reason to have one.
+  const redirecting = results.filter((r) => r.status >= 300 && r.status < 400);
+  if (redirecting.length) {
+    out.push(f('info', 'link-redirects', `${redirecting.length} internal link(s) point at a redirect`,
+      `First: ${redirecting.slice(0, 3).map((r) => `${r.target} (${r.status})`).join(', ')}. ` +
+        'Linking to the final URL saves the hop.', origin));
+  }
+
+  // --- Images that do not load --------------------------------------------
+  // The link sweep above reads anchors only, so a broken <img> on page 23 has
+  // never been visible to this tool — which is the exact shape of bug it was
+  // written for.
+  //
+  // Deliberately conservative about what counts as broken. A 403 is the
+  // signature of hotlink protection working as designed, not of a missing file,
+  // and reporting those would be the /cdn-cgi/ mistake a second time.
+  const imageSources = new Map();
+  for (const page of pages) {
+    for (const img of page.doc?.images ?? []) {
+      if (!img.src || /^data:/i.test(img.src)) continue;
+      let absolute;
+      try {
+        absolute = new URL(img.src, page.url).toString();
+      } catch {
+        continue;
+      }
+      if (!imageSources.has(absolute)) imageSources.set(absolute, page.url);
+    }
+  }
+  const imageLimit = opts.maxImageChecks ?? 200;
+  const imageTargets = [...imageSources.keys()].slice(0, imageLimit);
+  const imageResults = await mapLimit(imageTargets, 6, async (src) => {
+    let res = await fetcher.get(src, { method: 'HEAD' });
+    // Some hosts answer HEAD with 405 or 501 and serve the file perfectly well.
+    if (res.status === 405 || res.status === 501) res = await fetcher.get(src);
+    return { src, status: res.status, error: res.error };
+  });
+  // In source order, not completion order, so two runs of an unchanged site
+  // produce the same report.
+  for (const { src, status, error } of imageResults) {
+    if (status === 404 || status === 410 || status === 0) {
+      out.push(f('error', 'broken-image', 'Image does not load',
+        `HTTP ${status || error} for ${src} — used on ${imageSources.get(src)}.`, imageSources.get(src)));
+    }
+  }
+  if (imageSources.size > imageTargets.length) {
+    out.push(f('info', 'image-sweep-capped', `${imageSources.size - imageTargets.length} images were not checked`,
+      `The sweep stops at ${imageLimit} distinct images. Raise it with maxImageChecks in the config.`, origin));
+  }
+
   // --- Canonical targets --------------------------------------------------
   // A canonical pointing at a redirect or a 404 is worse than none: Google is
   // told the real page lives somewhere that does not answer.
@@ -168,7 +269,10 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   const ogImages = new Map();
   for (const page of pages) {
     const src = page.doc?.og['og:image'];
-    if (src) ogImages.set(src, page.url);
+    // A relative og:image is reported as og-image-relative by the page checks,
+    // which explains the actual problem. Fetching it here would only add a
+    // second, vaguer finding about the same tag.
+    if (src && /^(https?:)?\/\//i.test(src)) ogImages.set(src, page.url);
   }
   await mapLimit([...ogImages.keys()], 4, async (src) => {
     const res = await fetcher.get(src, { method: 'HEAD' });

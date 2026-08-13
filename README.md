@@ -151,6 +151,7 @@ Drop a `seo-audit.config.json` next to where you run it:
   "failOn": "error",
   "limits": { "thinWords": 250 },
   "maxLinkChecks": 200,
+  "maxImageChecks": 200,
   "psi": ["/", "/pricing/", "/journal/**"],
   "ignore": [
     "img-srcset",
@@ -172,6 +173,8 @@ Drop a `seo-audit.config.json` next to where you run it:
   page, so a large site can present thousands of targets; this bounds the run.
   When it bites, the report says how many were left unchecked rather than
   quietly describing a fraction of the site.
+- **`maxImageChecks`** — the same bound for the image sweep, default 200. An
+  image-heavy site can reference thousands of distinct files.
 - **`psi`** — pages to measure with PageSpeed Insights, as paths. A path glob
   names a section: `/journal/**` measures a sample of the crawled pages under
   it, three by default, spread across the section rather than taken off the
@@ -244,12 +247,14 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 |---|---|
 | Page returns 200 and is not a redirect listed in the sitemap | error |
 | `noindex` on a page the sitemap advertises | error |
+| `X-Robots-Tag: noindex` — the same instruction as a header, invisible in the HTML | error |
 | `<title>` present, 15–60 characters | error / warning |
 | Meta description present, 70–160 characters | warning |
 | Exactly one `<h1>` | error / warning |
 | `lang` attribute and viewport meta | warning / error |
 | Canonical present, single, self-referencing | warning / error / note |
 | `og:title`, `og:description`, `og:image` present | warning |
+| `og:image` is an absolute URL — a scraper has no page to resolve a relative one against | error |
 | `og:image` is not WebP — LinkedIn won't render it, WhatsApp is unreliable | warning |
 | `og:image` declares width and height | note |
 | JSON-LD parses and carries a `@type` (or a `@graph`) | error / warning |
@@ -282,9 +287,12 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `llms.txt` exists | note |
 | `http://`, `www.` and `https://www.` each reach the canonical host in one hop | warning |
 | HSTS, `X-Content-Type-Options`, `Referrer-Policy`, CSP headers | warning / note |
+| A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
 | Every internal link resolves — the site-wide 404 sweep | error |
+| Every `<img>` actually loads — 403 is hotlink protection, not a broken file, and is not reported | error |
+| Internal links point at final URLs rather than redirects | note |
 | No page is linked but missing from the sitemap | warning |
-| The link sweep says so when it stops at `maxLinkChecks` rather than implying it checked everything | note |
+| The link and image sweeps say so when they stop at their cap rather than implying they checked everything | note |
 | Every `og:image` actually loads, and isn't too heavy to scrape | error / warning |
 
 ---

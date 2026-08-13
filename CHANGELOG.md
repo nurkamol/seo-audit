@@ -5,6 +5,42 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Soft 404s** (`soft-404`). A URL that cannot exist has to answer 404; when it
+  answers 200 instead, every typo, stale inbound link and crawler guess becomes
+  an indexable copy of the error page. Nothing on a site reveals this — you have
+  to ask for something missing, which no visitor and no single-page grader does.
+
+  The probe follows the redirect chain and judges only the final answer, which
+  real sites forced: wikipedia.org answers `301 → 404`, which is correct and
+  must stay silent, while vercel.com answers `308 → 307 → 307 → 200` — a
+  trailing-slash normalisation ending in a soft 404 that reading the first hop
+  would miss completely. Landing on the homepage is reported separately, and a
+  soft 404 carrying `noindex` is a warning rather than an error, because the
+  damage stops at the index.
+
+- **`X-Robots-Tag: noindex`** (`x-robots-noindex`). The same instruction as the
+  meta tag, sent as a header — invisible in the HTML, so it survives every
+  review of the markup, and binding on Google exactly as hard.
+
+- **Broken images** (`broken-image`). The link sweep read anchors only, so a
+  404ing `<img>` on page 23 has never been visible to this tool, which is the
+  precise shape of bug it was written for. Deliberately conservative: only
+  404, 410 and a dead connection count. A 403 is hotlink protection working as
+  designed, and reporting those would repeat the `/cdn-cgi/` mistake. A host
+  that rejects `HEAD` with 405 or 501 is retried with `GET` before judgement.
+
+- **Relative `og:image`** (`og-image-relative`). Open Graph requires an absolute
+  URL; a scraper has no page context to resolve `/og.jpg` against, so the
+  preview comes out blank while the markup looks perfectly reasonable.
+  Protocol-relative URLs are accepted, because scrapers do resolve them.
+
+- **Internal links that redirect** (`link-redirects`, note). Aggregated into one
+  finding, since keeping an old permalink alive on purpose is legitimate.
+
+- `maxImageChecks` bounds the image sweep, and `image-sweep-capped` reports when
+  it bites.
+
 ### Fixed
 - `maxLinkChecks` now bounds the whole link sweep, not just half of it. The
   broken-link pass respected the cap while the "linked but not in the sitemap"

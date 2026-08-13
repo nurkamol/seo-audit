@@ -72,6 +72,14 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     out.push(f('error', 'noindex', 'Page is noindexed but listed in the sitemap',
       `robots meta: "${doc.robots}"`, url));
   }
+  // The same instruction, sent as a header. Nothing in the HTML shows it, so it
+  // survives every review of the markup and every tool that only reads the
+  // source — while binding Google exactly as hard as the meta tag.
+  const xRobots = res.headers?.get?.('x-robots-tag') ?? '';
+  if (/noindex/i.test(xRobots)) {
+    out.push(f('error', 'x-robots-noindex', 'Page is noindexed by an HTTP header',
+      `X-Robots-Tag: "${xRobots}" — invisible in the HTML, and the page is in the sitemap.`, url));
+  }
 
   // --- Title & description ------------------------------------------------
   if (!doc.title) {
@@ -121,6 +129,14 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       'Shared links will preview with whatever the platform scrapes.', url));
   }
   const ogImage = doc.og['og:image'];
+  // The Open Graph spec requires an absolute URL. A scraper has no page context
+  // to resolve `/og.jpg` against, so the preview comes out blank — and the
+  // markup looks perfectly reasonable to anyone reading it. Protocol-relative
+  // is tolerated here because scrapers do in fact resolve it.
+  if (ogImage && !/^(https?:)?\/\//i.test(ogImage)) {
+    out.push(f('error', 'og-image-relative', 'og:image is not an absolute URL',
+      `"${ogImage}" — Open Graph requires a full URL including the host. Shared links will preview blank.`, url));
+  }
   if (ogImage && /\.webp($|\?)/i.test(ogImage)) {
     out.push(f('warn', 'og-webp', 'og:image is WebP',
       'LinkedIn does not render WebP previews and WhatsApp is unreliable with it. Use JPEG or PNG.', url));

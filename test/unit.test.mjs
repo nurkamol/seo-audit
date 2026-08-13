@@ -74,26 +74,50 @@ test('parseSitemap distinguishes an index from a urlset', () => {
 
 // --- the link sweep -------------------------------------------------------
 
-// A fetcher that records every URL asked for, so the sweep's cost is testable.
-// Deliberately does not cache: the point is to count what the sweep asks for,
-// not what the real Fetcher would spare it.
-function countingFetcher() {
+// A fetcher that records every URL asked for and lets a test script individual
+// responses. Deliberately does not cache: the point is to count what the sweep
+// asks for, not what the real Fetcher would spare it.
+function fakeFetcher(routes = () => undefined) {
   const calls = [];
+  const make = (url, o = {}) => {
+    const status = o.status ?? 200;
+    return {
+      url,
+      status,
+      ok: status >= 200 && status < 300,
+      headers: new Headers(o.headers ?? { 'content-type': 'text/html' }),
+      body: o.body ?? '',
+      location: o.location ?? null,
+      error: o.error,
+      ms: 1,
+    };
+  };
   return {
     calls,
-    async get(url) {
+    async get(url, { method = 'GET' } = {}) {
       calls.push(url);
-      return {
-        url, status: 200, ok: true, body: '', location: null, ms: 1,
-        headers: new Headers({ 'content-type': 'text/html' }),
-      };
+      return make(url, routes(url, method) ?? {});
     },
-    async chain(url) {
-      const final = await this.get(url);
-      return { hops: [{ url, status: 200 }], final };
+    // Follows redirects like the real Fetcher does, so a test can express
+    // "308 to strip the slash, then 200" — the shape that matters for soft 404s.
+    async chain(url, max = 5) {
+      const hops = [];
+      let current = url;
+      for (let i = 0; i < max; i++) {
+        const res = await this.get(current);
+        hops.push({ url: current, status: res.status });
+        if (res.status < 300 || res.status >= 400 || !res.location) return { hops, final: res };
+        current = new URL(res.location, current).toString();
+      }
+      return { hops, final: await this.get(current) };
     },
   };
 }
+const countingFetcher = () => fakeFetcher();
+
+// Every fake host below answers 404 for the soft-404 probe unless a test says
+// otherwise, so a site that behaves correctly is the default.
+const notFound = (url) => (url.includes('seo-audit-probe-404') ? { status: 404 } : undefined);
 
 const linkPage = (origin, targets) => ({
   url: `${origin}/p/`,
@@ -137,6 +161,21 @@ test('a sweep that checks everything does not claim it was capped', async () => 
   assert.ok(!out.some((finding) => finding.id === 'link-sweep-capped'));
 });
 
+test('internal links that redirect are aggregated into one note', async () => {
+  const origin = 'https://x.test';
+  const targets = [`${origin}/a/`, `${origin}/b/`, `${origin}/c/`];
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (/\/[ab]\/$/.test(url) ? { status: 301 } : notFound(url))),
+    [linkPage(origin, targets)],
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  const note = out.filter((finding) => finding.id === 'link-redirects');
+  assert.equal(note.length, 1, 'one aggregated note, not one per link');
+  assert.equal(note[0].level, 'info');
+  assert.match(note[0].title, /2 internal link/);
+});
+
 test('broken links are reported in link order, so two runs agree', async () => {
   const origin = 'https://x.test';
   const targets = Array.from({ length: 6 }, (_, i) => `${origin}/link-${i}/`);
@@ -160,6 +199,131 @@ test('broken links are reported in link order, so two runs agree', async () => {
   assert.match(broken[0], /link-1\//);
   assert.match(broken[1], /link-3\//);
   assert.match(broken[2], /link-5\//);
+});
+
+// --- soft 404s ------------------------------------------------------------
+
+const bareSite = (origin, extra = {}) => [{
+  url: `${origin}/p/`,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: { links: { internal: [], inMain: [], external: [] }, canonical: [], og: {}, hreflang: [], images: [], ...extra },
+}];
+
+const soft404 = async (routes) => {
+  const out = await siteChecks('https://x.test', fakeFetcher(routes), bareSite('https://x.test'), {
+    sitemapUrls: ['https://x.test/p/'],
+  });
+  return out.find((finding) => finding.id === 'soft-404');
+};
+
+test('a site that 404s a missing page is not reported', async () => {
+  assert.equal(await soft404(notFound), undefined);
+});
+
+test('a missing page answering 200 with HTML is an error', async () => {
+  const finding = await soft404(() => undefined); // 200 for everything
+  assert.ok(finding, 'expected a soft-404 finding');
+  assert.equal(finding.level, 'error');
+});
+
+test('a soft 404 carrying noindex is a warning, not an error', async () => {
+  const finding = await soft404((url) =>
+    url.includes('seo-audit-probe-404')
+      ? { body: '<meta name="robots" content="noindex">' }
+      : undefined,
+  );
+  assert.equal(finding.level, 'warn');
+  assert.match(finding.title, /noindexed/);
+});
+
+test('the same applies when the noindex arrives as a header', async () => {
+  const finding = await soft404((url) =>
+    url.includes('seo-audit-probe-404')
+      ? { headers: { 'content-type': 'text/html', 'x-robots-tag': 'noindex' } }
+      : undefined,
+  );
+  assert.equal(finding.level, 'warn');
+});
+
+test('missing pages redirected to the homepage are reported as a soft 404', async () => {
+  const finding = await soft404((url) =>
+    url.includes('seo-audit-probe-404') ? { status: 302, location: 'https://x.test/' } : undefined,
+  );
+  assert.ok(finding, 'expected a soft-404 finding');
+  assert.equal(finding.level, 'warn');
+  assert.match(finding.title, /homepage/);
+});
+
+test('a redirect that ends in a real 404 is silent', async () => {
+  // wikipedia.org does exactly this: 301, then 404. Correct behaviour, and
+  // judging only the first hop would report it as a problem.
+  const finding = await soft404((url) => {
+    if (!url.includes('seo-audit-probe-404')) return undefined;
+    return url.endsWith('/') ? { status: 301, location: '/seo-audit-probe-404' } : { status: 404 };
+  });
+  assert.equal(finding, undefined);
+});
+
+test('a redirect that ends in a 200 is caught, which reading one hop would miss', async () => {
+  // vercel.com's shape: 308 to strip the trailing slash, then a 200 soft 404.
+  const finding = await soft404((url) => {
+    if (!url.includes('seo-audit-probe-404')) return undefined;
+    return url.endsWith('/') ? { status: 308, location: '/seo-audit-probe-404' } : { status: 200 };
+  });
+  assert.ok(finding, 'expected the chain to be followed to its 200');
+  assert.equal(finding.level, 'error');
+  assert.match(finding.detail, /308/);
+});
+
+// --- broken images --------------------------------------------------------
+
+const imageSite = (origin, srcs) => bareSite(origin, { images: srcs.map((src) => ({ src, alt: 'x' })) });
+
+test('an image that 404s is reported, with the page that uses it', async () => {
+  const out = await siteChecks(
+    'https://x.test',
+    fakeFetcher((url) => (url.endsWith('/gone.png') ? { status: 404 } : notFound(url))),
+    imageSite('https://x.test', ['/gone.png', '/fine.png']),
+    { sitemapUrls: ['https://x.test/p/'] },
+  );
+  const broken = out.filter((finding) => finding.id === 'broken-image');
+  assert.equal(broken.length, 1);
+  assert.match(broken[0].detail, /gone\.png/);
+  assert.equal(broken[0].url, 'https://x.test/p/');
+});
+
+test('an image behind hotlink protection is not called broken', async () => {
+  // 403 is that protection working as designed. Reporting it would be the
+  // /cdn-cgi/ mistake a second time.
+  const out = await siteChecks(
+    'https://x.test',
+    fakeFetcher((url) => (url.endsWith('/guarded.png') ? { status: 403 } : notFound(url))),
+    imageSite('https://x.test', ['/guarded.png']),
+    { sitemapUrls: ['https://x.test/p/'] },
+  );
+  assert.ok(!out.some((finding) => finding.id === 'broken-image'));
+});
+
+test('a host that rejects HEAD is retried with GET before being called broken', async () => {
+  const seen = [];
+  const fetcher = fakeFetcher((url, method) => {
+    if (!url.endsWith('/pic.png')) return notFound(url);
+    seen.push(method);
+    return method === 'HEAD' ? { status: 405 } : { status: 200 };
+  });
+  const out = await siteChecks('https://x.test', fetcher, imageSite('https://x.test', ['/pic.png']), {
+    sitemapUrls: ['https://x.test/p/'],
+  });
+  assert.deepEqual(seen, ['HEAD', 'GET']);
+  assert.ok(!out.some((finding) => finding.id === 'broken-image'));
+});
+
+test('a data: URI is not fetched', async () => {
+  const fetcher = fakeFetcher(notFound);
+  await siteChecks('https://x.test', fetcher, imageSite('https://x.test', ['data:image/png;base64,AAAA']), {
+    sitemapUrls: ['https://x.test/p/'],
+  });
+  assert.ok(!fetcher.calls.some((u) => u.startsWith('data:')));
 });
 
 // --- psi targets ----------------------------------------------------------
@@ -364,6 +528,25 @@ test('a page missing the basics reports each one', () => {
 test('an image with no alt attribute is an error; alt="" is not', () => {
   assert.ok(ids(pageChecks(page('<main><img src="/a.png"></main>'))).includes('img-alt'));
   assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>'))).includes('img-alt'));
+});
+
+test('a noindex sent as a header is reported like the meta tag', () => {
+  const headed = (headers) =>
+    page('<main><p>hi</p></main>', 'https://x.test/p/', {
+      res: { ok: true, status: 200, ms: 10, headers: new Headers(headers) },
+    });
+  assert.ok(ids(pageChecks(headed({ 'x-robots-tag': 'noindex, nofollow' }))).includes('x-robots-noindex'));
+  assert.ok(!ids(pageChecks(headed({ 'x-robots-tag': 'all' }))).includes('x-robots-noindex'));
+  assert.ok(!ids(pageChecks(headed({}))).includes('x-robots-noindex'));
+});
+
+test('a relative og:image is an error, absolute and protocol-relative are not', () => {
+  const og = (content) => page(`<head><meta property="og:image" content="${content}"></head>`);
+  assert.ok(ids(pageChecks(og('/og.jpg'))).includes('og-image-relative'));
+  assert.ok(ids(pageChecks(og('og.jpg'))).includes('og-image-relative'));
+  assert.ok(!ids(pageChecks(og('https://x.test/og.jpg'))).includes('og-image-relative'));
+  // Scrapers do resolve protocol-relative URLs, so flagging it would cry wolf.
+  assert.ok(!ids(pageChecks(og('//cdn.x.test/og.jpg'))).includes('og-image-relative'));
 });
 
 test('alt text that is really a filename is flagged', () => {

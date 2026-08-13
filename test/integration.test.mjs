@@ -63,6 +63,14 @@ test('missing llms.txt is a note, not a failure', () => {
   assert.equal(llms.level, 'info');
 });
 
+test('a fixture that returns a real 404 is not reported as a soft 404', () => {
+  assert.ok(!ids().includes('soft-404'));
+});
+
+test('images that the fixture serves are not reported as broken', () => {
+  assert.ok(!ids().includes('broken-image'));
+});
+
 test('the fixture has no false positives on the pages that are correct', () => {
   // The home page is deliberately sound apart from being thin and linking to
   // a missing page — neither of which is attributed to the page's own markup.
