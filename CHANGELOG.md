@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-14
+
+Three changes to what the tool audits, rather than to what it checks for.
+
 ### Added
 - **`--redirects <file>` checks a migration's redirect map** against the live
   site. A map is written once, verified once, and then rots: a later change to a
@@ -78,6 +82,25 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `missing-from-sitemap` is silent during a link crawl. Every page found that
   way is absent from a sitemap that does not exist, and saying so once per page
   would bury the finding that matters.
+
+### Upgrading
+`@v1` moves forward: no flag renamed, no config key changed, and a single-site
+run behaves exactly as before.
+
+Two things to know if you script this tool:
+
+- **Extra positional arguments used to be ignored and now mean something.**
+  `seo-audit a.example b.example` audited only the first; it now audits both and
+  prints a portfolio table. If you were passing stray arguments and relying on
+  them being dropped, they will be crawled. Combined with `--baseline`,
+  `--against` or `--update-baseline`, a second URL now exits 2 with an
+  explanation rather than quietly auditing one site.
+- **`no-sitemap` went from error to warning**, which can only turn a red build
+  green. The pages are audited either way now. A site that is genuinely
+  un-auditable reports `nothing-crawlable`, which is an error.
+
+New errors are otherwise confined to things you opt into: `redirect-dead` and
+`redirect-broken` only appear with `--redirects`.
 
 ## [1.3.0] — 2026-08-13
 
