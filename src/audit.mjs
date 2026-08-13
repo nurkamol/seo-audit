@@ -1,7 +1,7 @@
 // Orchestration: find the pages, fetch them, run the checks.
 import { Fetcher, mapLimit } from './http.mjs';
 import { parseHtml, parseSitemap } from './parse.mjs';
-import { pageChecks, crossPageChecks } from './checks.mjs';
+import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
@@ -35,17 +35,19 @@ async function discover(origin, fetcher, explicit) {
     tried.push(`${candidate} → ${res.error ?? res.status}`);
     if (!res.ok || !/<(urlset|sitemapindex)/i.test(res.body)) continue;
 
-    const { urls, sitemaps } = parseSitemap(res.body);
-    if (urls.length) return { urls, source: candidate, tried };
+    const { urls, sitemaps, entries } = parseSitemap(res.body);
+    if (urls.length) return { urls, entries, source: candidate, tried };
 
     const nested = await mapLimit(sitemaps, 4, async (child) => {
       const sub = (await fetcher.chain(child)).final;
-      return sub.ok ? parseSitemap(sub.body).urls : [];
+      return sub.ok ? parseSitemap(sub.body) : { urls: [], entries: [] };
     });
-    const all = nested.flat();
-    if (all.length) return { urls: all, source: candidate, tried };
+    const all = nested.flatMap((n) => n.urls);
+    if (all.length) {
+      return { urls: all, entries: nested.flatMap((n) => n.entries), source: candidate, tried };
+    }
   }
-  return { urls: [], source: null, tried };
+  return { urls: [], entries: [], source: null, tried };
 }
 
 /**
@@ -66,7 +68,7 @@ export async function audit(target, opts = {}) {
       opts.onNote(`still serving inconsistent HTML after ${opts.settle}s — crawling anyway`);
     }
   }
-  const { urls, source, tried } = await discover(
+  const { urls, entries, source, tried } = await discover(
     origin,
     fetcher,
     opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null),
@@ -127,6 +129,7 @@ export async function audit(target, opts = {}) {
 
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   findings.push(...crossPageChecks(pages));
+  findings.push(...sitemapChecks(entries, source));
   findings.push(...expectationChecks(pages, opts.expect));
   findings.push(...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls })));
 

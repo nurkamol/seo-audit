@@ -151,9 +151,24 @@ export function parseHtml(html, pageUrl) {
   };
 }
 
-/** URLs from a sitemap or sitemap index. Returns {urls, sitemaps}. */
+/** URLs from a sitemap or sitemap index. Returns {urls, sitemaps, entries}.
+ *
+ *  `entries` pairs each <loc> with its own <lastmod>, read from inside the
+ *  <url> block so a date cannot drift onto a neighbouring URL. It is additional
+ *  rather than a replacement: `urls` stays a plain list of strings, because
+ *  every caller wants exactly that and changing it would ripple through
+ *  discovery for no gain. */
 export function parseSitemap(xml) {
   const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => decode(m[1]));
   const isIndex = /<sitemapindex/i.test(xml);
-  return isIndex ? { urls: [], sitemaps: locs } : { urls: locs, sitemaps: [] };
+  if (isIndex) return { urls: [], sitemaps: locs, entries: [] };
+
+  const entries = [...xml.matchAll(/<url\b[^>]*>([\s\S]*?)<\/url>/gi)]
+    .map((m) => ({
+      loc: decode(m[1].match(/<loc>\s*([^<\s]+)\s*<\/loc>/i)?.[1] ?? ''),
+      lastmod: m[1].match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i)?.[1] ?? null,
+    }))
+    .filter((entry) => entry.loc);
+
+  return { urls: locs, sitemaps: [], entries };
 }

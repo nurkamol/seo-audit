@@ -2,7 +2,7 @@
 
 ```bash
 git clone https://github.com/nurkamol/seo-audit && cd seo-audit
-npm test                                   # 85 tests, no install needed
+npm test                                   # 93 tests, no install needed
 node bin/seo-audit.mjs https://example.com
 ```
 

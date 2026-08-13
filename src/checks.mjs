@@ -322,6 +322,52 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   return out;
 }
 
+const DAY = 24 * 60 * 60 * 1000;
+
+// Below this, "every page shares a date" is a coincidence rather than a
+// pattern — a five-page brochure site genuinely does get rebuilt all at once.
+const LASTMOD_SAMPLE = 5;
+
+/** Checks on the sitemap itself, rather than the pages it lists.
+ *
+ *  `now` is injectable so the tests are not hostage to the clock. */
+export function sitemapChecks(entries, source, now = Date.now()) {
+  const out = [];
+  if (!entries.length) return out;
+
+  const dated = entries.filter((entry) => entry.lastmod);
+  if (!dated.length) {
+    out.push(f('info', 'sitemap-lastmod-missing', 'No page in the sitemap declares a lastmod',
+      'Crawlers use it to decide what to look at again. Without it, a large site is re-crawled on ' +
+        'guesswork, and a page that changed waits its turn behind pages that did not.', source));
+    return out;
+  }
+
+  // A day of slack, because a build stamping "now" on a machine with a skewed
+  // clock is not the problem being described here.
+  const future = dated.filter((entry) => {
+    const at = Date.parse(entry.lastmod);
+    return Number.isFinite(at) && at > now + DAY;
+  });
+  if (future.length) {
+    out.push(f('warn', 'sitemap-lastmod-future', `${future.length} page(s) claim a lastmod in the future`,
+      `First: ${future[0].loc} says ${future[0].lastmod}. A date that has not happened yet is not a ` +
+        'signal a crawler can use, and it is usually a timezone or a scheduling bug in the generator.', source));
+  }
+
+  // The interesting failure: a generator stamping build time on every URL. It
+  // looks diligent and is worth nothing, because Google learns the dates never
+  // distinguish one page from another and stops reading them.
+  const distinct = new Set(dated.map((entry) => entry.lastmod));
+  if (dated.length >= LASTMOD_SAMPLE && distinct.size === 1) {
+    out.push(f('info', 'sitemap-lastmod-identical', 'Every page in the sitemap has the same lastmod',
+      `All ${dated.length} say ${dated[0].lastmod}. That is a generator stamping build time rather than ` +
+        'when each page last changed — which tells a crawler nothing, so it learns to ignore the field.', source));
+  }
+
+  return out;
+}
+
 /** Checks that need every page at once. */
 export function crossPageChecks(pages) {
   const out = [];

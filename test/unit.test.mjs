@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { attr, parseHtml, parseSitemap } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
-import { pageChecks, crossPageChecks } from '../src/checks.mjs';
+import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
 import { markdown, html, counts, group } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
@@ -65,11 +65,71 @@ test('parseSitemap distinguishes an index from a urlset', () => {
   assert.deepEqual(parseSitemap('<urlset><url><loc>https://a.test/</loc></url></urlset>'), {
     urls: ['https://a.test/'],
     sitemaps: [],
+    entries: [{ loc: 'https://a.test/', lastmod: null }],
   });
   assert.deepEqual(
     parseSitemap('<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>'),
-    { urls: [], sitemaps: ['https://a.test/s.xml'] },
+    { urls: [], sitemaps: ['https://a.test/s.xml'], entries: [] },
   );
+});
+
+test('lastmod stays attached to its own loc', () => {
+  // Read from inside each <url> block, so a date on one entry cannot drift
+  // onto a neighbour that has none.
+  const { entries } = parseSitemap(
+    `<urlset>
+       <url><loc>https://a.test/one/</loc><lastmod>2026-01-02</lastmod></url>
+       <url><loc>https://a.test/two/</loc></url>
+       <url><loc>https://a.test/three/</loc><lastmod>2026-03-04T10:00:00+00:00</lastmod></url>
+     </urlset>`,
+  );
+  assert.deepEqual(entries, [
+    { loc: 'https://a.test/one/', lastmod: '2026-01-02' },
+    { loc: 'https://a.test/two/', lastmod: null },
+    { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00' },
+  ]);
+});
+
+// --- sitemap hygiene ------------------------------------------------------
+
+const NOW = Date.parse('2026-06-01T00:00:00Z');
+const dated = (n, lastmod) =>
+  Array.from({ length: n }, (_, i) => ({ loc: `https://a.test/p${i}/`, lastmod }));
+const sitemapIds = (entries, now = NOW) =>
+  sitemapChecks(entries, 'https://a.test/sitemap.xml', now).map((finding) => finding.id);
+
+test('a sitemap where every page shares one lastmod is reported', () => {
+  // The generator stamped build time on all of them.
+  assert.ok(sitemapIds(dated(20, '2026-05-30')).includes('sitemap-lastmod-identical'));
+});
+
+test('a handful of pages sharing a date is not called a pattern', () => {
+  // A small site genuinely does get rebuilt all at once.
+  assert.ok(!sitemapIds(dated(4, '2026-05-30')).includes('sitemap-lastmod-identical'));
+});
+
+test('varied lastmod dates are what correct looks like', () => {
+  const varied = dated(20, '2026-05-30').map((entry, i) => ({ ...entry, lastmod: `2026-05-${10 + i}` }));
+  assert.deepEqual(sitemapIds(varied), []);
+});
+
+test('a lastmod in the future is a warning', () => {
+  const ids = sitemapIds([...dated(3, '2026-05-01'), { loc: 'https://a.test/x/', lastmod: '2027-01-01' }]);
+  assert.ok(ids.includes('sitemap-lastmod-future'));
+});
+
+test('a lastmod a few hours ahead is clock skew, not a finding', () => {
+  const soon = new Date(NOW + 6 * 60 * 60 * 1000).toISOString();
+  assert.ok(!sitemapIds([{ loc: 'https://a.test/x/', lastmod: soon }]).includes('sitemap-lastmod-future'));
+});
+
+test('a sitemap with no lastmod at all says so once', () => {
+  const ids = sitemapIds(dated(10, null));
+  assert.deepEqual(ids, ['sitemap-lastmod-missing']);
+});
+
+test('an empty sitemap produces nothing rather than throwing', () => {
+  assert.deepEqual(sitemapIds([]), []);
 });
 
 // --- the link sweep -------------------------------------------------------

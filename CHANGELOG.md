@@ -6,6 +6,20 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`lastmod` hygiene.** `sitemap-lastmod-missing` (note), `-identical` (note)
+  and `-future` (warning). The interesting one is `identical`: a generator
+  stamping build time on every URL looks diligent and is worth nothing, because
+  the dates never distinguish one page from another and crawlers stop reading
+  them. It needs five dated URLs before it will say so — a five-page brochure
+  site genuinely does get rebuilt all at once. `future` allows a day of slack,
+  since a build machine with a skewed clock is a different problem.
+
+  `parseSitemap` gained an `entries` array pairing each `<loc>` with its own
+  `<lastmod>`, read from inside the `<url>` block so a date cannot drift onto a
+  neighbour. `urls` is unchanged and still a list of strings — every caller
+  wants exactly that, and changing it would have rippled through discovery for
+  no gain.
+
 - **hreflang, past reciprocity.** Reciprocity was the hard part and was already
   covered; these are the rest, and they only ever fail on translated pages —
   which is to say, on the pages a homepage grader never opens.
