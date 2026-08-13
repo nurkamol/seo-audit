@@ -5,6 +5,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **TLS certificate expiry** — `tls-expiring` (warning) inside 14 days,
+  `tls-expired` (error) after. Not an SEO check, and the only thing in this tool
+  that takes a site off the internet completely: a browser refuses to load an
+  expired certificate, at which point nothing else in the report matters. The
+  certificates that lapse are the ones nobody was worried about, which is why
+  two weeks of notice is the useful amount.
+
+  The inspecting connection sets `rejectUnauthorized: false`, deliberately and
+  only here. An expired certificate fails the handshake, so a validating
+  connection cannot read the one fact this exists to report — the check would go
+  silent in exactly the case it is for. Nothing is sent over the socket, and
+  nothing is read but the certificate's dates, which are the ones a browser
+  would show. Verified against `expired.badssl.com`, which reads as 4141 days
+  past expiry rather than as an unreadable host.
+
 ## [1.4.0] — 2026-08-14
 
 Three changes to what the tool audits, rather than to what it checks for.

@@ -92,6 +92,53 @@ test('lastmod stays attached to its own loc', () => {
   ]);
 });
 
+// --- TLS certificates -----------------------------------------------------
+
+const NOW_TLS = Date.parse('2026-06-01T00:00:00Z');
+const certIds = async (daysFromNow) => {
+  const out = await siteChecks('https://x.test', fakeFetcher(notFound), bareSite('https://x.test'), {
+    sitemapUrls: ['https://x.test/p/'],
+    now: NOW_TLS,
+    readCertificateExpiry: async () =>
+      daysFromNow === null ? null : NOW_TLS + daysFromNow * 24 * 60 * 60 * 1000,
+  });
+  return out.filter((finding) => finding.id.startsWith('tls-'));
+};
+
+test('a certificate with months left is not mentioned', async () => {
+  assert.deepEqual(await certIds(60), []);
+});
+
+test('a certificate expiring inside two weeks is a warning', async () => {
+  const [finding] = await certIds(9);
+  assert.equal(finding.id, 'tls-expiring');
+  assert.equal(finding.level, 'warn');
+  assert.match(finding.title, /9 day/);
+});
+
+test('an expired certificate is an error, since nothing else matters then', async () => {
+  const [finding] = await certIds(-3);
+  assert.equal(finding.id, 'tls-expired');
+  assert.equal(finding.level, 'error');
+  assert.match(finding.title, /3 day\(s\) ago/);
+});
+
+test('a certificate that cannot be read is not guessed at', async () => {
+  assert.deepEqual(await certIds(null), []);
+});
+
+test('an http site is not asked about its certificate', async () => {
+  let asked = false;
+  await siteChecks('http://x.test', fakeFetcher(notFound), bareSite('http://x.test'), {
+    sitemapUrls: ['http://x.test/p/'],
+    readCertificateExpiry: async () => {
+      asked = true;
+      return NOW_TLS;
+    },
+  });
+  assert.equal(asked, false);
+});
+
 // --- redirect maps --------------------------------------------------------
 
 test('a redirect map is read in the shape people actually write it', () => {

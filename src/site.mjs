@@ -1,7 +1,58 @@
 // Whole-site checks: the files and headers that exist once per domain, plus
 // the link graph, which is the thing single-page graders can never see.
+import { connect } from 'node:tls';
 import { mapLimit } from './http.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
+
+// Two weeks is enough to renew by hand if the automation has quietly stopped,
+// which is the failure this is for — nobody is short of warning about a
+// certificate they knew was expiring.
+const CERT_WARN_DAYS = 14;
+const DAY = 24 * 60 * 60 * 1000;
+
+/** When the certificate expires, or null if that cannot be established.
+ *
+ *  Deliberately its own connection rather than anything read off a fetch: Node
+ *  does not expose the peer certificate through `fetch`, and this is the whole
+ *  of the dependency-free way to ask. */
+export function certificateExpiry(hostname, { timeout = 8000 } = {}) {
+  return new Promise((resolve) => {
+    let socket;
+    const done = (value) => {
+      socket?.destroy();
+      resolve(value);
+    };
+    try {
+      // Validation is switched off deliberately, and only here. An *expired*
+      // certificate fails the handshake, so a validating connection cannot read
+      // the one fact this function exists to report — the check would go silent
+      // in exactly the case it is for. Nothing is sent over this socket and
+      // nothing is read from it but the certificate's dates, which are the same
+      // ones a browser would show.
+      // SNI is not permitted to carry an IP address (RFC 6066), and Node warns
+      // about it. An IP has no name to send.
+      const isIp = /^[\d.]+$/.test(hostname) || hostname.includes(':');
+      socket = connect(
+        {
+          host: hostname,
+          port: 443,
+          ...(isIp ? {} : { servername: hostname }),
+          timeout,
+          rejectUnauthorized: false,
+        },
+        () => {
+          const cert = socket.getPeerCertificate();
+          done(cert?.valid_to ? Date.parse(cert.valid_to) : null);
+        },
+      );
+    } catch {
+      return resolve(null);
+    }
+    // A host that is not listening, or not speaking TLS, has nothing to say.
+    socket.on('error', () => done(null));
+    socket.on('timeout', () => done(null));
+  });
+}
 
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
@@ -123,6 +174,30 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     } else if (hops.length > 2) {
       out.push(f('warn', 'redirect-chain', `${variant} takes ${hops.length - 1} redirects`,
         hops.map((h) => `${h.status} ${h.url}`).join(' → '), variant));
+    }
+  }
+
+  // --- Certificate --------------------------------------------------------
+  // Not an SEO check, and the only thing here that takes a site off the
+  // internet completely. A browser refuses to load an expired certificate, so
+  // the ranking becomes irrelevant along with everything else.
+  if (base.protocol === 'https:') {
+    // Injectable so the thresholds can be tested without a live certificate
+    // that would have to be reissued to keep the test meaningful.
+    const readExpiry = opts.readCertificateExpiry ?? certificateExpiry;
+    const expiresAt = await readExpiry(base.hostname);
+    if (expiresAt) {
+      const days = Math.floor((expiresAt - (opts.now ?? Date.now())) / DAY);
+      const on = new Date(expiresAt).toISOString().slice(0, 10);
+      if (days < 0) {
+        out.push(f('error', 'tls-expired', `The TLS certificate expired ${-days} day(s) ago`,
+          `It ran out on ${on}. Browsers refuse to load the site, so nothing else in this report matters ` +
+            'until it is renewed.', origin));
+      } else if (days <= CERT_WARN_DAYS) {
+        out.push(f('warn', 'tls-expiring', `The TLS certificate expires in ${days} day(s)`,
+          `On ${on}. Usually this means automatic renewal has stopped without anyone noticing — the ` +
+            'certificates that lapse are the ones nobody was worried about.', origin));
+      }
     }
   }
 

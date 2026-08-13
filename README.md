@@ -390,6 +390,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No `lastmod` is in the future | warning |
 | `llms.txt` exists | note |
 | `http://`, `www.` and `https://www.` each reach the canonical host in one hop | warning |
+| The TLS certificate is not expired, and not expiring within 14 days | error / warning |
 | HSTS, `X-Content-Type-Options`, `Referrer-Policy`, CSP headers | warning / note |
 | A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
 | Every internal link resolves — the site-wide 404 sweep | error |
