@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { audit } from '../src/audit.mjs';
-import { terminal, markdown, html, diffReport, counts } from '../src/report.mjs';
-import { loadConfig } from '../src/config.mjs';
+import { terminal, markdown, html, diffReport, counts, portfolio, portfolioMarkdown, portfolioHtml } from '../src/report.mjs';
+import { loadConfig, resolveSites, optionsForSite } from '../src/config.mjs';
 import { readFileSync as read } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -12,7 +12,10 @@ const HELP = `
   seo-audit — crawl a site's sitemap and check every page
 
   Usage
-    npx github:nurkamol/seo-audit <url> [options]
+    npx github:nurkamol/seo-audit <url> [more urls…] [options]
+
+  Name more than one site — or list them under "sites" in the config — and the
+  report becomes a portfolio table, one row per site, worst first.
 
   Reporting
     --md <file>        write a Markdown report
@@ -62,6 +65,7 @@ const HELP = `
     npx github:nurkamol/seo-audit https://example.com --md audit.md
     npx github:nurkamol/seo-audit https://example.com \\
       --baseline seo-baseline.json --fail-on new
+    npx github:nurkamol/seo-audit one.example two.example --html portfolio.html
 
   Correctness is checked on every page. Performance is never estimated — with
   --psi it is measured by Google, and otherwise left to pagespeed.web.dev.
@@ -99,6 +103,7 @@ function parseArgs(argv) {
     } else rest.push(arg);
   }
   opts.target = rest[0];
+  opts.targets = rest;
   return opts;
 }
 
@@ -110,9 +115,9 @@ if (cli.version) {
   process.exit(0);
 }
 
-if (cli.help || !cli.target) {
+if (cli.help) {
   console.log(HELP);
-  process.exit(cli.target ? 0 : 2);
+  process.exit(0);
 }
 
 let file;
@@ -144,14 +149,76 @@ if (opts.failOn === 'new' && !opts.baseline) {
   process.exit(2);
 }
 
-let target = opts.target;
-if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
-try {
-  new URL(target);
-} catch {
-  console.error(`Not a URL: ${opts.target}`);
+// One site or twenty: the same options, resolved the same way. A site entry in
+// the config may carry its own overrides, which land on top of the shared ones.
+const sites = resolveSites(cli.targets ?? [], file);
+
+if (!sites.length) {
+  console.log(HELP);
   process.exit(2);
 }
+
+for (const site of sites) {
+  try {
+    new URL(site.url);
+  } catch {
+    console.error(`Not a URL: ${site.url}`);
+    process.exit(2);
+  }
+}
+
+// --- A portfolio ---------------------------------------------------------
+if (sites.length > 1) {
+  // Comparing two deployments, or against a stored baseline, is a question
+  // about one site. Rather than half-answer it across twenty, say so.
+  for (const [flag, name] of [['baseline', '--baseline'], ['against', '--against'], ['updateBaseline', '--update-baseline']]) {
+    if (opts[flag]) {
+      console.error(`  ${name} audits one site at a time — it compares a site against itself.`);
+      console.error(`  Run it per site, or drop the flag to get the portfolio table.`);
+      process.exit(2);
+    }
+  }
+
+  const runs = [];
+  for (const [i, site] of sites.entries()) {
+    if (!opts.quiet) process.stderr.write(`  [${i + 1}/${sites.length}] ${site.url} …\n`);
+    const siteOpts = optionsForSite(opts, site.overrides);
+    // Sites run one at a time on purpose: interleaved progress from twenty
+    // hosts is unreadable, and each audit is already parallel internally.
+    const { findings, meta } = await audit(site.url, {
+      ...siteOpts,
+      onNote: (m) => !opts.quiet && process.stderr.write(`      ${m}\n`),
+    });
+    runs.push({ findings, meta });
+  }
+
+  if (!opts.quiet) console.log(portfolio(runs));
+  if (opts.md) writeFileSync(opts.md, portfolioMarkdown(runs));
+  if (opts.html) writeFileSync(opts.html, portfolioHtml(runs));
+  if (opts.json) {
+    writeFileSync(
+      opts.json,
+      JSON.stringify(
+        { tool: 'seo-audit', date: runs[0]?.meta.date, sites: runs.map((r) => ({ ...r.meta, findings: r.findings })) },
+        null,
+        2,
+      ),
+    );
+  }
+  if (!opts.quiet && (opts.md || opts.html || opts.json)) {
+    console.log(`  ${[opts.md, opts.html, opts.json].filter(Boolean).join('  ')}\n`);
+  }
+
+  // One bad site fails the run: a portfolio check that passes while a site in
+  // it is broken is a check nobody can trust.
+  const failed = runs.some(({ findings }) => {
+    const n = counts(findings);
+    return (opts.failOn === 'error' && n.error > 0) || (opts.failOn === 'warn' && n.error + n.warn > 0);
+  });
+  process.exit(failed ? 1 : 0);
+}
+
+const target = sites[0].url;
 
 if (!opts.quiet) {
   process.stderr.write(`  crawling ${target} …${file.source ? ` (${file.source})` : ''}\n`);

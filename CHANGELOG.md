@@ -5,6 +5,37 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Multi-site runs.** `seo-audit one.example two.example` — or a `sites` array
+  in the config — audits a portfolio and prints one table, worst site first.
+  This is the question a per-site report can never answer, because each report
+  only ever sees its own site.
+
+  A `sites` entry may be a bare URL or an object carrying its own settings,
+  because a portfolio is not a list of interchangeable sites: one has a
+  deliberately short contact page, another has no journal to expect
+  `BlogPosting` on. Overrides land on top of the shared config, and `ignore`
+  accumulates rather than replacing — a portfolio-wide rule and a site rule are
+  both meant to apply. URLs on the command line replace the configured list
+  entirely, which is how you audit a subset of a portfolio.
+
+  `--md` and `--html` write one file with the table on top and each site's full
+  report underneath, so a section can be lifted out and sent to whoever owns
+  that site. `--json` writes one object with a `sites` array. The run exits 1 if
+  **any** site fails: a portfolio check that passes while a site in it is broken
+  is a check nobody can trust.
+
+  Sites are audited one at a time. Interleaved progress from twenty hosts is
+  unreadable, and each audit is already parallel inside itself.
+
+  `--baseline`, `--against` and `--update-baseline` compare a site against
+  itself, so with more than one site they refuse to run and say why rather than
+  half-answering. The baseline file format is single-site; a portfolio
+  regression guard needs a format that holds several, and that is its own piece
+  of work.
+
+  Nothing changes for a single site — same output, same exit code, same flags.
+
 ## [1.3.0] — 2026-08-13
 
 The checks that only fail on translated pages and in generated files.

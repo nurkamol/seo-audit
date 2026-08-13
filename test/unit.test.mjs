@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { attr, parseHtml, parseSitemap } from '../src/parse.mjs';
-import { matchGlob, applyIgnores, expectationChecks } from '../src/config.mjs';
+import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
-import { markdown, html, counts, group } from '../src/report.mjs';
+import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
@@ -89,6 +89,92 @@ test('lastmod stays attached to its own loc', () => {
     { loc: 'https://a.test/two/', lastmod: null },
     { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00' },
   ]);
+});
+
+// --- portfolios -----------------------------------------------------------
+
+test('sites may be bare URLs or objects with their own settings', () => {
+  const sites = resolveSites([], {
+    sites: ['one.example', { url: 'https://two.example', limit: 50, ignore: ['thin-content'] }],
+  });
+  assert.deepEqual(sites, [
+    { url: 'https://one.example', overrides: {} },
+    { url: 'https://two.example', overrides: { limit: 50, ignore: ['thin-content'] } },
+  ]);
+});
+
+test('URLs on the command line replace the configured portfolio', () => {
+  // Naming sites explicitly is how you audit a subset, so they win outright
+  // rather than being appended.
+  const sites = resolveSites(['just-this.example'], { sites: ['a.example', 'b.example'] });
+  assert.deepEqual(sites, [{ url: 'https://just-this.example', overrides: {} }]);
+});
+
+test('a site entry with no url is skipped rather than crashing the run', () => {
+  assert.deepEqual(resolveSites([], { sites: [{ limit: 10 }, 'ok.example'] }), [
+    { url: 'https://ok.example', overrides: {} },
+  ]);
+});
+
+test('a site override lands on top of the shared config, and ignores accumulate', () => {
+  const merged = optionsForSite(
+    { limit: 200, failOn: 'error', ignore: ['img-srcset'] },
+    { limit: 50, ignore: ['thin-content'] },
+  );
+  assert.equal(merged.limit, 50);
+  assert.equal(merged.failOn, 'error');
+  // Both rules are meant to apply: one is portfolio-wide, one is this site.
+  assert.deepEqual(merged.ignore, ['img-srcset', 'thin-content']);
+});
+
+const run = (origin, levels, pages = 10) => ({
+  meta: { origin, pages, ms: 1000, date: '2026-06-01', requests: 20 },
+  findings: levels.map((level, i) => ({
+    level, id: `${level}-${i}`, title: `${level} thing`, detail: 'd', url: `${origin}/p${i}/`,
+  })),
+});
+
+test('the portfolio table puts the worst site first', () => {
+  const rows = portfolioRows([
+    run('https://clean.example', []),
+    run('https://bad.example', ['error', 'error', 'warn']),
+    run('https://middling.example', ['warn']),
+  ]);
+  assert.deepEqual(rows.map((r) => r.host), ['bad.example', 'middling.example', 'clean.example']);
+});
+
+test('the portfolio summary counts sites, not just findings', () => {
+  const text = portfolio([
+    run('https://a.example', ['error', 'warn']),
+    run('https://b.example', ['error']),
+    run('https://c.example', []),
+  ]);
+  assert.match(text, /2 errors across 2 of 3 sites/);
+  assert.match(text, /a\.example/);
+});
+
+test('a clean portfolio says so rather than showing an error count of zero', () => {
+  const text = portfolio([run('https://a.example', ['info']), run('https://b.example', [])]);
+  assert.match(text, /no errors across 2 sites/);
+});
+
+test('a site that crawled nothing is called out in its row', () => {
+  const dead = { meta: { origin: 'https://dead.example', pages: 0, ms: 10, date: '2026-06-01' }, findings: [] };
+  assert.match(portfolio([dead, run('https://ok.example', [])]), /nothing crawled/);
+});
+
+test('both portfolio file formats render every site', () => {
+  const runs = [run('https://a.example', ['error']), run('https://b.example', ['warn'])];
+  const md = portfolioMarkdown(runs);
+  assert.match(md, /# SEO audit — portfolio/);
+  for (const h of ['a.example', 'b.example']) assert.ok(md.includes(h), `markdown missing ${h}`);
+
+  const page = portfolioHtml(runs);
+  assert.ok(page.startsWith('<!doctype html>'));
+  // One document, with each site spliced in as a section rather than nested
+  // inside another <main>.
+  assert.equal((page.match(/<main>/g) ?? []).length, 1);
+  assert.equal((page.match(/class="site"/g) ?? []).length, 2);
 });
 
 // --- robots.txt -----------------------------------------------------------

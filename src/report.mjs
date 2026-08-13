@@ -133,6 +133,140 @@ export function markdown(findings, meta) {
   return out.join('\n');
 }
 
+// --- Portfolio --------------------------------------------------------------
+// One command over several sites, and one table. The point is the comparison:
+// which of the twenty sites regressed this week is a question no per-site
+// report can answer, because each one only ever sees itself.
+
+const host = (run) => {
+  try {
+    return new URL(run.meta.origin).host;
+  } catch {
+    return run.meta.origin ?? '?';
+  }
+};
+
+/** Per-site tallies, worst site first — that is the row you act on. */
+export function portfolioRows(runs) {
+  return runs
+    .map((run) => ({ host: host(run), run, n: counts(run.findings) }))
+    .sort((a, b) => b.n.error - a.n.error || b.n.warn - a.n.warn || a.host.localeCompare(b.host));
+}
+
+export function portfolio(runs) {
+  const rows = portfolioRows(runs);
+  const lines = [''];
+  const totals = rows.reduce(
+    (acc, r) => ({
+      error: acc.error + r.n.error,
+      warn: acc.warn + r.n.warn,
+      info: acc.info + r.n.info,
+      pages: acc.pages + (r.run.meta.pages ?? 0),
+      ms: acc.ms + (r.run.meta.ms ?? 0),
+    }),
+    { error: 0, warn: 0, info: 0, pages: 0, ms: 0 },
+  );
+
+  lines.push(
+    bold(`  Portfolio — ${rows.length} sites`) +
+      dim(` · ${totals.pages} pages · ${(totals.ms / 1000).toFixed(1)}s`),
+  );
+  lines.push('');
+
+  const width = Math.max(4, ...rows.map((r) => r.host.length));
+  const pad = (s, n) => String(s).padStart(n);
+  lines.push(
+    dim(`  ${'SITE'.padEnd(width)}  ${pad('PAGES', 5)}  ${pad('✗', 4)}  ${pad('!', 4)}  ${pad('·', 4)}`),
+  );
+
+  for (const { host: h, run, n } of rows) {
+    // A site that never answered has no tallies worth lining up — say so in
+    // the row rather than printing four zeros that look like a clean bill.
+    const failed = run.meta.pages === 0;
+    lines.push(
+      `  ${h.padEnd(width)}  ${pad(run.meta.pages ?? 0, 5)}  ` +
+        `${n.error ? red(pad(n.error, 4)) : dim(pad(0, 4))}  ` +
+        `${n.warn ? yellow(pad(n.warn, 4)) : dim(pad(0, 4))}  ` +
+        `${n.info ? blue(pad(n.info, 4)) : dim(pad(0, 4))}` +
+        (failed ? dim('   — nothing crawled') : ''),
+    );
+  }
+
+  lines.push('');
+  const bad = rows.filter((r) => r.n.error).length;
+  lines.push(
+    bad
+      ? `  ${red(`${totals.error} error${totals.error === 1 ? '' : 's'}`)} across ${bad} of ${rows.length} sites` +
+          dim(`  ·  ${totals.warn} warnings  ·  ${totals.info} notes`)
+      : `  ${c('32', '✓')} no errors across ${rows.length} sites` +
+          dim(`  ·  ${totals.warn} warnings  ·  ${totals.info} notes`),
+  );
+  lines.push('');
+  return lines.join('\n');
+}
+
+/** The same table, then each site's full report underneath it. */
+export function portfolioMarkdown(runs) {
+  const rows = portfolioRows(runs);
+  const out = [];
+  out.push('# SEO audit — portfolio');
+  out.push('');
+  out.push(`${runs[0]?.meta.date ?? ''} · ${rows.length} sites`);
+  out.push('');
+  out.push('| Site | Pages | Errors | Warnings | Notes |');
+  out.push('|---|---:|---:|---:|---:|');
+  for (const { host: h, run, n } of rows) {
+    out.push(`| [${h}](${run.meta.origin}) | ${run.meta.pages ?? 0} | ${n.error} | ${n.warn} | ${n.info} |`);
+  }
+  out.push('');
+  out.push('---');
+  out.push('');
+  // Each site's own report, unchanged, so a single site's section can be
+  // lifted out and sent to whoever owns that site.
+  for (const { run } of rows) out.push(markdown(run.findings, run.meta), '');
+  return out.join('\n');
+}
+
+export function portfolioHtml(runs) {
+  const rows = portfolioRows(runs);
+  const esc = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+  // Each site rendered by the existing single-site view, then spliced in below
+  // the table — one file, and every section is the report that site would have
+  // produced on its own.
+  const sections = rows
+    .map(({ run }) => {
+      const body = html(run.findings, run.meta).match(/<main>([\s\S]*)<\/main>/)?.[1] ?? '';
+      return `<section class="site" id="${esc(host(run))}">${body}</section>`;
+    })
+    .join('');
+
+  const shell = html([], { origin: 'portfolio', date: runs[0]?.meta.date ?? '', pages: 0 });
+  const table = `
+  <h1>SEO audit — ${rows.length} sites</h1>
+  <p class="meta">${esc(runs[0]?.meta.date ?? '')}</p>
+  <table>
+    <thead><tr><th>Site</th><th class="n">Pages</th><th class="n">Errors</th><th class="n">Warnings</th><th class="n">Notes</th></tr></thead>
+    <tbody>${rows
+      .map(
+        ({ host: h, run, n }) =>
+          `<tr><td><a href="#${esc(h)}">${esc(h)}</a></td><td class="n">${run.meta.pages ?? 0}</td>` +
+          `<td class="n">${n.error}</td><td class="n">${n.warn}</td><td class="n">${n.info}</td></tr>`,
+      )
+      .join('')}</tbody>
+  </table>
+  ${sections}`;
+
+  return shell
+    .replace(/<title>[\s\S]*?<\/title>/, `<title>SEO audit — ${rows.length} sites</title>`)
+    .replace(/<main>[\s\S]*<\/main>/, `<main>${table}</main>`);
+}
+
 /** Baseline comparison: what changed since the last run, and nothing else. */
 export function diffReport({ added, fixed, unchanged, previousDate }) {
   const lines = [''];

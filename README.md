@@ -108,7 +108,41 @@ npx github:nurkamol/seo-audit https://example.com --md audit.md
 # Audit a local build before it ships
 npm run preview &
 npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
+
+# A whole portfolio, one table
+npx github:nurkamol/seo-audit one.example two.example three.example
 ```
+
+### A portfolio
+
+Name more than one site and the report becomes a table, worst site first —
+which is the question a per-site report can never answer, because each one
+only ever sees itself.
+
+```
+  Portfolio — 3 sites · 24 pages · 36.3s
+
+  SITE                   PAGES     ✗     !     ·
+  fitculturepilates.com      8     2    28    20
+  vitejs.dev                 8     2    19    32
+  astro.build                8     1    31    26
+
+  5 errors across 3 of 3 sites  ·  78 warnings  ·  78 notes
+```
+
+`--md` and `--html` write one file with the table on top and each site's full
+report underneath, so a single section can be lifted out and sent to whoever
+owns that site. `--json` writes one object with a `sites` array. The run exits
+1 if **any** site fails, because a portfolio check that passes while a site in
+it is broken is a check nobody can trust.
+
+Sites run one at a time: interleaved progress from twenty hosts is unreadable,
+and each audit is already parallel inside itself.
+
+`--baseline`, `--against` and `--update-baseline` compare a site against
+itself, so they refuse to run across a portfolio rather than half-answering the
+question. Run those per site. The GitHub Action is single-site for the same
+reason.
 
 ### Options
 
@@ -150,6 +184,10 @@ Drop a `seo-audit.config.json` next to where you run it:
   "limit": 200,
   "failOn": "error",
   "limits": { "thinWords": 250 },
+  "sites": [
+    "https://one.example",
+    { "url": "https://two.example", "limit": 50, "ignore": ["thin-content"] }
+  ],
   "maxLinkChecks": 200,
   "maxImageChecks": 200,
   "psi": ["/", "/pricing/", "/journal/**"],
@@ -166,6 +204,13 @@ Drop a `seo-audit.config.json` next to where you run it:
 }
 ```
 
+- **`sites`** — a portfolio. Each entry is a URL, or an object with a `url` and
+  whatever that site overrides — a portfolio is not a list of interchangeable
+  sites, and one of them has a deliberately short contact page. Overrides land
+  on top of the shared config; `ignore` accumulates rather than replacing,
+  since a portfolio-wide rule and a site rule are both meant to apply. URLs
+  given on the command line replace this list entirely, which is how you audit
+  a subset.
 - **`limits`** — thresholds this site disagrees with: `titleMin`, `titleMax`,
   `descMin`, `descMax`, `thinWords`, `slowMs`.
 - **`maxLinkChecks`** — how many distinct link targets the site-wide sweep
