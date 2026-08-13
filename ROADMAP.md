@@ -4,14 +4,20 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-The hreflang and sitemap work, in one batch — the checks that fail on translated
-pages and in generated files, where nobody is looking.
+The check table is in good shape. What is left is structural — changes to what
+the tool *is*, not to what it looks for.
 
-- **hreflang, past reciprocity** — a missing self-reference, a target that 404s, a malformed code like `en_US`, no `x-default`, and the good one: `<html lang="en">` on a page its own hreflang calls `ru`. That is the shape of the bug this tool was built for.
-- **`lastmod` hygiene** — a generator stamping build time on every URL makes `lastmod` identical everywhere, at which point Google ignores it. Changes `parseSitemap`'s return shape, so it touches discovery.
-- **robots.txt disallows a sitemap URL** — the site contradicting itself. Needs `Allow` matched as well as `Disallow`, longest-match-wins, or it invents false positives on every site with a carve-out.
+- **Multi-site runs** — one command over a portfolio, one summary table. The only item here that compounds rather than adding a row to the check table, and the reason this repo is standalone.
+- **Crawl by following links** — a site with no sitemap currently stops the tool dead. Following links would audit it anyway, and would find orphans that no sitemap ever mentions.
+- **Redirect map validation** — take a migration's `_redirects` and confirm each old URL still lands somewhere sensible in one hop. Migrations rot quietly.
+- **TLS certificate expiring** — a warning under 14 days, zero-dependency via `node:tls`. Not strictly SEO, but nothing else on this list takes a site down completely.
+- **A prompt when run with no arguments** — currently prints help and exits 2. It could ask for a URL and then print the flag invocation it is about to run, so it teaches the CLI rather than hiding it. Gated on `stdin.isTTY`, so CI never sees it.
 
 ## Shipped
+
+- **hreflang, past reciprocity** (unreleased) — malformed codes, a missing self-reference, a dead alternate, no `x-default`, and `<html lang="en">` on a page its own hreflang calls `ru`. Found 45 dead alternates on wordpress.org the first time it was pointed at a site that uses hreflang at all.
+- **`lastmod` hygiene** (unreleased) — a generator stamping build time on every URL tells a crawler nothing, so it learns to ignore the field.
+- **robots.txt contradicting the sitemap** (unreleased) — needed a real `Allow`/`Disallow` matcher, longest-match-wins, because the first real file tested against carved three exceptions out of a blocked `/wp-admin/`.
 
 - **Soft 404s** (1.2.0) — a URL that cannot exist must answer 404. Follows the redirect chain, because the first hop says almost nothing.
 - **Broken images, `X-Robots-Tag`, relative `og:image`, redirecting internal links** (1.2.0) — the rest of the checks that only fail where nobody looks.
