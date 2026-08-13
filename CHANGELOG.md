@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-13
+
+The checks that only fail on translated pages and in generated files.
+
 ### Added
 - **robots.txt contradicting the sitemap** (`robots-blocks-sitemap-url`, error).
   The sitemap asks Google to index a URL while robots.txt forbids fetching it,
@@ -57,6 +61,18 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     unnoticed. Grouped by the page that declares them: wordpress.org names 52
     locale subdomains for a page that exists in 7 of them, which as one finding
     per target would have been 45 lines saying the same thing.
+
+### Upgrading
+Nothing renamed, no exit code or config shape changed, so `@v1` moves forward.
+As in 1.2.0, two of these are **errors** — `hreflang-dead` and
+`robots-blocks-sitemap-url` — so `--fail-on error` can turn red on a site that
+has not changed. Both are contradictions rather than judgement calls: a
+translation that does not load, and two files disagreeing about whether a page
+should be crawled. `--fail-on new` with a `--baseline` keeps a build green while
+the backlog is worked through.
+
+Sites with no translated pages and no `Disallow` rules will see nothing new
+except possibly a `lastmod` note.
 
 ## [1.2.0] — 2026-08-13
 
