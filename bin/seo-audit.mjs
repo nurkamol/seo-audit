@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { serialize, parse, diff } from '../src/baseline.mjs';
 import { parseRedirectMap } from '../src/redirects.mjs';
+import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 
 const HELP = `
   seo-audit — crawl a site's sitemap and check every page
@@ -170,11 +171,28 @@ if (opts.redirects) {
 
 // One site or twenty: the same options, resolved the same way. A site entry in
 // the config may carry its own overrides, which land on top of the shared ones.
-const sites = resolveSites(cli.targets ?? [], file);
+let sites = resolveSites(cli.targets ?? [], file);
 
+// Nothing to audit. If a person is there to ask, ask; otherwise this is a
+// script or a CI runner and the help text is the right answer.
 if (!sites.length) {
-  console.log(HELP);
-  process.exit(2);
+  let answers = null;
+  if (isInteractive()) {
+    const { createInterface } = await import('node:readline/promises');
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    console.log('');
+    answers = await askForSite(rl);
+    rl.close();
+  }
+
+  if (!answers) {
+    console.log(HELP);
+    process.exit(2);
+  }
+
+  sites = resolveSites([answers.url], file);
+  if (answers.html) opts.html = answers.html;
+  console.log(`\n  Next time, in one line:\n    ${invocation(sites[0].url, answers)}\n`);
 }
 
 for (const site of sites) {

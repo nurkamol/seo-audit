@@ -168,6 +168,26 @@ test('a link crawl obeys robots.txt rather than helping itself', async () => {
   }
 });
 
+test('the bare command never waits for input when nothing is a terminal', async () => {
+  // The property that matters more than the prompt itself: in CI, in a pipe,
+  // or under a task runner, this has to print help and leave rather than block
+  // a build forever waiting for a URL nobody can type.
+  const { execFile } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'seo-audit.mjs');
+
+  const { code, stdout } = await new Promise((resolve) => {
+    const child = execFile(process.execPath, [bin], { timeout: 10000 }, (err, stdout) =>
+      resolve({ code: err?.code ?? 0, stdout }),
+    );
+    child.stdin.end(); // not a TTY, and closed
+  });
+
+  assert.equal(code, 2, 'expected the help exit code, not a hang');
+  assert.match(stdout, /Usage/);
+});
+
 test('a host that never answers is reported as unreachable, not as missing a sitemap', async () => {
   // Nothing listens on port 1. A refused connection is not a sitemap problem,
   // and calling it one sends people looking in the wrong place.

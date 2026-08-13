@@ -6,6 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Running the bare command asks for a URL** instead of printing help and
+  exiting 2. It asks two questions, then prints the one-line command it
+  assembled and runs that — the point is to teach the flags, not to hide them
+  behind a menu, so the second use needs no questions at all.
+
+  Only when both stdin and stdout are a terminal. In CI, in a pipe, under
+  `| tee`, or in an editor's task runner, the help text is still the answer: a
+  prompt that blocks a build waiting for input nobody can type is much worse
+  than the help it replaced. There is a test that spawns the binary with a
+  closed stdin and asserts it exits rather than waiting.
+
 - **TLS certificate expiry** — `tls-expiring` (warning) inside 14 days,
   `tls-expired` (error) after. Not an SEO check, and the only thing in this tool
   that takes a site off the internet completely: a browser refuses to load an

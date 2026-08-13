@@ -4,13 +4,18 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-The check table is in good shape. What is left is structural — changes to what
-the tool *is*, not to what it looks for.
+Empty, and deliberately so. The check table covers what a `fetch` loop can
+honestly verify, and the structural work — a portfolio, a crawl that does not
+need a sitemap, a redirect map — is done.
 
-- **A prompt when run with no arguments** — currently prints help and exits 2. It could ask for a URL and then print the flag invocation it is about to run, so it teaches the CLI rather than hiding it. Gated on `stdin.isTTY`, so CI never sees it.
+What is left in **Later** needs either a headless browser or an index, and both
+are refused below for reasons that have not changed. The honest next move is
+running this against more real sites and fixing what it gets wrong, which is
+how every check here earned its place.
 
 ## Shipped
 
+- **A prompt when run with no arguments** (unreleased) — asks for a URL, then prints the one-liner it assembled and runs that. Never fires unless both streams are a terminal.
 - **TLS certificate expiry** (unreleased) — a warning inside 14 days, an error after. Reads the certificate without validating it, because an expired one fails the handshake and would otherwise go unreported.
 - **Redirect map validation** (1.4.0) — `--redirects` asks the live site for every old URL and reports what actually happens. Wildcard rules are counted, never guessed at.
 - **Crawl by following links** (1.4.0) — no sitemap no longer stops the tool. Obeys robots.txt, follows a redirecting homepage, and took mozilla.org from 0 pages audited to a full crawl.

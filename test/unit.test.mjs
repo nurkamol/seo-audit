@@ -10,6 +10,7 @@ import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
 import { parseRedirectMap, redirectChecks } from '../src/redirects.mjs';
+import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -90,6 +91,64 @@ test('lastmod stays attached to its own loc', () => {
     { loc: 'https://a.test/two/', lastmod: null },
     { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00' },
   ]);
+});
+
+// --- the no-argument prompt -----------------------------------------------
+
+// A readline stand-in, so the flow is testable without a terminal.
+const answering = (...replies) => {
+  const queue = [...replies];
+  return {
+    asked: [],
+    async question(q) {
+      this.asked.push(q);
+      const next = queue.shift();
+      if (next instanceof Error) throw next;
+      return next ?? '';
+    },
+  };
+};
+
+test('the prompt is only offered when someone is there to answer', () => {
+  assert.equal(isInteractive({ stdin: { isTTY: true }, stdout: { isTTY: true } }), true);
+  // A pipe, a CI runner, an editor task: asking would block a build forever.
+  assert.equal(isInteractive({ stdin: { isTTY: false }, stdout: { isTTY: true } }), false);
+  assert.equal(isInteractive({ stdin: { isTTY: true }, stdout: { isTTY: false } }), false);
+  assert.equal(isInteractive({}), false);
+});
+
+test('a URL and a no gives a plain run', async () => {
+  assert.deepEqual(await askForSite(answering('https://example.com', 'n')), {
+    url: 'https://example.com',
+  });
+});
+
+test('a yes adds the HTML report', async () => {
+  assert.deepEqual(await askForSite(answering('example.com', 'y')), {
+    url: 'example.com',
+    html: 'seo-audit.html',
+  });
+  assert.deepEqual(await askForSite(answering('example.com', 'YES')), {
+    url: 'example.com',
+    html: 'seo-audit.html',
+  });
+});
+
+test('an empty URL is not an audit of nothing', async () => {
+  assert.equal(await askForSite(answering('   ', 'y')), null);
+});
+
+test('a stream closing under the prompt is not a crash', async () => {
+  // Ctrl-C, or a terminal that went away mid-question.
+  assert.equal(await askForSite(answering(new Error('EOF'))), null);
+});
+
+test('the printed one-liner is the command that was actually run', () => {
+  assert.equal(invocation('https://example.com'), 'seo-audit https://example.com');
+  assert.equal(
+    invocation('https://example.com', { html: 'seo-audit.html' }),
+    'seo-audit https://example.com --html seo-audit.html',
+  );
 });
 
 // --- TLS certificates -----------------------------------------------------
