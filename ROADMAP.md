@@ -15,8 +15,8 @@ how every check here earned its place.
 
 ## Shipped
 
-- **A prompt when run with no arguments** (unreleased) — asks for a URL, then prints the one-liner it assembled and runs that. Never fires unless both streams are a terminal.
-- **TLS certificate expiry** (unreleased) — a warning inside 14 days, an error after. Reads the certificate without validating it, because an expired one fails the handshake and would otherwise go unreported.
+- **A prompt when run with no arguments** (1.5.0) — asks for a URL, then prints the one-liner it assembled and runs that. Never fires unless both streams are a terminal.
+- **TLS certificate expiry** (1.5.0) — a warning inside 14 days, an error after. Reads the certificate without validating it, because an expired one fails the handshake and would otherwise go unreported.
 - **Redirect map validation** (1.4.0) — `--redirects` asks the live site for every old URL and reports what actually happens. Wildcard rules are counted, never guessed at.
 - **Crawl by following links** (1.4.0) — no sitemap no longer stops the tool. Obeys robots.txt, follows a redirecting homepage, and took mozilla.org from 0 pages audited to a full crawl.
 - **Multi-site runs** (1.4.0) — several URLs, or a `sites` array, and the report becomes one table with the worst site first. Per-site overrides, because a portfolio is not a list of interchangeable sites. `--baseline` and `--against` refuse to run across one and say why.

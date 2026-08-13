@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-08-14
+
 ### Added
 - **Running the bare command asks for a URL** instead of printing help and
   exiting 2. It asks two questions, then prints the one-line command it
@@ -31,6 +33,18 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nothing is read but the certificate's dates, which are the ones a browser
   would show. Verified against `expired.badssl.com`, which reads as 4141 days
   past expiry rather than as an unreadable host.
+
+### Upgrading
+`@v1` moves forward. No flag renamed, no config key changed, and a scripted run
+behaves exactly as before.
+
+`tls-expired` is a new error, but it only fires on a certificate that has
+already expired — at which point browsers are refusing to load the site and a
+red build is the least of it. `tls-expiring` is a warning with two weeks of
+notice.
+
+The no-argument prompt only appears when both stdin and stdout are a terminal.
+Anything scripted, piped or running in CI still gets the help text and exit 2.
 
 ## [1.4.0] — 2026-08-14
 
