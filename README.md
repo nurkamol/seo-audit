@@ -257,6 +257,9 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `og:image` is an absolute URL — a scraper has no page to resolve a relative one against | error |
 | `og:image` is not WebP — LinkedIn won't render it, WhatsApp is unreliable | warning |
 | `og:image` declares width and height | note |
+| `hreflang` codes are well formed — `en_US` with an underscore is the usual slip | error |
+| `hreflang` lists the page itself, not only its translations | warning |
+| `<html lang>` agrees with what the page's own `hreflang` calls it | warning |
 | JSON-LD parses and carries a `@type` (or a `@graph`) | error / warning |
 | Every `<img>` has an `alt` attribute (empty is correct for decorative) | error |
 | `alt` isn't a filename — `alt="DSC_0042.jpg"` is what a CMS fills in for you | warning |
@@ -276,6 +279,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No two pages share a title | warning |
 | No two pages share a meta description | warning |
 | `hreflang` is reciprocal — Google drops one-way pairs | error |
+| Something in the `hreflang` set is an `x-default` | note |
 | Pages carry the schema types `expect` says they should | error |
 | No page is an orphan — in the sitemap but linked from nowhere | warning |
 
@@ -290,6 +294,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
 | Every internal link resolves — the site-wide 404 sweep | error |
 | Every `<img>` actually loads — 403 is hotlink protection, not a broken file, and is not reported | error |
+| Every `hreflang` alternate actually loads, including versions outside the crawl | error |
 | Internal links point at final URLs rather than redirects | note |
 | No page is linked but missing from the sitemap | warning |
 | The link and image sweeps say so when they stop at their cap rather than implying they checked everything | note |

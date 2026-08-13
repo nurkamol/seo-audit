@@ -40,6 +40,22 @@ const ALT_PLACEHOLDER = new Set([
 // A screen reader reads alt in one breath, with no way to skim or pause.
 const ALT_MAX = 125;
 
+// --- hreflang ---------------------------------------------------------------
+// A language, optionally a script, optionally a region, joined by hyphens:
+// en, en-GB, zh-Hant, zh-Hant-TW, en-419. Case is not significant to Google.
+// Only the shape is checked, not whether the codes exist — that would mean
+// embedding the ISO lists, and a wrong list is worse than no check. The shape
+// alone catches the common mistake, which is an underscore.
+const LANGUAGE_TAG = /^[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|\d{3}))?$/i;
+const isLanguageTag = (tag) =>
+  (tag ?? '').toLowerCase() === 'x-default' || LANGUAGE_TAG.test(tag ?? '');
+
+// Compare languages, not dialects: a page declaring lang="en-US" and hreflang
+// "en" agrees with itself. Only the primary subtag is the claim about language.
+const primaryLanguage = (tag) => (tag ?? '').split('-')[0].toLowerCase();
+
+const withoutSlash = (u) => (u ?? '').replace(/\/$/, '');
+
 // Two images sharing alt text is a judgement call — a gallery of near-identical
 // product shots is a fair reason. A whole page of them is a template nobody
 // filled in, so only report from three up.
@@ -144,6 +160,36 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   if (ogImage && !doc.og['og:image:width']) {
     out.push(f('info', 'og-no-dimensions', 'og:image has no declared width/height',
       'Scrapers guess, and some skip the preview rather than guess.', url));
+  }
+
+  // --- hreflang -----------------------------------------------------------
+  // Reciprocity is checked across pages, in crossPageChecks. What is checkable
+  // from the page alone is whether the annotation is well formed and whether
+  // the page agrees with it about what the page is.
+  if (doc.hreflang.length) {
+    const malformed = doc.hreflang.filter((alt) => !isLanguageTag(alt.lang));
+    for (const alt of malformed) {
+      out.push(f('error', 'hreflang-invalid', `Malformed hreflang code: "${alt.lang}"`,
+        'Google ignores an annotation it cannot parse, so this version is invisible to it. The form is ' +
+          'a language, optionally a script and a region, joined by hyphens — en, en-GB, zh-Hant-TW. ' +
+          'An underscore instead of a hyphen is the usual cause.', url));
+    }
+
+    // Every version has to list itself alongside the others, or the set is
+    // incomplete and Google may discard all of it.
+    const self = doc.hreflang.find((alt) => alt.href && withoutSlash(alt.href) === withoutSlash(url));
+    if (!self) {
+      out.push(f('warn', 'hreflang-no-self', 'hreflang does not list this page',
+        `It points at ${doc.hreflang.map((a) => a.lang).join(', ')} but never at itself. A version that ` +
+          'omits its own self-reference leaves the set incomplete.', url));
+    } else if (doc.lang && primaryLanguage(self.lang) !== primaryLanguage(doc.lang)) {
+      // The page's two statements about its own language, disagreeing. This is
+      // only ever visible on a translated page, which is the kind of page a
+      // homepage grader never opens.
+      out.push(f('warn', 'hreflang-lang-mismatch', 'The page disagrees with its own hreflang about its language',
+        `<html lang="${doc.lang}"> but hreflang calls this page "${self.lang}". Google reads both, and one ` +
+          'of them is wrong — usually a template that hardcodes lang while the annotation is generated.', url));
+    }
   }
 
   // --- Structured data ----------------------------------------------------
@@ -312,6 +358,22 @@ export function crossPageChecks(pages) {
     if (!isHome && !linkedTo.has(p.url.replace(/\/$/, ''))) {
       out.push(f('warn', 'orphan-page', 'Nothing links to this page',
         'It is in the sitemap, but no other page links to it — so it collects no internal authority.', p.url));
+    }
+  }
+
+  // x-default names the version to serve someone whose language matches none of
+  // the others. Reported once for the whole site rather than on every page,
+  // because on a translated site the answer is the same on all of them.
+  const translated = live.filter((p) => p.doc.hreflang.length);
+  if (translated.length) {
+    const hasDefault = translated.some((p) =>
+      p.doc.hreflang.some((alt) => (alt.lang ?? '').toLowerCase() === 'x-default'),
+    );
+    if (!hasDefault) {
+      out.push(f('info', 'hreflang-no-x-default', 'No x-default in the hreflang set',
+        `${translated.length} pages declare alternates and none names an x-default — the version to serve ` +
+          'a visitor whose language matches none of the others. Usually the English or the country selector.',
+        translated[0].url));
     }
   }
 

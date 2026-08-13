@@ -5,6 +5,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **hreflang, past reciprocity.** Reciprocity was the hard part and was already
+  covered; these are the rest, and they only ever fail on translated pages —
+  which is to say, on the pages a homepage grader never opens.
+
+  - `hreflang-invalid` (error) — a malformed code. Only the *shape* is checked,
+    never whether the codes exist: validating against ISO lists would mean
+    embedding them, and a stale list is worse than no check. The shape alone
+    catches the common slip, which is `en_US` with an underscore.
+  - `hreflang-no-self` (warn) — a set that lists every translation except the
+    page it is on, leaving the set incomplete.
+  - `hreflang-lang-mismatch` (warn) — `<html lang="en">` on a page its own
+    hreflang calls `ru`. Google reads both, and one of them is wrong. Dialects
+    are not contradictions: `lang="en"` with `hreflang="en-GB"` is the same
+    claim, and only the primary subtag is compared.
+  - `hreflang-no-x-default` (note) — reported once for the site rather than on
+    every page, because on a translated site the answer is the same everywhere.
+  - `hreflang-dead` (error) — an alternate that does not load, including
+    versions outside the crawl, which is where a stale translation URL survives
+    unnoticed. Grouped by the page that declares them: wordpress.org names 52
+    locale subdomains for a page that exists in 7 of them, which as one finding
+    per target would have been 45 lines saying the same thing.
+
 ## [1.2.0] — 2026-08-13
 
 ### Added

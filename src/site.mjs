@@ -225,6 +225,45 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       `The sweep stops at ${imageLimit} distinct images. Raise it with maxImageChecks in the config.`, origin));
   }
 
+  // --- hreflang targets load ----------------------------------------------
+  // A version that does not load is dropped from the set, and the pages that
+  // pointed at it lose the annotation with it. Targets already crawled and
+  // answering 200 are not asked again; the interesting ones are the alternates
+  // outside the crawl, which is where a stale translation URL survives.
+  const crawledOk = new Set(pages.filter((p) => p.res.ok).map((p) => p.url.replace(/\/$/, '')));
+  const alternates = new Map();
+  for (const page of pages) {
+    for (const alt of page.doc?.hreflang ?? []) {
+      if (!alt.href || crawledOk.has(alt.href.replace(/\/$/, ''))) continue;
+      if (!alternates.has(alt.href)) alternates.set(alt.href, page.url);
+    }
+  }
+  const alternateResults = await mapLimit(
+    [...alternates.keys()].slice(0, limit),
+    6,
+    async (href) => {
+      const res = await fetcher.get(href);
+      return { href, status: res.status, error: res.error };
+    },
+  );
+  // Grouped by the page that declares them. A translated site tends to carry
+  // one alternate per locale, so a single broken page can produce forty
+  // identical findings — wordpress.org declares fifty-two locale subdomains for
+  // a page that exists in seven of them. One finding per page, naming a few.
+  const deadByPage = new Map();
+  for (const { href, status, error } of alternateResults) {
+    if (status !== 404 && status !== 410 && status !== 0) continue;
+    const source = alternates.get(href);
+    deadByPage.set(source, [...(deadByPage.get(source) ?? []), `${href} (${status || error})`]);
+  }
+  for (const [source, dead] of deadByPage) {
+    const shown = dead.slice(0, 3).join(', ');
+    out.push(f('error', 'hreflang-dead', `${dead.length} hreflang target(s) do not load`,
+      `${shown}${dead.length > 3 ? `, and ${dead.length - 3} more` : ''} — declared on ${source}. Each ` +
+        'version that does not load drops out of the set, and the pages pointing at it lose the annotation.',
+      source));
+  }
+
   // --- Canonical targets --------------------------------------------------
   // A canonical pointing at a redirect or a 404 is worse than none: Google is
   // told the real page lives somewhere that does not answer.

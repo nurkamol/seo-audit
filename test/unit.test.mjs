@@ -530,6 +530,105 @@ test('an image with no alt attribute is an error; alt="" is not', () => {
   assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>'))).includes('img-alt'));
 });
 
+// --- hreflang -------------------------------------------------------------
+
+const alternates = (...links) =>
+  page(
+    `<html lang="en"><head>${links.join('')}</head><body><main><p>hi</p></main></body></html>`,
+    'https://x.test/p/',
+  );
+const alt = (lang, href) => `<link rel="alternate" hreflang="${lang}" href="${href}">`;
+
+test('a malformed hreflang code is an error, valid shapes are not', () => {
+  assert.ok(ids(pageChecks(alternates(alt('en_US', '/p/')))).includes('hreflang-invalid'));
+  assert.ok(ids(pageChecks(alternates(alt('english', '/p/')))).includes('hreflang-invalid'));
+  for (const code of ['en', 'en-GB', 'en-gb', 'zh-Hant', 'zh-Hant-TW', 'en-419', 'x-default']) {
+    assert.ok(
+      !ids(pageChecks(alternates(alt(code, '/p/')))).includes('hreflang-invalid'),
+      `expected "${code}" to be accepted`,
+    );
+  }
+});
+
+test('hreflang that never names its own page is reported', () => {
+  const missing = alternates(alt('ru', '/ru/p/'), alt('de', '/de/p/'));
+  assert.ok(ids(pageChecks(missing)).includes('hreflang-no-self'));
+
+  const present = alternates(alt('en', '/p/'), alt('ru', '/ru/p/'));
+  assert.ok(!ids(pageChecks(present)).includes('hreflang-no-self'));
+});
+
+test('a page whose lang contradicts its own hreflang is reported', () => {
+  // <html lang="en"> while the annotation calls this page the Russian version.
+  const clash = alternates(alt('ru', '/p/'), alt('en', '/en/p/'));
+  assert.ok(ids(pageChecks(clash)).includes('hreflang-lang-mismatch'));
+});
+
+test('a dialect is not a contradiction', () => {
+  // lang="en" and hreflang="en-GB" are the same claim about language.
+  const fine = page(
+    `<html lang="en"><head>${alt('en-GB', '/p/')}</head><body><main><p>hi</p></main></body></html>`,
+    'https://x.test/p/',
+  );
+  assert.ok(!ids(pageChecks(fine)).includes('hreflang-lang-mismatch'));
+});
+
+test('a page with no hreflang at all is not asked about self-references', () => {
+  assert.ok(!ids(pageChecks(page('<main><p>hi</p></main>'))).some((id) => id.startsWith('hreflang-')));
+});
+
+test('a missing x-default is reported once for the site, not once per page', () => {
+  const mk = (url) => ({
+    url,
+    res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+    doc: {
+      hreflang: [{ lang: 'en', href: url }, { lang: 'ru', href: `${url}ru/` }],
+      links: { internal: [], inMain: [], external: [] },
+      title: null, description: null, canonical: [], og: {},
+    },
+  });
+  const found = crossPageChecks([mk('https://x.test/a/'), mk('https://x.test/b/')])
+    .filter((finding) => finding.id === 'hreflang-no-x-default');
+  assert.equal(found.length, 1);
+  assert.match(found[0].detail, /2 pages/);
+});
+
+test('an x-default anywhere in the set satisfies the check', () => {
+  const withDefault = {
+    url: 'https://x.test/a/',
+    res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+    doc: {
+      hreflang: [{ lang: 'x-default', href: 'https://x.test/' }],
+      links: { internal: [], inMain: [], external: [] },
+      title: null, description: null, canonical: [], og: {},
+    },
+  };
+  assert.ok(!crossPageChecks([withDefault]).some((finding) => finding.id === 'hreflang-no-x-default'));
+});
+
+test('an hreflang target that 404s is reported', async () => {
+  const origin = 'https://x.test';
+  const pages = bareSite(origin, { hreflang: [{ lang: 'ru', href: `${origin}/ru/gone/` }] });
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (url.endsWith('/ru/gone/') ? { status: 404 } : notFound(url))),
+    pages,
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  const dead = out.filter((finding) => finding.id === 'hreflang-dead');
+  assert.equal(dead.length, 1);
+  assert.match(dead[0].detail, /ru\/gone/);
+});
+
+test('an hreflang target already crawled and healthy is not fetched again', async () => {
+  const origin = 'https://x.test';
+  const fetcher = fakeFetcher(notFound);
+  await siteChecks(origin, fetcher, bareSite(origin, { hreflang: [{ lang: 'en', href: `${origin}/p/` }] }), {
+    sitemapUrls: [`${origin}/p/`],
+  });
+  assert.equal(fetcher.calls.filter((u) => u === `${origin}/p/`).length, 0);
+});
+
 test('a noindex sent as a header is reported like the meta tag', () => {
   const headed = (headers) =>
     page('<main><p>hi</p></main>', 'https://x.test/p/', {
