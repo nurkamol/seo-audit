@@ -5,6 +5,46 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-08-13
+
+### Added
+- **Alt-text quality**, not just presence. Nine images sharing one alt text
+  passed every previous check and helped nobody. Four new checks: `alt` that is
+  really a filename (`img-alt-filename`), `alt` that names the medium rather
+  than the content (`img-alt-placeholder`), three or more images sharing one
+  `alt` (`img-alt-duplicate`), and `alt` too long to be read in one breath
+  (`img-alt-long`).
+
+  `alt=""` is still never judged — it is the correct, deliberate way to mark a
+  decorative image, and treating it as a defect would punish sites for getting
+  it right. Repeated alt starts at three images rather than two, because a
+  gallery of near-identical product shots is a fair reason for two.
+
+- **`--psi` takes a section**, not just a list of pages. `--psi "/journal/**"`
+  measures a sample of the crawled pages under a path instead of making you
+  name each one. `--psi-sample <n>` sets how many, default 3.
+
+  The sample is spread across the section rather than taken off the front, so a
+  template regression late in a section is not missed, and it is deterministic,
+  so `--baseline` compares like with like instead of reporting the sample
+  itself as a change. When a glob matches more pages than were measured, the
+  report says so: a silent cap would read as a clean bill of health for a
+  section that was mostly never looked at.
+
+### Changed
+- `psi` paths in a config file are now resolved against the origin the crawl
+  settled on, rather than the target string as typed. Same result for an
+  ordinary run; correct for one that was given a bare hostname.
+
+### Upgrading
+Nothing renamed, no exit code or config shape changed, so `@v1` moves forward
+to this release. One thing to expect: `img-alt-filename` and
+`img-alt-placeholder` are **warnings**, so a build running `--fail-on warn` can
+turn red on a site that has not changed. That is the new checks finding
+something real, but it will arrive as a surprise. `--fail-on new` with a
+baseline exists for exactly this — it tolerates the backlog you already have
+and fails only on a regression.
+
 ## [1.0.1] — 2026-08-08
 
 ### Fixed

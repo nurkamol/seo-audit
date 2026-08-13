@@ -100,6 +100,12 @@ breakages live.
 
 - [ ] Every `<img>` has an `alt` attribute — `alt=""` for decoration, a real
       description otherwise. The attribute must exist either way
+- [ ] The `alt` actually describes *this* picture. `alt="DSC_0042.jpg"` and
+      `alt="image"` pass a presence check and help nobody, and a whole gallery
+      sharing one description is a template nobody filled in
+- [ ] `alt` stays under ~125 characters. It is read out in one breath, with no
+      way to skim or pause — a longer description belongs in the page text,
+      where sighted readers get it too
 - [ ] Every `<img>` has `width` and `height`, so the browser reserves the box
       and the page doesn't reflow as images arrive
 - [ ] **`img { height: auto }` is in the CSS.** With dimensions set and no
@@ -264,7 +270,7 @@ The discipline that keeps this from rotting after week one.
   "limit": 200,
   "failOn": "error",
   "limits": { "thinWords": 300 },
-  "psi": ["/"],
+  "psi": ["/", "/blog/**"],
   "ignore": [
     { "id": "thin-content", "urls": ["/contact/", "/thanks/", "**/legal/**"] },
     { "id": "no-editorial-links", "urls": ["**/privacy-policy/", "**/terms-of-use/", "**/cookie-policy/"] }

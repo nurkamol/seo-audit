@@ -125,7 +125,8 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 | `--user-agent <ua>` | `seo-audit …` | Identify as something else |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
-| `--psi <urls>` | — | Measure these pages with PageSpeed Insights (see below) |
+| `--psi <urls>` | — | Measure these pages with PageSpeed Insights. A path glob names a section (see below) |
+| `--psi-sample <n>` | 3 | Pages measured per section glob |
 | `--psi-strategy` | `mobile` | `mobile` or `desktop` |
 | `--against <url>` | — | Compare against another deployment now — preview vs production |
 | `--settle <s>` | — | Wait until the site serves consistent HTML before crawling |
@@ -149,7 +150,7 @@ Drop a `seo-audit.config.json` next to where you run it:
   "limit": 200,
   "failOn": "error",
   "limits": { "thinWords": 250 },
-  "psi": ["/", "/pricing/"],
+  "psi": ["/", "/pricing/", "/journal/**"],
   "ignore": [
     "img-srcset",
     { "id": "thin-content", "urls": ["/contact/", "/thanks/", "**/legal/**"] },
@@ -165,7 +166,15 @@ Drop a `seo-audit.config.json` next to where you run it:
 
 - **`limits`** — thresholds this site disagrees with: `titleMin`, `titleMax`,
   `descMin`, `descMax`, `thinWords`, `slowMs`.
-- **`psi`** — pages to measure with PageSpeed Insights, as paths.
+- **`psi`** — pages to measure with PageSpeed Insights, as paths. A path glob
+  names a section: `/journal/**` measures a sample of the crawled pages under
+  it, three by default, spread across the section rather than taken off the
+  front. PageSpeed Insights costs about 12 seconds a page, so a section of
+  forty measured whole is eight minutes — the report says how many of the
+  matched pages were actually measured, because a sample that stayed quiet
+  about the rest would read as a clean bill of health for the whole section.
+  Raise it with `--psi-sample`, and expect the wait. The sample is the same on
+  every run, so a `--baseline` comparison stays meaningful.
 - **`ignore`** — a bare check id silences it everywhere; `{ id, urls }` silences
   it only where it is intended. `*` stops at a slash, `**` does not. The id is
   printed with every finding.
@@ -239,6 +248,10 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `og:image` declares width and height | note |
 | JSON-LD parses and carries a `@type` (or a `@graph`) | error / warning |
 | Every `<img>` has an `alt` attribute (empty is correct for decorative) | error |
+| `alt` isn't a filename — `alt="DSC_0042.jpg"` is what a CMS fills in for you | warning |
+| `alt` isn't a placeholder — `alt="image"`, `alt="logo"` name the medium, not the content | warning |
+| Three or more images don't share one `alt` | note |
+| `alt` is under 125 characters — it's read in one breath, with no way to skim | note |
 | Every `<img>` has `width` and `height` — otherwise the page reflows | warning |
 | Images offer a `srcset` rather than one size for every screen | note |
 | Word count above ~300 | warning |
@@ -319,7 +332,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v0.3.0` | Exactly that release, forever |
+| `@v1.1.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

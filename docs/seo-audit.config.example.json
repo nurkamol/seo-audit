@@ -2,7 +2,7 @@
   "limit": 200,
   "failOn": "error",
   "limits": { "thinWords": 300 },
-  "psi": ["/"],
+  "psi": ["/", "/blog/**"],
   "ignore": [
     { "id": "thin-content", "urls": ["/contact/", "/thanks/", "**/legal/**"] },
     { "id": "no-editorial-links", "urls": ["**/privacy-policy/", "**/terms-of-use/", "**/cookie-policy/"] }

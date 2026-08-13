@@ -28,7 +28,15 @@ inputs:
   psi:
     description: >
       Comma-separated pages to measure with PageSpeed Insights. Slow (~12s
-      each). Set the PSI_API_KEY env var from a secret to lift the quota.
+      each). A path glob names a section — /journal/** is every crawled page
+      under it, sampled. Set the PSI_API_KEY env var from a secret to lift the
+      quota.
+    required: false
+  psi-sample:
+    description: >
+      Pages measured per section glob (default 3). The report says how many of
+      the matched pages were left unmeasured, so a sample never reads as a
+      clean bill of health for the whole section.
     required: false
   settle:
     description: >
@@ -88,6 +96,7 @@ runs:
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_LIMIT: ${{ inputs.limit }}
         INPUT_PSI: ${{ inputs.psi }}
+        INPUT_PSI_SAMPLE: ${{ inputs.psi-sample }}
         INPUT_SETTLE: ${{ inputs.settle }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT: ${{ inputs.report }}
@@ -98,6 +107,7 @@ runs:
         [ -n "$INPUT_CONFIG" ]   && args+=(--config "$INPUT_CONFIG")
         [ -n "$INPUT_LIMIT" ]    && args+=(--limit "$INPUT_LIMIT")
         [ -n "$INPUT_PSI" ]      && args+=(--psi "$INPUT_PSI")
+        [ -n "$INPUT_PSI_SAMPLE" ] && args+=(--psi-sample "$INPUT_PSI_SAMPLE")
         [ -n "$INPUT_SETTLE" ]   && args+=(--settle "$INPUT_SETTLE")
 
         node "$SEO_AUDIT_BIN" "${args[@]}"

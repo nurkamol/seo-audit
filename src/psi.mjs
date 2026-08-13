@@ -14,8 +14,17 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { matchGlob } from './config.mjs';
 
 const ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
+
+// Roughly a minute of measuring per section. Enough to tell whether a template
+// is slow — which is the question a section is asked — without turning an audit
+// into a coffee break.
+export const DEFAULT_SAMPLE = 3;
+
+// What one PSI call costs, near enough to warn someone before they wait for it.
+const SECONDS_PER_URL = 12;
 
 // Google's own thresholds for "good" and "poor".
 const CWV = {
@@ -42,6 +51,69 @@ async function run(url, strategy, key) {
 }
 
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
+
+/** `n` items spread across a list, rather than the first n.
+ *
+ *  Deterministic on purpose. A random sample would measure different pages on
+ *  every run, and --baseline would then report the change as a regression. */
+function spread(list, n) {
+  if (list.length <= n) return list;
+  const step = list.length / n;
+  return Array.from({ length: n }, (_, i) => list[Math.floor(i * step)]);
+}
+
+export const estimateSeconds = (n) => n * SECONDS_PER_URL;
+
+/** Resolve --psi entries against the pages actually crawled.
+ *
+ *  A URL or a path is measured as given. A path glob names a section — every
+ *  crawled page under it, sampled down to `sample`, because a section of forty
+ *  pages measured whole is eight minutes of waiting.
+ *
+ *  Returns { urls, notes }. The notes report what matched but was not measured:
+ *  a sampled section must never read as a clean bill of health for the whole
+ *  section, which is exactly how a silent cap would read. */
+export function psiTargets(entries, pageUrls, { origin, sample = DEFAULT_SAMPLE } = {}) {
+  const urls = [];
+  const notes = [];
+
+  for (const entry of entries) {
+    if (!entry.includes('*')) {
+      try {
+        urls.push(new URL(entry, origin).toString());
+      } catch {
+        notes.push(f('info', 'psi-no-match', `Not a URL or path: ${entry}`,
+          'Pass a full URL, a path, or a path glob such as /journal/**.', origin));
+      }
+      continue;
+    }
+
+    const matched = pageUrls.filter((u) => {
+      try {
+        return matchGlob(entry, new URL(u).pathname);
+      } catch {
+        return false;
+      }
+    });
+
+    if (!matched.length) {
+      notes.push(f('info', 'psi-no-match', `No crawled page matches ${entry}`,
+        'Nothing was measured for this pattern. Globs match URL paths, where `*` stops at a slash and `**` does not.', origin));
+      continue;
+    }
+
+    const picked = spread(matched, sample);
+    urls.push(...picked);
+    if (picked.length < matched.length) {
+      notes.push(f('info', 'psi-sampled', `Measured ${picked.length} of the ${matched.length} pages under ${entry}`,
+        `A sample, spread across the section — at ~${SECONDS_PER_URL}s a page, measuring all ${matched.length} would take ` +
+        `${Math.ceil(estimateSeconds(matched.length) / 60)} minutes. The other ${matched.length - picked.length} were not looked at; ` +
+        'raise the sample with --psi-sample, and expect the wait.', origin));
+    }
+  }
+
+  return { urls: [...new Set(urls)], notes };
+}
 
 /**
  * @param {string[]} urls pages to measure — a handful, not a sitemap

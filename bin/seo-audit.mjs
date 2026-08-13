@@ -46,7 +46,11 @@ const HELP = `
   Performance (asks Google, does not guess)
     --psi <urls>       comma-separated pages to measure with PageSpeed
                        Insights. Slow (~12s each) and rate-limited, so name a
-                       handful. Uses PSI_API_KEY, or ~/.config/seo-audit/.env
+                       handful. A path glob names a section — /journal/** is
+                       every crawled page under it, sampled. Uses PSI_API_KEY,
+                       or ~/.config/seo-audit/.env
+    --psi-sample <n>   pages to measure per section glob (default 3). The
+                       report says what was matched but not measured
     --psi-strategy     mobile (default) | desktop
 
   Exit code
@@ -87,6 +91,7 @@ function parseArgs(argv) {
     else if (arg === '--ignore') opts.ignore = value().split(',').map((s) => s.trim()).filter(Boolean);
     else if (arg === '--fail-on') opts.failOn = value();
     else if (arg === '--psi') opts.psi = value().split(',').map((s) => s.trim()).filter(Boolean);
+    else if (arg === '--psi-sample') opts.psiSample = Number(value());
     else if (arg === '--psi-strategy') opts.psiStrategy = value();
     else if (arg.startsWith('-')) {
       console.error(`Unknown option: ${arg}`);
@@ -118,11 +123,11 @@ try {
   process.exit(2);
 }
 
-// A `psi: ["/", "/pricing/"]` in the config is written as paths; make them
-// absolute against the site being audited.
-const psiFromConfig = (file.psi ?? []).map((u) =>
-  /^https?:\/\//i.test(u) ? u : new URL(u, cli.target.startsWith('http') ? cli.target : `https://${cli.target}`).toString(),
-);
+// A `psi: ["/", "/journal/**"]` in the config is written as paths and globs.
+// Both are resolved against the crawled site later, in src/psi.mjs, which knows
+// the origin the audit actually settled on and can match a glob against the
+// pages that were really found.
+const psiFromConfig = file.psi ?? [];
 
 // CLI wins over the config file; ignore rules from both are combined, since
 // one is "this site always" and the other is "just this run".

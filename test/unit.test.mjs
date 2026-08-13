@@ -6,6 +6,7 @@ import { matchGlob, applyIgnores, expectationChecks } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks } from '../src/checks.mjs';
 import { markdown, html, counts, group } from '../src/report.mjs';
+import { psiTargets } from '../src/psi.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -68,6 +69,82 @@ test('parseSitemap distinguishes an index from a urlset', () => {
     parseSitemap('<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>'),
     { urls: [], sitemaps: ['https://a.test/s.xml'] },
   );
+});
+
+// --- psi targets ----------------------------------------------------------
+
+const crawled = (n, prefix = '/journal') =>
+  Array.from({ length: n }, (_, i) => `https://x.test${prefix}/post-${i}/`);
+
+test('psiTargets passes a URL or a path through, resolving against the origin', () => {
+  const { urls, notes } = psiTargets(['https://other.test/a/', '/pricing/'], [], {
+    origin: 'https://x.test',
+  });
+  assert.deepEqual(urls, ['https://other.test/a/', 'https://x.test/pricing/']);
+  assert.deepEqual(notes, []);
+});
+
+test('a section glob expands to the crawled pages under it, capped at the sample', () => {
+  const { urls } = psiTargets(['/journal/**'], crawled(40), {
+    origin: 'https://x.test',
+    sample: 3,
+  });
+  assert.equal(urls.length, 3);
+  assert.ok(urls.every((u) => u.startsWith('https://x.test/journal/')));
+});
+
+test('the sample is spread across the section, not the first n', () => {
+  const { urls } = psiTargets(['/journal/**'], crawled(30), {
+    origin: 'https://x.test',
+    sample: 3,
+  });
+  // First, middle, last third — a template regression late in a section is
+  // exactly what taking the first three would miss.
+  assert.deepEqual(urls, [
+    'https://x.test/journal/post-0/',
+    'https://x.test/journal/post-10/',
+    'https://x.test/journal/post-20/',
+  ]);
+});
+
+test('the same pages are sampled on every run, so a baseline stays comparable', () => {
+  const once = psiTargets(['/journal/**'], crawled(40), { origin: 'https://x.test' });
+  const twice = psiTargets(['/journal/**'], crawled(40), { origin: 'https://x.test' });
+  assert.deepEqual(once.urls, twice.urls);
+});
+
+test('a sampled section says what it did not measure', () => {
+  const { notes } = psiTargets(['/journal/**'], crawled(40), {
+    origin: 'https://x.test',
+    sample: 3,
+  });
+  const sampled = notes.find((n) => n.id === 'psi-sampled');
+  assert.ok(sampled, 'expected a psi-sampled note');
+  assert.match(sampled.title, /3 of the 40/);
+  assert.match(sampled.detail, /37 were not looked at/);
+});
+
+test('a section small enough to measure whole reports no sampling', () => {
+  const { urls, notes } = psiTargets(['/journal/**'], crawled(2), {
+    origin: 'https://x.test',
+    sample: 3,
+  });
+  assert.equal(urls.length, 2);
+  assert.deepEqual(notes, []);
+});
+
+test('a glob matching nothing says so rather than measuring nothing quietly', () => {
+  const { urls, notes } = psiTargets(['/shop/**'], crawled(5), { origin: 'https://x.test' });
+  assert.deepEqual(urls, []);
+  assert.equal(notes[0].id, 'psi-no-match');
+});
+
+test('two globs over the same page measure it once', () => {
+  const { urls } = psiTargets(['/journal/**', '/journal/post-0/'], crawled(1), {
+    origin: 'https://x.test',
+    sample: 3,
+  });
+  assert.deepEqual(urls, ['https://x.test/journal/post-0/']);
 });
 
 // --- config ---------------------------------------------------------------
@@ -196,6 +273,45 @@ test('a page missing the basics reports each one', () => {
 test('an image with no alt attribute is an error; alt="" is not', () => {
   assert.ok(ids(pageChecks(page('<main><img src="/a.png"></main>'))).includes('img-alt'));
   assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>'))).includes('img-alt'));
+});
+
+test('alt text that is really a filename is flagged', () => {
+  const found = ids(pageChecks(page('<main><img src="/a.png" alt="DSC_0042.jpg"></main>')));
+  assert.ok(found.includes('img-alt-filename'));
+  assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt="A blue vase"></main>'))).includes('img-alt-filename'));
+});
+
+test('alt text naming the medium rather than the content is flagged', () => {
+  for (const alt of ['image', 'Photo', 'logo', 'thumbnail.']) {
+    assert.ok(
+      ids(pageChecks(page(`<main><img src="/a.png" alt="${alt}"></main>`))).includes('img-alt-placeholder'),
+      `expected "${alt}" to be a placeholder`,
+    );
+  }
+  assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt="Acme logo"></main>'))).includes('img-alt-placeholder'));
+});
+
+test('repeated alt text is reported from three images up, not two', () => {
+  const imgs = (n) => '<main>' + `<img src="/a.png" alt="A blue vase">`.repeat(n) + '</main>';
+  assert.ok(!ids(pageChecks(page(imgs(2)))).includes('img-alt-duplicate'));
+  assert.ok(ids(pageChecks(page(imgs(3)))).includes('img-alt-duplicate'));
+});
+
+test('a repeated placeholder is reported once, as the placeholder', () => {
+  // Not also as a duplicate — one problem, and the better message wins.
+  const found = ids(pageChecks(page('<main>' + '<img src="/a.png" alt="image">'.repeat(4) + '</main>')));
+  assert.ok(found.includes('img-alt-placeholder'));
+  assert.ok(!found.includes('img-alt-duplicate'));
+});
+
+test('decorative alt="" is never judged for quality', () => {
+  const found = ids(pageChecks(page('<main>' + '<img src="/a.png" alt="">'.repeat(5) + '</main>')));
+  assert.ok(!found.some((id) => id.startsWith('img-alt-')));
+});
+
+test('very long alt text is a note', () => {
+  const long = 'a '.repeat(100);
+  assert.ok(ids(pageChecks(page(`<main><img src="/a.png" alt="${long}"></main>`))).includes('img-alt-long'));
 });
 
 test('a WebP og:image is flagged, a JPEG is not', () => {

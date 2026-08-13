@@ -22,6 +22,29 @@ export const DEFAULT_LIMITS = {
   slowMs: 800,
 };
 
+// --- Alt text ---------------------------------------------------------------
+// An alt that is really a filename — what a CMS fills in when nobody typed
+// anything. `.jpg` at the end, or the shape a camera and a phone both produce.
+const ALT_FILENAME = /\.(jpe?g|png|gif|webp|svg|avif)$/i;
+const ALT_SERIAL = /^(img|dsc|dscn|pxl|photo|image|screenshot|untitled)[-_ ]?\d+$/i;
+
+// Words that name the medium rather than the content. A screen reader already
+// announces "image" before reading the alt, so alt="image" says it twice and
+// tells nobody anything.
+const ALT_PLACEHOLDER = new Set([
+  'image', 'photo', 'picture', 'img', 'icon', 'logo', 'graphic', 'banner',
+  'thumbnail', 'untitled', 'alt', 'alt text', 'image of', 'photo of',
+  'spacer', 'placeholder', 'no alt', 'none',
+]);
+
+// A screen reader reads alt in one breath, with no way to skim or pause.
+const ALT_MAX = 125;
+
+// Two images sharing alt text is a judgement call — a gallery of near-identical
+// product shots is a fair reason. A whole page of them is a template nobody
+// filled in, so only report from three up.
+const ALT_DUP_MIN = 3;
+
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
 /** Checks that only need the page itself. */
@@ -127,6 +150,44 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     out.push(f('error', 'img-alt', `${noAlt.length} image(s) with no alt attribute`,
       `First: ${noAlt[0].src}. Decorative images need alt="" — the attribute must exist either way.`, url));
   }
+  // Alt text that exists but says nothing. alt="" is deliberate and correct for
+  // a decorative image, so it is never judged here — only text a screen reader
+  // would actually read out.
+  const described = doc.images.filter((i) => i.alt);
+  const norm = (i) => i.alt.trim().toLowerCase().replace(/[.:,;!?—–-]+$/, '');
+
+  const filename = described.filter((i) => ALT_FILENAME.test(i.alt.trim()) || ALT_SERIAL.test(i.alt.trim()));
+  if (filename.length) {
+    out.push(f('warn', 'img-alt-filename', `${filename.length} image(s) with a filename as alt text`,
+      `First: alt="${filename[0].alt}" on ${filename[0].src}. That is what a CMS fills in when nobody typed anything — it describes the file, not the picture.`, url));
+  }
+
+  const placeholder = described.filter((i) => ALT_PLACEHOLDER.has(norm(i)));
+  if (placeholder.length) {
+    out.push(f('warn', 'img-alt-placeholder', `${placeholder.length} image(s) with placeholder alt text`,
+      `First: alt="${placeholder[0].alt}" on ${placeholder[0].src}. It names the medium, not the content — a screen reader already announces "image" before reading it.`, url));
+  }
+
+  // Counted over what is left, because a filename or a placeholder repeated on
+  // every image is already reported above, with a more useful message.
+  const flagged = new Set([...filename, ...placeholder]);
+  const repeats = new Map();
+  for (const i of described.filter((i) => !flagged.has(i))) {
+    repeats.set(norm(i), [...(repeats.get(norm(i)) ?? []), i]);
+  }
+  for (const [alt, group] of repeats) {
+    if (group.length >= ALT_DUP_MIN) {
+      out.push(f('info', 'img-alt-duplicate', `${group.length} images share one alt text`,
+        `"${alt}" — fair for near-identical product shots, a template nobody filled in otherwise. Each image earns its own description.`, url));
+    }
+  }
+
+  const longAlt = described.filter((i) => i.alt.length > ALT_MAX);
+  if (longAlt.length) {
+    out.push(f('info', 'img-alt-long', `${longAlt.length} image(s) with very long alt text`,
+      `First: ${longAlt[0].alt.length} chars on ${longAlt[0].src}. Alt is read in one breath, with no way to skim — a description this long belongs in the page text, where everyone gets it.`, url));
+  }
+
   const noDim = doc.images.filter((i) => i.src && (!i.width || !i.height));
   if (noDim.length) {
     out.push(f('warn', 'img-dimensions', `${noDim.length} image(s) without width/height`,

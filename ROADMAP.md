@@ -4,12 +4,15 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-- **`--against <url>`** — audit a preview deployment and diff it against production directly, no baseline file. The natural shape for a pull-request check.
-- **Wait for the edge** — a `--settle` flag that polls until a site serves consistent HTML before crawling. Auditing during a Cloudflare rollout produces a snapshot that is wrong in a confusing way; this has now bitten three separate verifications on one project.
-- **Alt-text quality**, not just presence. Nine images on one page all sharing the same alt text pass every existing check and help nobody.
-- **`--psi` for a whole section** — sample N pages of a path rather than naming each. Needs care: 12s per URL adds up fast.
+Empty — both entries shipped and are awaiting a release. The next one is promoted from **Later** below.
 
 ## Shipped
+
+- **Alt-text quality** (1.1.0) — a filename, a placeholder, the same alt on three images, or an alt too long to be read in one breath. Presence was never the interesting half.
+- **`--psi` for a whole section** (1.1.0) — `/journal/**` measures a deterministic sample of the pages under a path, and says how many it skipped.
+
+- **`--against <url>`** (1.0.0) — diff a preview deployment against production directly, no baseline file. The natural shape for a pull-request check.
+- **Wait for the edge** (1.0.0) — `--settle <seconds>` polls until the site serves consistent HTML before crawling. Auditing during a Cloudflare rollout produces a snapshot that is wrong in a confusing way; it had bitten three separate verifications on one project.
 
 - **`--html`** (0.3.0) — a self-contained report to send a client.
 - **`--psi`** (0.3.0) — performance measured by Google, never estimated here.

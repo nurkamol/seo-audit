@@ -4,7 +4,7 @@ import { parseHtml, parseSitemap } from './parse.mjs';
 import { pageChecks, crossPageChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
-import { psiChecks } from './psi.mjs';
+import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -131,9 +131,21 @@ export async function audit(target, opts = {}) {
   findings.push(...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls })));
 
   // Performance, measured by Google rather than guessed at here. Slow and
-  // rate-limited, so only on request and only for the pages named.
+  // rate-limited, so only on request, and for a named page or a sample of a
+  // named section rather than the whole crawl.
   if (opts.psi?.length) {
-    findings.push(...(await psiChecks(opts.psi, { strategy: opts.psiStrategy })));
+    const { urls: targets, notes } = psiTargets(opts.psi, pages.map((p) => p.url), {
+      origin,
+      sample: opts.psiSample,
+    });
+    findings.push(...notes);
+    if (targets.length) {
+      opts.onNote?.(
+        `measuring ${targets.length} page(s) with PageSpeed Insights — about ` +
+          `${Math.ceil(estimateSeconds(targets.length) / 60)} min …`,
+      );
+      findings.push(...(await psiChecks(targets, { strategy: opts.psiStrategy })));
+    }
   }
 
   if (truncated > 0) {

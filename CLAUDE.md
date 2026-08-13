@@ -9,11 +9,19 @@ Public repo. Built because every free SEO grader audits only the homepage.
 node bin/seo-audit.mjs https://example.com               # terminal report
 node bin/seo-audit.mjs https://example.com --html r.html --md r.md --json r.json
 node bin/seo-audit.mjs https://example.com --psi https://example.com/
+node bin/seo-audit.mjs https://example.com --psi "/journal/**" --psi-sample 3
+npm test                                                # 57 tests, no install
 ```
 
-Node 22 (`nvm use 22`). There is nothing to install and no build step. There
-are no unit tests — the tool is validated by running it against real sites,
-which is the only thing that has ever found a real bug in it.
+Node 22 (`nvm use 22`). There is nothing to install and no build step.
+
+`npm test` runs `node --test` over `test/`, serving its own fixture site on
+localhost so it works offline and cannot be broken by a real site changing.
+The suite is necessary and not sufficient: every real bug this tool has ever
+had was found by running it against a real site, so do that too before calling
+a change done. Writing the tests found one immediately — `\b` treats the hyphen
+in `data-src` as a word boundary, so a lazy-loading site had its `data-src`
+read as its `src`.
 
 ## Three rules that are not negotiable
 
@@ -50,9 +58,15 @@ Return `{ level, id, title, detail, url }` from the right place — that is the
 whole contract. Per-page goes in `pageChecks`, anything needing the full set
 in `crossPageChecks`, anything once-per-domain in `src/site.mjs`.
 
-Then, in the same change: add the row to the README's check table, and an
-entry to `CHANGELOG.md`. The README table is the tool's documentation of
-record and drifts immediately if this is skipped.
+Then, in the same change: add the row to the README's check table, an entry to
+`CHANGELOG.md`, and a test in `test/unit.test.mjs` — including a case proving
+it does **not** fire when it shouldn't, which is the half that matters. The
+README table is the tool's documentation of record and drifts immediately if
+this is skipped.
+
+A new flag has one more place to go: `action.yml`, as an input *and* in the
+`args+=` block that assembles the command. An input that never reaches the CLI
+is worse than no input, because it fails silently.
 
 ## Releasing
 
