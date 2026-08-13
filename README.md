@@ -288,6 +288,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Check | Level |
 |---|---|
 | `robots.txt` exists, does not block everything, advertises the sitemap | error / warning / note |
+| No sitemap URL is disallowed by `robots.txt` — the site contradicting itself | error |
 | The sitemap declares `lastmod` at all | note |
 | `lastmod` differs between pages — one date on every URL is a build stamp, and crawlers learn to ignore it | note |
 | No `lastmod` is in the future | warning |

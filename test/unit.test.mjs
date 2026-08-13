@@ -8,6 +8,7 @@ import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
 import { markdown, html, counts, group } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
+import { parseRobots, robotsVerdict } from '../src/robots.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -88,6 +89,102 @@ test('lastmod stays attached to its own loc', () => {
     { loc: 'https://a.test/two/', lastmod: null },
     { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00' },
   ]);
+});
+
+// --- robots.txt -----------------------------------------------------------
+
+const allows = (body, path, agent) => robotsVerdict(parseRobots(body), path, agent).allowed;
+
+test('a longer rule beats a shorter one, whichever way it points', () => {
+  // The pattern that makes a Disallow-only implementation useless: almost every
+  // WordPress site carves admin-ajax.php out of a blocked /wp-admin/.
+  const body = 'User-agent: *\nDisallow: /wp-admin/\nAllow: /wp-admin/admin-ajax.php\n';
+  assert.equal(allows(body, '/wp-admin/'), false);
+  assert.equal(allows(body, '/wp-admin/options.php'), false);
+  assert.equal(allows(body, '/wp-admin/admin-ajax.php'), true);
+});
+
+test('a tie between Allow and Disallow goes to Allow', () => {
+  const body = 'User-agent: *\nDisallow: /x/\nAllow: /x/\n';
+  assert.equal(allows(body, '/x/page/'), true);
+});
+
+test('an empty Disallow blocks nothing', () => {
+  // "Disallow:" with no value is the documented way to say "nothing".
+  assert.equal(allows('User-agent: *\nDisallow:\n', '/anything/'), true);
+});
+
+test('wildcards and the end anchor are honoured', () => {
+  const body = 'User-agent: *\nDisallow: /*.pdf$\nDisallow: /private*/secret\n';
+  assert.equal(allows(body, '/files/report.pdf'), false);
+  // Anchored: the extension has to end the path.
+  assert.equal(allows(body, '/files/report.pdf.html'), true);
+  assert.equal(allows(body, '/private-area/secret'), false);
+  assert.equal(allows(body, '/public/secret'), true);
+});
+
+test('a path nothing matches is allowed', () => {
+  assert.equal(allows('User-agent: *\nDisallow: /admin/\n', '/about/'), true);
+});
+
+test('a Googlebot group wins over the wildcard group', () => {
+  const body = 'User-agent: *\nDisallow: /\n\nUser-agent: googlebot\nAllow: /\n';
+  assert.equal(allows(body, '/about/', 'googlebot'), true);
+  assert.equal(allows(body, '/about/', 'bingbot'), false);
+});
+
+test('consecutive user-agent lines share one set of rules', () => {
+  const body = 'User-agent: googlebot\nUser-agent: bingbot\nDisallow: /both/\n';
+  assert.equal(allows(body, '/both/', 'googlebot'), false);
+  assert.equal(allows(body, '/both/', 'bingbot'), false);
+});
+
+test('comments and blank lines are ignored, and rules before any agent belong to nobody', () => {
+  const body = '# a comment\nDisallow: /orphaned/\n\nUser-agent: *\nDisallow: /real/ # trailing\n';
+  assert.equal(allows(body, '/orphaned/'), true);
+  assert.equal(allows(body, '/real/'), false);
+});
+
+test('a sitemap URL that robots.txt disallows is reported', async () => {
+  const origin = 'https://x.test';
+  const fetcher = fakeFetcher((url) => {
+    if (url.endsWith('/robots.txt')) {
+      return { body: 'User-agent: *\nDisallow: /private/\nSitemap: https://x.test/sitemap.xml\n' };
+    }
+    return notFound(url);
+  });
+  const out = await siteChecks(origin, fetcher, bareSite(origin), {
+    sitemapUrls: [`${origin}/ok/`, `${origin}/private/thing/`],
+  });
+  const finding = out.find((f) => f.id === 'robots-blocks-sitemap-url');
+  assert.ok(finding, 'expected the contradiction to be reported');
+  assert.match(finding.title, /1 sitemap URL/);
+  assert.match(finding.detail, /private\/thing/);
+});
+
+test('a carve-out in robots.txt does not make the sitemap look blocked', async () => {
+  const origin = 'https://x.test';
+  const fetcher = fakeFetcher((url) =>
+    url.endsWith('/robots.txt')
+      ? { body: 'User-agent: *\nDisallow: /wp-admin/\nAllow: /wp-admin/admin-ajax.php\nSitemap: s\n' }
+      : notFound(url),
+  );
+  const out = await siteChecks(origin, fetcher, bareSite(origin), {
+    sitemapUrls: [`${origin}/wp-admin/admin-ajax.php`, `${origin}/about/`],
+  });
+  assert.ok(!out.some((f) => f.id === 'robots-blocks-sitemap-url'));
+});
+
+test('a site blocked entirely is reported once, not once per sitemap URL', async () => {
+  const origin = 'https://x.test';
+  const fetcher = fakeFetcher((url) =>
+    url.endsWith('/robots.txt') ? { body: 'User-agent: *\nDisallow: /\n' } : notFound(url),
+  );
+  const out = await siteChecks(origin, fetcher, bareSite(origin), {
+    sitemapUrls: [`${origin}/a/`, `${origin}/b/`, `${origin}/c/`],
+  });
+  assert.ok(out.some((f) => f.id === 'robots-blocks-all'));
+  assert.ok(!out.some((f) => f.id === 'robots-blocks-sitemap-url'));
 });
 
 // --- sitemap hygiene ------------------------------------------------------

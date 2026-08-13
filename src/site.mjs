@@ -1,6 +1,7 @@
 // Whole-site checks: the files and headers that exist once per domain, plus
 // the link graph, which is the thing single-page graders can never see.
 import { mapLimit } from './http.mjs';
+import { parseRobots, robotsVerdict } from './robots.mjs';
 
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
@@ -14,17 +15,45 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
 
   // --- robots.txt ---------------------------------------------------------
   const robots = await fetcher.get(new URL('/robots.txt', base).toString());
+  let blocksAll = false;
   if (!robots.ok) {
     out.push(f('warn', 'robots-missing', 'No robots.txt',
       `HTTP ${robots.status}. Not fatal, but it is where the sitemap is advertised.`, robots.url));
   } else {
     if (/^\s*disallow:\s*\/\s*$/im.test(robots.body) && /user-agent:\s*\*/i.test(robots.body)) {
+      blocksAll = true;
       out.push(f('error', 'robots-blocks-all', 'robots.txt blocks the whole site',
         'Disallow: / for User-agent: *. Nothing will be indexed.', robots.url));
     }
     if (!/sitemap:/i.test(robots.body)) {
       out.push(f('info', 'robots-no-sitemap', 'robots.txt does not list a sitemap',
         'One line, and every crawler finds the sitemap without guessing.', robots.url));
+    }
+
+    // The site contradicting itself: the sitemap says index this, robots.txt
+    // says do not crawl it. Skipped when the whole site is blocked, because
+    // that is already reported above and this would restate it once per URL.
+    if (!blocksAll) {
+      const groups = parseRobots(robots.body);
+      const blocked = [];
+      for (const listed of opts.sitemapUrls ?? []) {
+        let path;
+        try {
+          path = new URL(listed).pathname;
+        } catch {
+          continue;
+        }
+        const verdict = robotsVerdict(groups, path);
+        if (!verdict.allowed) blocked.push({ listed, rule: verdict.rule });
+      }
+      if (blocked.length) {
+        const shown = blocked.slice(0, 3).map((b) => `${b.listed} (Disallow: ${b.rule.path})`).join(', ');
+        out.push(f('error', 'robots-blocks-sitemap-url',
+          `${blocked.length} sitemap URL(s) are disallowed by robots.txt`,
+          `${shown}${blocked.length > 3 ? `, and ${blocked.length - 3} more` : ''}. The sitemap asks Google ` +
+            'to index these and robots.txt forbids fetching them, so they land in the index without a ' +
+            'description, or not at all. One of the two files is wrong.', robots.url));
+      }
     }
   }
 

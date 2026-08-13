@@ -6,6 +6,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **robots.txt contradicting the sitemap** (`robots-blocks-sitemap-url`, error).
+  The sitemap asks Google to index a URL while robots.txt forbids fetching it,
+  so it lands in the index with no description, or not at all. One of the two
+  files is wrong, and nothing about either one on its own looks wrong.
+
+  This needed a real robots.txt reader rather than a regex, in `src/robots.mjs`.
+  `Allow` and `Disallow` are not first-match-wins: the longest pattern wins and
+  a tie goes to `Allow`. A `Disallow`-only implementation would have reported
+  every site that carves an exception out of a broad block — which is what
+  wordpress.org does, and it was the first real file tested against. Wildcards
+  and the trailing `$` anchor are honoured, an empty `Disallow:` blocks nothing,
+  and a `googlebot` group takes precedence over the `*` group.
+
+  Skipped entirely when `robots-blocks-all` has already fired, which would
+  otherwise restate the same problem once per URL.
+
 - **`lastmod` hygiene.** `sitemap-lastmod-missing` (note), `-identical` (note)
   and `-future` (warning). The interesting one is `identical`: a generator
   stamping build time on every URL looks diligent and is worth nothing, because
