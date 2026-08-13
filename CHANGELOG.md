@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.2] — 2026-08-14
+
 ### Fixed
 A second sweep, against gov.uk, blog.cloudflare.com, smashingmagazine.com,
 nextjs.org and python.org. 41 errors reported; 22 of them were the tool's fault.
@@ -33,6 +35,18 @@ by hand: gov.uk really does list `/search/all` in its sitemap while `robots.txt`
 disallows it, and smashingmagazine.com's canonicals really do point at URLs that
 301 elsewhere. Reading an unquoted attribute is what made that canonical
 visible in the first place.
+
+### Upgrading
+Worth taking promptly, for the same reason as 1.5.1: `robots-blocks-all` is an
+**error**, and 1.5.1 raised it on any site whose robots.txt blocks a single
+badly-behaved crawler in its own group — telling people their whole site is
+unindexable when it is not.
+
+The parser fixes remove far more findings than they add, but they do add some:
+a page whose `<meta name=viewport …>` was unquoted stops reporting a missing
+viewport and starts being checked properly, so a canonical or a description that
+was invisible can now produce a finding of its own. Those are real, and were
+being missed rather than newly introduced.
 
 ## [1.5.1] — 2026-08-14
 
