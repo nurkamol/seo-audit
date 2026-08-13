@@ -364,7 +364,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `alt` is under 125 characters — it's read in one breath, with no way to skim | note |
 | Every `<img>` has `width` and `height` — otherwise the page reflows | warning |
 | Images offer a `srcset` rather than one size for every screen | note |
-| Word count above ~300 | warning |
+| Word count above ~300 — Japanese, Chinese and Thai are counted by character, since they don't space words | warning |
 | At least one link inside the content, not just navigation | note |
 | No `http://` **subresources** on an HTTPS page — a hyperlink to one is not mixed content | error |
 | Images declared decorative by `alt=""` **or** `role="presentation"` are left alone | — |

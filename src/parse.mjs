@@ -55,6 +55,28 @@ export function attr(tag, name) {
 export const stripMarkupInAttributes = (html) =>
   html.replace(/="[^"]*<[a-z][^">]*>[^"]*"/gi, '=""');
 
+// Japanese, Chinese and Thai do not put spaces between words, so splitting on
+// whitespace counts an entire paragraph as one. The Japanese translation of a
+// React docs page counted 177 against the English original's 411 — the same
+// page, the same content — and was reported as thin.
+//
+// Counted at roughly two characters to the word, the usual working equivalence.
+// It is an approximation, and deliberately a generous one: over-counting keeps
+// a real page quiet, while under-counting calls it thin, and only one of those
+// is a finding somebody has to argue with.
+const UNSPACED_SCRIPT =
+  /[぀-ヿ㐀-䶿一-鿿豈-﫿฀-๿]/g;
+
+export function countWords(text) {
+  if (!text) return 0;
+  const unspaced = text.match(UNSPACED_SCRIPT)?.length ?? 0;
+  const spaced = text
+    .replace(UNSPACED_SCRIPT, ' ')
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+  return spaced + Math.round(unspaced / 2);
+}
+
 export function parseHtml(rawHtml, pageUrl) {
   const html = stripMarkupInAttributes(rawHtml);
 
@@ -188,7 +210,7 @@ export function parseHtml(rawHtml, pageUrl) {
       inMain: [...new Set(internal(mainAnchors))],
       external: [...new Set(hrefs(anchors).filter((h) => !h.startsWith(origin)))],
     },
-    words: bodyText ? bodyText.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length : 0,
+    words: countWords(bodyText),
   };
 }
 

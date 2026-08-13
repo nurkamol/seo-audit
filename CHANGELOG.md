@@ -5,6 +5,25 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Pages in Japanese, Chinese or Thai were reported as thin.** Those scripts do
+  not put spaces between words, so splitting on whitespace counted an entire
+  paragraph as one. The Japanese translation of a React docs page counted 177
+  words against the English original's 411 — the same page, the same content —
+  and was called thin while the English one passed.
+
+  Characters in unspaced scripts are now counted at roughly two to the word,
+  the usual working equivalence. That is an approximation and a deliberately
+  generous one: over-counting keeps a real page quiet, under-counting calls it
+  thin, and only one of those is a finding somebody has to argue with. Latin and
+  Arabic counts are unchanged — Arabic spaces its words, and its pages were
+  never affected.
+
+  Found by a fourth sweep, against docusaurus.io, ja.react.dev, aljazeera.net,
+  vuejs.org and jestjs.io. Notably the only bug that sweep found: the previous
+  three rounds of parser fixes held on documentation generators, on right-to-left
+  markup, and on non-Latin scripts.
+
 ## [1.5.3] — 2026-08-14
 
 ### Fixed

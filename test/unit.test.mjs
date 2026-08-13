@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { attr, parseHtml, parseSitemap } from '../src/parse.mjs';
+import { attr, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
@@ -147,6 +147,29 @@ test('parseHtml separates internal from external links', () => {
   );
   assert.deepEqual(doc.links.internal, ['https://example.com/in/']);
   assert.deepEqual(doc.links.external, ['https://other.test/out']);
+});
+
+test('word counting handles scripts that do not use spaces', () => {
+  // The Japanese translation of a React docs page counted 177 against the
+  // English original's 411 — the same page, the same content — because
+  // splitting on whitespace makes a Japanese paragraph one word.
+  assert.equal(countWords('one two three four five'), 5);
+  assert.equal(countWords(''), 0);
+
+  // Japanese, Chinese and Thai run words together; counted at two characters
+  // to the word.
+  assert.equal(countWords('あいうえおかきくけこ'), 5);
+  assert.equal(countWords('한국어는 띄어쓰기를 한다'), 3); // Korean does use spaces
+
+  // Mixed text counts both halves rather than losing one.
+  assert.ok(countWords('React の useState フックは state を返します') > 5);
+});
+
+test('a page of Japanese is not reported as thin', () => {
+  const japanese = 'これはテストです。'.repeat(80); // ~720 characters
+  const doc = parseHtml(`<main><p>${japanese}</p></main>`, 'https://x.test/p/');
+  assert.ok(doc.words > 300, `expected a real word count, got ${doc.words}`);
+  assert.ok(!pageChecks(page(`<main><p>${japanese}</p></main>`)).some((f) => f.id === 'thin-content'));
 });
 
 test('parseSitemap distinguishes an index from a urlset', () => {
