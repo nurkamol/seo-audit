@@ -9,7 +9,11 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, 'fixtures', 'site', name), 'utf8');
 
-export async function startFixtureSite({ withSitemap = true } = {}) {
+export async function startFixtureSite({
+  withSitemap = true,
+  disallow = null,
+  homeRedirect = null,
+} = {}) {
   const server = createServer((req, res) => {
     const host = req.headers.host;
     const send = (body, type = 'text/html; charset=utf-8', status = 200) => {
@@ -23,9 +27,9 @@ export async function startFixtureSite({ withSitemap = true } = {}) {
     switch (req.url) {
       case '/robots.txt':
         return send(
-          withSitemap
-            ? `User-agent: *\nAllow: /\n\nSitemap: http://${host}/sitemap.xml\n`
-            : 'User-agent: *\nAllow: /\n',
+          `User-agent: *\nAllow: /\n` +
+            (disallow ? `Disallow: ${disallow}\n` : '') +
+            (withSitemap ? `\nSitemap: http://${host}/sitemap.xml\n` : ''),
           'text/plain',
         );
       case '/sitemap.xml':
@@ -39,6 +43,11 @@ export async function startFixtureSite({ withSitemap = true } = {}) {
           'application/xml',
         );
       case '/':
+        // Plenty of real sites send / to a locale or a canonical path.
+        if (homeRedirect) {
+          res.writeHead(302, { location: homeRedirect });
+          return res.end();
+        }
         return page('index.html');
       case '/about/':
         return page('about.html');

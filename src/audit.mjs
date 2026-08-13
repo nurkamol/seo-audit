@@ -1,6 +1,7 @@
 // Orchestration: find the pages, fetch them, run the checks.
 import { Fetcher, mapLimit } from './http.mjs';
 import { parseHtml, parseSitemap } from './parse.mjs';
+import { parseRobots, robotsVerdict } from './robots.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
@@ -50,6 +51,75 @@ async function discover(origin, fetcher, explicit) {
   return { urls: [], entries: [], source: null, tried };
 }
 
+// Files that are linked from pages but are not pages. Fetching a 40MB video to
+// discover it has no <title> wastes the crawl budget on a site that, by
+// definition, has no sitemap telling us where the pages actually are.
+const NOT_A_PAGE =
+  /\.(jpe?g|png|gif|webp|avif|svg|ico|pdf|zip|gz|mp4|webm|mp3|wav|woff2?|ttf|eot|css|js|json|xml|txt|csv|docx?|xlsx?)($|\?)/i;
+
+/**
+ * Breadth-first from the homepage, following internal links.
+ *
+ * Only used when no sitemap exists. Ordinarily that stopped the tool dead,
+ * which meant the sites least likely to have been looked after were the ones it
+ * refused to look at.
+ *
+ * robots.txt is obeyed. A crawler that ignores it is rude, and here it would
+ * also spend the budget on exactly the pages nobody wants indexed.
+ */
+async function crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups }) {
+  const start = new URL('/', origin).toString();
+  const queued = new Set([start]);
+  const visited = new Set();
+  let frontier = [start];
+  const pages = [];
+
+  while (frontier.length && pages.length < limit) {
+    const batch = frontier.slice(0, limit - pages.length);
+    frontier = [];
+
+    // Redirects are followed here, unlike everywhere else in this tool. A link
+    // crawl has to land on the page a visitor would land on: www.mozilla.org/
+    // answers 302 to /en-US/, and reading only the first hop finds a redirect
+    // with no links in it and concludes the site has one page.
+    const fetched = await mapLimit(batch, concurrency, async (pageUrl) => {
+      const { final } = await fetcher.chain(pageUrl);
+      const isHtml = /text\/html/i.test(final.headers.get('content-type') ?? '');
+      return {
+        url: final.url,
+        res: final,
+        html: final.body,
+        doc: final.ok && isHtml ? parseHtml(final.body, final.url) : null,
+      };
+    });
+
+    for (const page of fetched) {
+      // Two aliases redirecting to one page are one page.
+      const key = page.url.replace(/\/$/, '');
+      if (visited.has(key)) continue;
+      // A redirect that leaves the site is somebody else's page.
+      if (!page.url.startsWith(origin)) continue;
+      visited.add(key);
+      pages.push(page);
+
+      for (const href of page.doc?.links.internal ?? []) {
+        const clean = href.split('#')[0];
+        if (queued.has(clean) || visited.has(clean.replace(/\/$/, '')) || NOT_A_PAGE.test(clean)) continue;
+        try {
+          if (!robotsVerdict(robotsGroups, new URL(clean).pathname).allowed) continue;
+        } catch {
+          continue;
+        }
+        queued.add(clean);
+        frontier.push(clean);
+      }
+    }
+  }
+
+  // Everything reachable that the budget did not reach.
+  return { pages, remaining: frontier.length };
+}
+
 /**
  * @param {string} target site origin, or a sitemap URL
  * @param {{limit?: number, concurrency?: number, sitemap?: string}} opts
@@ -75,31 +145,23 @@ export async function audit(target, opts = {}) {
   );
 
   const findings = [];
+  const limit = opts.limit ?? 200;
+  const concurrency = opts.concurrency ?? 6;
 
-  if (!urls.length) {
-    findings.push(
-      fetcher.reachable
-        ? {
-            level: 'error',
-            id: 'no-sitemap',
-            title: 'No sitemap found',
-            detail:
-              `Tried: ${tried.join(', ')}. Without a sitemap, crawlers discover pages by following ` +
-              'links only, and this tool has nothing to audit. Pass --sitemap <url> if it lives elsewhere.',
-            url: origin,
-          }
-        : {
-            level: 'error',
-            id: 'unreachable',
-            title: 'The site did not answer a single request',
-            detail:
-              `Tried: ${tried.join(', ')}. The TLS connection succeeds but no response arrives, which ` +
-              'usually means a bot-protection rule is stalling non-browser clients — Cloudflare Bot ' +
-              "Fight Mode does exactly this. If it is your site, allow this crawler's user agent, or " +
-              'pass --user-agent to present a different one.',
-            url: origin,
-          },
-    );
+  // A host that never answered is not a sitemap problem, and following links
+  // from a page that does not load would find nothing either.
+  if (!urls.length && !fetcher.reachable) {
+    findings.push({
+      level: 'error',
+      id: 'unreachable',
+      title: 'The site did not answer a single request',
+      detail:
+        `Tried: ${tried.join(', ')}. The TLS connection succeeds but no response arrives, which ` +
+        'usually means a bot-protection rule is stalling non-browser clients — Cloudflare Bot ' +
+        "Fight Mode does exactly this. If it is your site, allow this crawler's user agent, or " +
+        'pass --user-agent to present a different one.',
+      url: origin,
+    });
     return {
       findings,
       meta: {
@@ -113,25 +175,67 @@ export async function audit(target, opts = {}) {
     };
   }
 
-  const list = urls.slice(0, opts.limit ?? 200);
-  const truncated = urls.length - list.length;
+  let pages;
+  let truncated = 0;
+  const bySitemap = urls.length > 0;
 
-  const pages = await mapLimit(list, opts.concurrency ?? 6, async (pageUrl) => {
-    const res = await fetcher.get(pageUrl);
-    const isHtml = /text\/html/i.test(res.headers.get('content-type') ?? '');
-    return {
-      url: pageUrl,
-      res,
-      html: res.body,
-      doc: res.ok && isHtml ? parseHtml(res.body, pageUrl) : null,
-    };
-  });
+  if (bySitemap) {
+    const list = urls.slice(0, limit);
+    truncated = urls.length - list.length;
+    pages = await mapLimit(list, concurrency, async (pageUrl) => {
+      const res = await fetcher.get(pageUrl);
+      const isHtml = /text\/html/i.test(res.headers.get('content-type') ?? '');
+      return {
+        url: pageUrl,
+        res,
+        html: res.body,
+        doc: res.ok && isHtml ? parseHtml(res.body, pageUrl) : null,
+      };
+    });
+  } else {
+    // No sitemap, but the site answers. Follow links instead of giving up: the
+    // sites least likely to have been looked after were the ones this refused
+    // to look at.
+    opts.onNote?.('no sitemap — following links from the homepage instead');
+    const robotsRes = await fetcher.get(new URL('/robots.txt', origin).toString());
+    const robotsGroups = robotsRes.ok ? parseRobots(robotsRes.body) : [];
+
+    const crawled = await crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups });
+    pages = crawled.pages;
+    truncated = crawled.remaining;
+
+    findings.push({
+      level: 'warn',
+      id: 'no-sitemap',
+      title: 'No sitemap found',
+      detail:
+        `Tried: ${tried.join(', ')}. This run followed links from the homepage instead, which is what a ` +
+        `crawler has to do without one — ${pages.length} pages were reached that way. A sitemap states ` +
+        'the pages you want indexed rather than leaving it to be inferred, and carries lastmod. ' +
+        'Pass --sitemap <url> if one exists somewhere unusual.',
+      url: origin,
+    });
+
+    if (!pages.some((p) => p.res.ok)) {
+      findings.push({
+        level: 'error',
+        id: 'nothing-crawlable',
+        title: 'Nothing could be crawled',
+        detail:
+          'No sitemap, and the homepage did not return a page to follow links from. There is nothing ' +
+          'here to audit.',
+        url: origin,
+      });
+    }
+  }
 
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   findings.push(...crossPageChecks(pages));
   findings.push(...sitemapChecks(entries, source));
   findings.push(...expectationChecks(pages, opts.expect));
-  findings.push(...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls })));
+  findings.push(
+    ...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls, bySitemap })),
+  );
 
   // Performance, measured by Google rather than guessed at here. Slow and
   // rate-limited, so only on request, and for a named page or a sample of a
@@ -155,9 +259,14 @@ export async function audit(target, opts = {}) {
     findings.push({
       level: 'info',
       id: 'truncated',
-      title: `${truncated} pages were not checked`,
-      detail: `The sitemap lists ${urls.length} URLs and the limit is ${list.length}. Raise it with --limit.`,
-      url: source,
+      title: bySitemap
+        ? `${truncated} pages were not checked`
+        : `At least ${truncated} more pages are linked but were not checked`,
+      detail: bySitemap
+        ? `The sitemap lists ${urls.length} URLs and the limit is ${pages.length}. Raise it with --limit.`
+        : `The crawl stopped at ${pages.length} pages with more still queued. Following links cannot know ` +
+          'the total in advance the way a sitemap can, so this is a floor, not a count. Raise it with --limit.',
+      url: source ?? origin,
     });
   }
 

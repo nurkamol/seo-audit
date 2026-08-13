@@ -189,7 +189,15 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
 
   // Linked, reachable, and absent from the sitemap — the mirror image of an
   // orphan, and just as easy to ship by accident when a route is added.
-  const missing = results.filter((r) => r.status === 200 && /text\/html/i.test(r.type));
+  //
+  // Silent when the crawl followed links rather than a sitemap: every page
+  // found that way is by definition absent from a sitemap that does not exist,
+  // and saying so once per page would bury the finding that matters, which is
+  // that there is no sitemap at all.
+  const missing =
+    opts.bySitemap === false
+      ? []
+      : results.filter((r) => r.status === 200 && /text\/html/i.test(r.type));
   for (const { target } of missing.slice(0, 20)) {
     out.push(f('warn', 'missing-from-sitemap', 'Page is linked but not in the sitemap',
       `${target} — linked from ${seen.get(target).slice(0, 2).join(', ')}`, target));

@@ -113,6 +113,18 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 npx github:nurkamol/seo-audit one.example two.example three.example
 ```
 
+### Sites without a sitemap
+
+If no sitemap can be found, the crawl follows links from the homepage instead
+of stopping — the sites least likely to have been looked after were the ones
+this used to refuse to look at. `no-sitemap` is still reported, as a warning
+rather than an error, because the pages get audited either way.
+
+The link crawl obeys `robots.txt`, follows a redirecting homepage (plenty of
+sites send `/` to a locale), skips assets, and treats two URLs redirecting to
+one page as one page. `missing-from-sitemap` stays quiet, since every page
+found this way is by definition absent from a sitemap that does not exist.
+
 ### A portfolio
 
 Name more than one site and the report becomes a table, worst site first —
@@ -155,7 +167,7 @@ reason.
 | `--update-baseline` | — | Rewrite the baseline after comparing |
 | `--limit <n>` | 200 | Maximum pages to check |
 | `--concurrency <n>` | 6 | Parallel requests |
-| `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path |
+| `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path. Without any sitemap, the crawl follows links instead |
 | `--user-agent <ua>` | `seo-audit …` | Identify as something else |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |

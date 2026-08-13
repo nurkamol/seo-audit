@@ -6,6 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A site with no sitemap is crawled by following links**, instead of stopping
+  dead. The sites least likely to have been looked after were exactly the ones
+  this refused to look at. `www.mozilla.org` went from 0 pages audited to a full
+  crawl with 20 distinct checks firing.
+
+  The crawl obeys `robots.txt` — a crawler that ignores it is rude, and here it
+  would also spend the budget on the pages nobody wants indexed. It skips
+  assets, and treats two URLs redirecting to one page as one page.
+
+  It also follows a redirecting homepage, which real sites forced: `/` on
+  `www.mozilla.org` answers 302 to `/en-US/`, and reading only the first hop
+  finds a redirect with no links in it and concludes the site has one page.
+  This is the one place in the tool that follows redirects rather than
+  reporting them, because a link crawl has to land where a visitor lands.
+
 - **Multi-site runs.** `seo-audit one.example two.example` — or a `sites` array
   in the config — audits a portfolio and prints one table, worst site first.
   This is the question a per-site report can never answer, because each report
@@ -35,6 +50,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of work.
 
   Nothing changes for a single site — same output, same exit code, same flags.
+
+### Changed
+- `no-sitemap` is a **warning** rather than an error. It used to mean "there is
+  nothing here to audit", which was true and is not any more. A missing sitemap
+  is worth saying and is rarely worth failing a build over, now that the pages
+  get checked anyway. A site that has no sitemap *and* serves no crawlable
+  homepage reports `nothing-crawlable`, which is an error.
+- `missing-from-sitemap` is silent during a link crawl. Every page found that
+  way is absent from a sitemap that does not exist, and saying so once per page
+  would bury the finding that matters.
 
 ## [1.3.0] — 2026-08-13
 

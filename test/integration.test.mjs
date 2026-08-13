@@ -107,15 +107,62 @@ test('both report formats render the run without throwing', () => {
   assert.ok(page.includes(site.origin));
 });
 
-test('a site that answers but has no sitemap says exactly that', async () => {
+test('a site with no sitemap is crawled by following links instead of refused', async () => {
   const bare = await startFixtureSite({ withSitemap: false });
   try {
     const result = await audit(bare.origin, { concurrency: 1 });
+
     const finding = result.findings.find((f) => f.id === 'no-sitemap');
     assert.ok(finding, 'expected a no-sitemap finding');
-    // It should say what it tried, so the fix is obvious.
-    assert.match(finding.detail, /sitemap\.xml/);
-    assert.equal(result.meta.pages, 0);
+    // Still worth saying, but no longer fatal — the pages got audited anyway.
+    assert.equal(finding.level, 'warn');
+    assert.match(finding.detail, /sitemap\.xml/); // says what it tried
+    assert.match(finding.detail, /followed links/);
+
+    // The homepage plus what it links to, rather than nothing at all.
+    assert.ok(result.meta.pages > 1, `expected a link crawl, got ${result.meta.pages} pages`);
+
+    // Real checks ran on those pages, which is the whole point.
+    const ids = result.findings.map((f) => f.id);
+    assert.ok(ids.includes('h1-multiple'), 'expected per-page checks to have run');
+
+    // Nothing is "missing from the sitemap" when there is no sitemap.
+    assert.ok(!ids.includes('missing-from-sitemap'));
+  } finally {
+    await bare.stop();
+  }
+});
+
+test('a link crawl follows a redirecting homepage instead of stopping at it', async () => {
+  // www.mozilla.org answers 302 to /en-US/. Reading only the first hop finds a
+  // redirect with no links in it and concludes the site has one page — which
+  // is exactly what this did before the seed was followed.
+  const bare = await startFixtureSite({ withSitemap: false, homeRedirect: '/about/' });
+  try {
+    const result = await audit(bare.origin, { concurrency: 1 });
+    // Before the seed was followed this produced nothing-crawlable and no
+    // audited pages at all.
+    assert.ok(!result.findings.some((f) => f.id === 'nothing-crawlable'));
+    assert.equal(result.meta.pages, 1);
+    // The page it landed on was parsed and checked, rather than the redirect
+    // being recorded as a contentless page. (/about/ links only to itself, so
+    // one page is the whole reachable set here.)
+    assert.ok(result.findings.some((f) => f.id === 'h1-multiple'));
+    assert.ok(result.findings.some((f) => (f.url ?? '').endsWith('/about/')));
+  } finally {
+    await bare.stop();
+  }
+});
+
+test('a link crawl obeys robots.txt rather than helping itself', async () => {
+  const bare = await startFixtureSite({ withSitemap: false, disallow: '/hidden/' });
+  try {
+    const result = await audit(bare.origin, { concurrency: 1 });
+    const crawled = result.findings.map((f) => f.url ?? '');
+    assert.ok(
+      !crawled.some((u) => u.includes('/hidden/')),
+      'a disallowed path should not be crawled',
+    );
   } finally {
     await bare.stop();
   }
