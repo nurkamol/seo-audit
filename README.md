@@ -150,6 +150,7 @@ Drop a `seo-audit.config.json` next to where you run it:
   "limit": 200,
   "failOn": "error",
   "limits": { "thinWords": 250 },
+  "maxLinkChecks": 200,
   "psi": ["/", "/pricing/", "/journal/**"],
   "ignore": [
     "img-srcset",
@@ -166,6 +167,11 @@ Drop a `seo-audit.config.json` next to where you run it:
 
 - **`limits`** — thresholds this site disagrees with: `titleMin`, `titleMax`,
   `descMin`, `descMax`, `thinWords`, `slowMs`.
+- **`maxLinkChecks`** — how many distinct link targets the site-wide sweep
+  fetches, default 200. The sweep checks every internal link on every crawled
+  page, so a large site can present thousands of targets; this bounds the run.
+  When it bites, the report says how many were left unchecked rather than
+  quietly describing a fraction of the site.
 - **`psi`** — pages to measure with PageSpeed Insights, as paths. A path glob
   names a section: `/journal/**` measures a sample of the crawled pages under
   it, three by default, spread across the section rather than taken off the
@@ -278,6 +284,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | HSTS, `X-Content-Type-Options`, `Referrer-Policy`, CSP headers | warning / note |
 | Every internal link resolves — the site-wide 404 sweep | error |
 | No page is linked but missing from the sitemap | warning |
+| The link sweep says so when it stops at `maxLinkChecks` rather than implying it checked everything | note |
 | Every `og:image` actually loads, and isn't too heavy to scrape | error / warning |
 
 ---

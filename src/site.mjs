@@ -79,27 +79,49 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       seen.set(clean, [...(seen.get(clean) ?? []), page.url]);
     }
   }
-  const targets = [...seen.keys()].slice(0, opts.maxLinkChecks ?? 200);
-  await mapLimit(targets, 6, async (target) => {
+  // Both questions below — is the target broken, and is it missing from the
+  // sitemap — are answered by the same response, so ask once and read it twice.
+  //
+  // The fetcher caches, so the old second pass was free for anything already
+  // checked. What it was not free for was everything past maxLinkChecks: that
+  // pass looped over every target, uncapped and one at a time, so the cap
+  // bounded the broken-link check but not the run. A site with 500 link targets
+  // paid for 300 serial requests that nothing was capping.
+  const all = [...seen.keys()];
+  const limit = opts.maxLinkChecks ?? 200;
+  const targets = all.slice(0, limit);
+  const results = await mapLimit(targets, 6, async (target) => {
     const res = await fetcher.get(target);
-    if (res.status === 404 || res.status === 0) {
+    return { target, status: res.status, type: res.headers.get('content-type') ?? '' };
+  });
+
+  if (all.length > targets.length) {
+    out.push(f('info', 'link-sweep-capped', `${all.length - targets.length} link targets were not checked`,
+      `The sweep stops at ${limit} distinct targets. Raise it with maxLinkChecks in the config — ` +
+        'the rest of this section describes only what was actually fetched.', origin));
+  }
+
+  // Iterated in link order rather than whichever request finished first, so two
+  // runs of an unchanged site produce the same report and --baseline stays
+  // meaningful.
+  for (const { target, status } of results) {
+    if (status === 404 || status === 0) {
       out.push(f('error', 'broken-link', 'Link to a page that does not exist',
         `${target} — linked from ${seen.get(target).slice(0, 3).join(', ')}`, seen.get(target)[0]));
     }
-  });
+  }
 
   // Linked, reachable, and absent from the sitemap — the mirror image of an
   // orphan, and just as easy to ship by accident when a route is added.
-  const missing = new Map();
-  for (const [target, sources] of seen) {
-    const res = await fetcher.get(target);
-    if (res.status === 200 && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
-      missing.set(target, sources);
-    }
-  }
-  for (const [target, sources] of [...missing].slice(0, 20)) {
+  const missing = results.filter((r) => r.status === 200 && /text\/html/i.test(r.type));
+  for (const { target } of missing.slice(0, 20)) {
     out.push(f('warn', 'missing-from-sitemap', 'Page is linked but not in the sitemap',
-      `${target} — linked from ${sources.slice(0, 2).join(', ')}`, target));
+      `${target} — linked from ${seen.get(target).slice(0, 2).join(', ')}`, target));
+  }
+  if (missing.length > 20) {
+    out.push(f('info', 'missing-from-sitemap-more', `${missing.length - 20} more pages are linked but not in the sitemap`,
+      `${missing.length} in total; the first 20 are listed above. This usually means one route or ` +
+        'section never made it into the generator’s sitemap, so look for the pattern rather than fixing them one by one.', origin));
   }
 
   // --- Canonical targets --------------------------------------------------

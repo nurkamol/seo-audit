@@ -5,6 +5,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `maxLinkChecks` now bounds the whole link sweep, not just half of it. The
+  broken-link pass respected the cap while the "linked but not in the sitemap"
+  pass looped over every target, uncapped and one request at a time — so on a
+  site with 500 link targets, 300 serial requests happened that nothing was
+  limiting. Both questions are now answered from one pass.
+
+  The two passes were never fetching the same URL twice: `Fetcher` caches by
+  method and URL, so anything the first pass had already asked for was free.
+  What was not free was everything past the cap, which the first pass had never
+  requested.
+
+### Added
+- `link-sweep-capped` and `missing-from-sitemap-more`, so a sweep that stopped
+  early says so. A capped run that stayed quiet described a fraction of the
+  site in the voice of a complete audit.
+- `maxLinkChecks` is documented, having been readable only from the source.
+
+### Changed
+- Broken links are reported in link order rather than whichever request
+  finished first, so two runs of an unchanged site produce identical reports
+  and `--baseline` stops seeing phantom movement.
+
 ## [1.1.0] — 2026-08-13
 
 ### Added

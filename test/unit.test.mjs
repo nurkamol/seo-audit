@@ -7,6 +7,7 @@ import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks } from '../src/checks.mjs';
 import { markdown, html, counts, group } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
+import { siteChecks } from '../src/site.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -69,6 +70,96 @@ test('parseSitemap distinguishes an index from a urlset', () => {
     parseSitemap('<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>'),
     { urls: [], sitemaps: ['https://a.test/s.xml'] },
   );
+});
+
+// --- the link sweep -------------------------------------------------------
+
+// A fetcher that records every URL asked for, so the sweep's cost is testable.
+// Deliberately does not cache: the point is to count what the sweep asks for,
+// not what the real Fetcher would spare it.
+function countingFetcher() {
+  const calls = [];
+  return {
+    calls,
+    async get(url) {
+      calls.push(url);
+      return {
+        url, status: 200, ok: true, body: '', location: null, ms: 1,
+        headers: new Headers({ 'content-type': 'text/html' }),
+      };
+    },
+    async chain(url) {
+      const final = await this.get(url);
+      return { hops: [{ url, status: 200 }], final };
+    },
+  };
+}
+
+const linkPage = (origin, targets) => ({
+  url: `${origin}/p/`,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: {
+    links: { internal: targets, inMain: [], external: [] },
+    canonical: [`${origin}/p/`],
+    og: {},
+    hreflang: [],
+  },
+});
+
+test('the link sweep never fetches more targets than maxLinkChecks allows', async () => {
+  const origin = 'https://x.test';
+  const targets = Array.from({ length: 50 }, (_, i) => `${origin}/link-${i}/`);
+  const fetcher = countingFetcher();
+
+  const out = await siteChecks(origin, fetcher, [linkPage(origin, targets)], {
+    sitemapUrls: [`${origin}/p/`],
+    maxLinkChecks: 5,
+  });
+
+  // Before the two passes were merged, the second one looped over all 50
+  // uncapped, so the cap bounded one check rather than the run.
+  const fetched = fetcher.calls.filter((u) => u.includes('/link-'));
+  assert.equal(new Set(fetched).size, 5);
+  assert.equal(fetched.length, 5, 'each target asked for once');
+
+  const capped = out.find((finding) => finding.id === 'link-sweep-capped');
+  assert.ok(capped, 'expected the sweep to say it stopped early');
+  assert.match(capped.title, /45 link targets were not checked/);
+});
+
+test('a sweep that checks everything does not claim it was capped', async () => {
+  const origin = 'https://x.test';
+  const fetcher = countingFetcher();
+  const out = await siteChecks(origin, fetcher, [linkPage(origin, [`${origin}/only/`])], {
+    sitemapUrls: [`${origin}/p/`],
+    maxLinkChecks: 5,
+  });
+  assert.ok(!out.some((finding) => finding.id === 'link-sweep-capped'));
+});
+
+test('broken links are reported in link order, so two runs agree', async () => {
+  const origin = 'https://x.test';
+  const targets = Array.from({ length: 6 }, (_, i) => `${origin}/link-${i}/`);
+  const fetcher = countingFetcher();
+  // Every other target is missing, and they resolve out of order.
+  fetcher.get = async function (url) {
+    this.calls.push(url);
+    const missing = /link-[135]\//.test(url);
+    await new Promise((r) => setTimeout(r, missing ? 1 : 5));
+    return {
+      url, status: missing ? 404 : 200, ok: !missing, body: '', location: null, ms: 1,
+      headers: new Headers({ 'content-type': 'text/html' }),
+    };
+  };
+
+  const out = await siteChecks(origin, fetcher, [linkPage(origin, targets)], {
+    sitemapUrls: [`${origin}/p/`],
+  });
+  const broken = out.filter((finding) => finding.id === 'broken-link').map((finding) => finding.detail);
+  assert.equal(broken.length, 3);
+  assert.match(broken[0], /link-1\//);
+  assert.match(broken[1], /link-3\//);
+  assert.match(broken[2], /link-5\//);
 });
 
 // --- psi targets ----------------------------------------------------------
