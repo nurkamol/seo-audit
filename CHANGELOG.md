@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.1] — 2026-08-14
+
 ### Fixed
 Three false positives, all found by running 1.5.0 against five real sites and
 checking every error it reported. Ten errors across those sites; six were the
@@ -33,6 +35,12 @@ tool's fault.
   Reporting a deliberate choice as an error is how a report gets ignored.
 
 Also: an `<img>` with neither `src` nor `alt` described itself as `First: null`.
+
+### Upgrading
+Worth taking promptly if you run `--fail-on error` in CI. `mixed-content` is an
+**error**, and 1.5.0 raised it on any `<a href="http://…">` — which means a
+build could be failing over an outbound link to somebody else's site. This
+release only ever removes findings; nothing new is reported.
 
 ## [1.5.0] — 2026-08-14
 
