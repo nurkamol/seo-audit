@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.3] — 2026-08-14
+
 ### Fixed
 A third sweep, against the shapes the first two missed: WordPress, e-commerce
 and a JavaScript-framework front end — techcrunch.com, allbirds.com,
@@ -34,6 +36,12 @@ tool's fault.
 
 That is the third time reading only the first hop has been wrong, after soft
 404s and the link-crawl seed.
+
+### Upgrading
+Take this one if you audit anything built with Alpine, Vue or Angular. 1.5.2
+read `:src` and `:href` as real attributes, so a page using bindings could
+report dozens of broken images and links that do not exist. This release only
+removes findings.
 
 ## [1.5.2] — 2026-08-14
 
