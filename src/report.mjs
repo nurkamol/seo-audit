@@ -302,6 +302,12 @@ export function diffReport({ added, fixed, unchanged, previousDate }) {
 }
 
 /** Self-contained HTML — one file, no assets, safe to email or attach. */
+/** Self-contained HTML — one file, no assets, safe to email or attach.
+ *
+ *  Everything is inline and nothing is fetched: no CDN, no webfont, no script.
+ *  A report that needs the network to render is a report that renders blank in
+ *  an email client, on a plane, or in three years' time when the CDN is gone.
+ */
 export function html(findings, meta) {
   const n = counts(findings);
   const esc = (s) =>
@@ -312,19 +318,25 @@ export function html(findings, meta) {
       .replace(/"/g, '&quot;');
 
   const LABEL = { error: 'Error', warn: 'Warning', info: 'Note' };
+  const HEADING = { error: 'Errors', warn: 'Warnings', info: 'Notes' };
   const entries = group(findings);
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
   const section = (level) => {
     const list = entries.filter((e) => e.level === level);
     if (!list.length) return '';
     return `
-    <h2 id="${level}">${{ error: 'Errors', warn: 'Warnings', info: 'Notes' }[level]}</h2>
+    <h2 id="${level}"><span>${HEADING[level]}</span><span class="rule"></span><span class="tick">${list.length}</span></h2>
     ${list
       .map(
         (entry) => `
-    <section class="finding ${entry.level}">
-      <h3>${esc(entry.title)}${entry.items.length > 1 ? ` <span class="count">${entry.items.length} pages</span>` : ''}</h3>
-      <p class="id">${esc(entry.id)}</p>
+    <article class="finding ${entry.level}">
+      <header>
+        <span class="pill ${entry.level}">${LABEL[entry.level]}</span>
+        <h3>${esc(entry.title)}</h3>
+        ${entry.items.length > 1 ? `<span class="badge">${plural(entry.items.length, 'page')}</span>` : ''}
+      </header>
+      <code class="id">${esc(entry.id)}</code>
       <ul>
         ${entry.items
           .map(
@@ -335,7 +347,7 @@ export function html(findings, meta) {
           )
           .join('')}
       </ul>
-    </section>`,
+    </article>`,
       )
       .join('')}`;
   };
@@ -349,66 +361,227 @@ export function html(findings, meta) {
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #fff; --fg: #1a1a1a; --muted: #6b7280; --line: #e5e7eb; --card: #fafafa;
-    --error: #b91c1c; --warn: #b45309; --info: #1d4ed8;
+    --bg: #fff;
+    --panel: #fafafa;
+    --fg: #0a0a0a;
+    --muted: #666;
+    --faint: #8f8f8f;
+    --line: #eaeaea;
+    --line-strong: #d4d4d4;
+    --error: #c5292f;
+    --warn: #a35200;
+    --info: #0059c8;
+    --error-bg: #fdf0f0;
+    --warn-bg: #fdf4e7;
+    --info-bg: #eef4ff;
+    --ok: #0a7c42;
+    --radius: 7px;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --fg: #e8e8ea; --muted: #9096a2; --line: #262b36; --card: #161a22;
-            --error: #f87171; --warn: #fbbf24; --info: #7dd3fc; }
+    :root {
+      --bg: #000;
+      --panel: #0e0e0e;
+      --fg: #ededed;
+      --muted: #a1a1a1;
+      --faint: #7a7a7a;
+      --line: #262626;
+      --line-strong: #3a3a3a;
+      --error: #ff6166;
+      --warn: #f5a623;
+      --info: #6ea8ff;
+      --error-bg: #1c0d0e;
+      --warn-bg: #1c1408;
+      --info-bg: #0b1220;
+      --ok: #3fcf7f;
+    }
   }
+
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 2.5rem 1.5rem 5rem; background: var(--bg); color: var(--fg);
-         font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 60rem; margin-inline: auto; }
-  h1 { font-size: 1.6rem; margin: 0 0 .3rem; }
-  h1 a { color: inherit; }
-  .meta { color: var(--muted); font-size: .9rem; margin: 0 0 2rem; }
-  .tally { display: flex; gap: .6rem; flex-wrap: wrap; margin: 0 0 2.5rem; }
-  .tally b { display: block; font-size: 1.5rem; line-height: 1.2; }
-  .tally div { flex: 1 1 8rem; border: 1px solid var(--line); border-radius: .6rem;
-               padding: .8rem 1rem; background: var(--card); }
-  .tally .e b { color: var(--error); } .tally .w b { color: var(--warn); } .tally .i b { color: var(--info); }
-  table { width: 100%; border-collapse: collapse; margin: 0 0 3rem; font-size: .93rem; }
-  th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
-  td.n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-  .pill { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-  .pill.error { color: var(--error); } .pill.warn { color: var(--warn); } .pill.info { color: var(--info); }
-  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-       margin: 3rem 0 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--line); }
-  .finding { border-left: 3px solid var(--line); padding: 0 0 0 1.1rem; margin: 0 0 2rem; }
-  .finding.error { border-color: var(--error); } .finding.warn { border-color: var(--warn); }
-  .finding.info { border-color: var(--info); }
-  .finding h3 { font-size: 1.02rem; margin: 0 0 .15rem; }
-  .count { font-size: .78rem; font-weight: 500; color: var(--muted); }
-  .id { font: .74rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); margin: 0 0 .7rem; }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li { padding: .4rem 0; border-top: 1px dashed var(--line); font-size: .9rem; }
-  li a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); word-break: break-all; }
-  li a:hover { border-color: currentColor; }
-  .detail { display: block; color: var(--muted); font-size: .85rem; }
-  footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--line);
-           color: var(--muted); font-size: .85rem; }
-  footer a { color: inherit; }
-  @media print { body { padding: 0; } .finding { break-inside: avoid; } }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 0 1.25rem 6rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: 400 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 62rem; margin-inline: auto; }
+  a { color: inherit; }
+
+  /* --- Masthead ------------------------------------------------------- */
+  .bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 1.1rem 0; margin-bottom: 3rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .mark {
+    font: 600 12.5px/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: .02em; color: var(--fg); text-decoration: none;
+  }
+  .mark span { color: var(--faint); }
+  .stamp {
+    font: 500 12px/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--faint); font-variant-numeric: tabular-nums;
+  }
+
+  h1 {
+    font-size: 1.75rem; line-height: 1.2; font-weight: 600;
+    letter-spacing: -.021em; margin: 0 0 .55rem;
+  }
+  h1 a { text-decoration: none; }
+  h1 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  .facts {
+    display: flex; flex-wrap: wrap; gap: .4rem .95rem;
+    margin: 0 0 2.25rem; padding: 0; list-style: none;
+    font-size: .82rem; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .facts li { display: flex; gap: .38rem; }
+  .facts b { font-weight: 600; color: var(--fg); }
+
+  /* --- Tally ---------------------------------------------------------- */
+  .tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; margin: 0 0 3rem; }
+  .tally div {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--panel); padding: .9rem 1rem;
+  }
+  .tally b {
+    display: block; font-size: 1.9rem; line-height: 1.1; font-weight: 600;
+    letter-spacing: -.028em; font-variant-numeric: tabular-nums;
+  }
+  .tally small {
+    display: block; margin-top: .18rem; font-size: .715rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .075em; color: var(--muted);
+  }
+  .tally .e b { color: var(--error); }
+  .tally .w b { color: var(--warn); }
+  .tally .i b { color: var(--info); }
+  .tally .zero b { color: var(--faint); }
+
+  /* --- Tables --------------------------------------------------------- */
+  .scroll { overflow-x: auto; margin: 0 0 3.25rem; border: 1px solid var(--line); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  thead th {
+    text-align: left; padding: .62rem .85rem;
+    font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .075em;
+    color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody td { padding: .62rem .85rem; border-bottom: 1px solid var(--line); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.n { color: var(--muted); }
+  tbody a { text-decoration: none; font-weight: 500; }
+  tbody a:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+  /* --- Pills ---------------------------------------------------------- */
+  .pill {
+    display: inline-block; flex: none;
+    padding: .12rem .42rem; border-radius: 4px;
+    font-size: .655rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    border: 1px solid currentColor;
+  }
+  .pill.error { color: var(--error); background: var(--error-bg); }
+  .pill.warn  { color: var(--warn);  background: var(--warn-bg); }
+  .pill.info  { color: var(--info);  background: var(--info-bg); }
+
+  /* --- Section headings ----------------------------------------------- */
+  h2 {
+    display: flex; align-items: center; gap: .8rem;
+    font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .085em;
+    color: var(--muted); margin: 0 0 1.1rem;
+  }
+  h2 .rule { flex: 1; height: 1px; background: var(--line); }
+  h2 .tick { font-variant-numeric: tabular-nums; color: var(--faint); }
+
+  /* --- Findings ------------------------------------------------------- */
+  .finding {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    margin: 0 0 .8rem; overflow: hidden; background: var(--bg);
+  }
+  .finding > header {
+    display: flex; align-items: baseline; gap: .55rem; flex-wrap: wrap;
+    padding: .8rem .95rem .1rem;
+  }
+  .finding h3 {
+    font-size: .975rem; font-weight: 600; letter-spacing: -.011em;
+    margin: 0; flex: 1 1 20rem;
+  }
+  .badge {
+    font-size: .715rem; font-weight: 500; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .id {
+    display: inline-block; margin: 0 .95rem .7rem;
+    font: 500 .71rem/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--faint);
+  }
+  .finding ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .finding li { padding: .55rem .95rem; border-bottom: 1px solid var(--line); }
+  .finding li:last-child { border-bottom: 0; }
+  .finding li a {
+    font: 500 .8rem/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    text-decoration: none; word-break: break-word; color: var(--fg);
+  }
+  .finding li a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .detail { display: block; color: var(--muted); font-size: .83rem; margin-top: .12rem; }
+
+  /* --- Clean bill ------------------------------------------------------ */
+  .clean {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+    padding: 2.25rem 1.25rem; text-align: center;
+  }
+  .clean b { display: block; font-size: 1.05rem; font-weight: 600; color: var(--ok); }
+  .clean span { color: var(--muted); font-size: .87rem; }
+
+  /* --- Portfolio ------------------------------------------------------- */
+  .site { margin: 0 0 4.5rem; }
+  .site h1 { font-size: 1.25rem; }
+
+  footer {
+    margin-top: 4.5rem; padding-top: 1.15rem; border-top: 1px solid var(--line);
+    color: var(--faint); font-size: .8rem; line-height: 1.7;
+  }
+  footer a { color: var(--muted); }
+
+  @media (max-width: 34rem) {
+    .tally { grid-template-columns: 1fr; }
+    h1 { font-size: 1.4rem; }
+  }
+  @media print {
+    body { padding: 0; color: #000; background: #fff; }
+    .finding, .tally div, .scroll { break-inside: avoid; }
+    .bar { margin-bottom: 1.5rem; }
+    footer { break-before: avoid; }
+  }
 </style>
 </head>
 <body>
 <main>
-  <h1>SEO audit — <a href="${esc(meta.origin)}">${esc(meta.origin)}</a></h1>
-  <p class="meta">${esc(meta.date)} · ${meta.pages} pages crawled${
-    meta.ignored ? ` · ${meta.ignored} findings ignored by config` : ''
-  }</p>
+  <div class="bar">
+    <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+    <span class="stamp">${esc(meta.date)}</span>
+  </div>
+
+  <h1><a href="${esc(meta.origin)}">${esc(meta.origin)}</a></h1>
+  <ul class="facts">
+    <li><b>${meta.pages ?? 0}</b> pages crawled</li>
+    ${meta.requests ? `<li><b>${meta.requests}</b> requests</li>` : ''}
+    ${meta.ms ? `<li><b>${(meta.ms / 1000).toFixed(1)}s</b> elapsed</li>` : ''}
+    ${meta.ignored ? `<li><b>${meta.ignored}</b> silenced by config</li>` : ''}
+  </ul>
 
   <div class="tally">
-    <div class="e"><b>${n.error}</b> ${n.error === 1 ? 'error' : 'errors'}</div>
-    <div class="w"><b>${n.warn}</b> ${n.warn === 1 ? 'warning' : 'warnings'}</div>
-    <div class="i"><b>${n.info}</b> ${n.info === 1 ? 'note' : 'notes'}</div>
+    <div class="e${n.error ? '' : ' zero'}"><b>${n.error}</b><small>${n.error === 1 ? 'Error' : 'Errors'}</small></div>
+    <div class="w${n.warn ? '' : ' zero'}"><b>${n.warn}</b><small>${n.warn === 1 ? 'Warning' : 'Warnings'}</small></div>
+    <div class="i${n.info ? '' : ' zero'}"><b>${n.info}</b><small>${n.info === 1 ? 'Note' : 'Notes'}</small></div>
   </div>
 
   ${
     findings.length
-      ? `<table>
+      ? `<div class="scroll"><table>
     <thead><tr><th>Level</th><th>Finding</th><th class="n">Pages</th></tr></thead>
     <tbody>${entries
       .map(
@@ -418,9 +591,9 @@ export function html(findings, meta) {
           )}</td><td class="n">${e.items.length}</td></tr>`,
       )
       .join('')}</tbody>
-  </table>
+  </table></div>
   ${section('error')}${section('warn')}${section('info')}`
-      : '<p>Nothing to report.</p>'
+      : `<div class="clean"><b>Nothing to report</b><span>Every check passed on all ${meta.pages ?? 0} pages.</span></div>`
   }
 
   <footer>

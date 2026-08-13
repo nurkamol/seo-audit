@@ -5,6 +5,35 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.5] — 2026-08-14
+
+### Changed
+- **The HTML report was redesigned.** It read as a default stylesheet rather
+  than something you would put in front of a client. Now: a masthead carrying
+  the run date, the origin as the headline, and a facts line giving pages,
+  requests, elapsed time and how many findings the config silenced — which the
+  old header did not say at all.
+
+  Findings became bordered cards with a severity pill, a monospace check id and
+  the affected URLs in monospace, since a URL is an identifier rather than
+  prose. Numbers are tabular throughout, so counts line up in a column. The
+  palette is one tone per severity, used on the pill and the tally and nowhere
+  else; light mode semantics were darkened to hold against white, and dark mode
+  is true black. No shadows and no gradients — flat surfaces and hairline rules
+  are what make a report read as a tool.
+
+  Zero findings now renders a proper panel — *every check passed on all N
+  pages* — rather than a sentence of body text. A clean audit is the result you
+  most want to hand somebody.
+
+  Still one self-contained file with **no external assets**: no stylesheet link,
+  no script, no webfont, no remote image. A report that needs the network
+  renders blank in an email client, on a plane, or in three years when the CDN
+  has moved on. That is also why the masthead is a text wordmark and not a logo.
+
+  `docs/report.jpg` in the README was regenerated to match, since it advertised
+  a design the tool no longer produced.
+
 ## [1.5.4] — 2026-08-14
 
 ### Fixed
