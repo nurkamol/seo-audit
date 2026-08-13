@@ -1,6 +1,6 @@
 {
   "name": "seo-audit",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Crawl a site's sitemap and check every page for SEO, metadata and structured-data problems that single-page graders miss. Zero dependencies.",
   "type": "module",
   "bin": {

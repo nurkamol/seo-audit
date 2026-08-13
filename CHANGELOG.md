@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.5.4] — 2026-08-14
+
 ### Fixed
 - **Pages in Japanese, Chinese or Thai were reported as thin.** Those scripts do
   not put spaces between words, so splitting on whitespace counted an entire
