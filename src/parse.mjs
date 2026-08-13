@@ -25,7 +25,11 @@ export function attr(tag, name) {
   const start = `(?<![-\\w])${name}`;
   const m =
     tag.match(new RegExp(`${start}\\s*=\\s*"([^"]*)"`, 'i')) ??
-    tag.match(new RegExp(`${start}\\s*=\\s*'([^']*)'`, 'i'));
+    tag.match(new RegExp(`${start}\\s*=\\s*'([^']*)'`, 'i')) ??
+    // Unquoted, which HTML permits and minifiers produce: smashingmagazine.com
+    // ships `<meta name=viewport content="…">`, and reading only quoted values
+    // reported nine of its pages as having no viewport at all.
+    tag.match(new RegExp(`${start}\\s*=\\s*([^\\s"'\`=<>]+)`, 'i'));
   if (m) return decode(m[1]);
   // Bare boolean attribute (`<img alt>`) — present, with an empty value.
   return new RegExp(`${start}(?=[\\s/>])`, 'i').test(tag) ? '' : null;
@@ -46,16 +50,27 @@ export const stripMarkupInAttributes = (html) =>
 
 export function parseHtml(rawHtml, pageUrl) {
   const html = stripMarkupInAttributes(rawHtml);
-  const head = (html.match(/<head[\s\S]*?<\/head>/i) ?? [''])[0];
-  const main = (html.match(/<main[\s\S]*?<\/main>/i) ?? [''])[0] || html;
 
-  const metas = [...html.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
+  // Elements are read from markup with <script> and <style> contents removed.
+  // A script that builds HTML by concatenation — `'<li><a href="' + a.url + '">'`
+  // — is code, not links on the page, and smashingmagazine.com's offline-article
+  // list had nine of those reported as links to a page that does not exist.
+  //
+  // JSON-LD is read from `html` instead, because it lives inside a <script>.
+  const markup = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ');
+
+  const head = (markup.match(/<head[\s\S]*?<\/head>/i) ?? [''])[0];
+  const main = (markup.match(/<main[\s\S]*?<\/main>/i) ?? [''])[0] || markup;
+
+  const metas = [...markup.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
   const metaBy = (key, value) => {
     const tag = metas.find((t) => (attr(t, key) ?? '').toLowerCase() === value);
     return tag ? attr(tag, 'content') : null;
   };
 
-  const links = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
+  const links = [...markup.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
   const linkRel = (rel) => links.filter((t) => (attr(t, 'rel') ?? '').toLowerCase() === rel);
 
   const abs = (href) => {
@@ -66,7 +81,7 @@ export function parseHtml(rawHtml, pageUrl) {
     }
   };
 
-  const anchors = [...html.matchAll(/<a\b[^>]*>/gi)].map((m) => m[0]);
+  const anchors = [...markup.matchAll(/<a\b[^>]*>/gi)].map((m) => m[0]);
   const mainAnchors = [...main.matchAll(/<a\b[^>]*>/gi)].map((m) => m[0]);
   const hrefs = (list) =>
     list
@@ -87,7 +102,7 @@ export function parseHtml(rawHtml, pageUrl) {
       }
     });
 
-  const images = [...html.matchAll(/<img\b[^>]*>/gi)].map((m) => {
+  const images = [...markup.matchAll(/<img\b[^>]*>/gi)].map((m) => {
     const tag = m[0];
     return {
       tag,
@@ -103,13 +118,13 @@ export function parseHtml(rawHtml, pageUrl) {
     };
   });
 
-  const pictures = [...html.matchAll(/<picture[\s\S]*?<\/picture>/gi)].map((m) => m[0]);
+  const pictures = [...markup.matchAll(/<picture[\s\S]*?<\/picture>/gi)].map((m) => m[0]);
   for (const img of images) {
     if (img.src && pictures.some((p) => p.includes(img.src))) img.inPicture = true;
   }
 
   const headings = (level) =>
-    [...html.matchAll(new RegExp(`<h${level}\\b[^>]*>([\\s\\S]*?)</h${level}>`, 'gi'))].map((m) =>
+    [...markup.matchAll(new RegExp(`<h${level}\\b[^>]*>([\\s\\S]*?)</h${level}>`, 'gi'))].map((m) =>
       stripTags(m[1]),
     );
 
@@ -126,11 +141,11 @@ export function parseHtml(rawHtml, pageUrl) {
   );
 
   return {
-    title: (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) ?? [null, null])[1]?.trim(),
+    title: (markup.match(/<title[^>]*>([\s\S]*?)<\/title>/i) ?? [null, null])[1]?.trim(),
     description: metaBy('name', 'description'),
     robots: metaBy('name', 'robots'),
     viewport: metaBy('name', 'viewport'),
-    lang: attr((html.match(/<html\b[^>]*>/i) ?? [''])[0], 'lang'),
+    lang: attr((markup.match(/<html\b[^>]*>/i) ?? [''])[0], 'lang'),
     canonical: linkRel('canonical').map((t) => abs(attr(t, 'href'))).filter(Boolean),
     hreflang: linkRel('alternate')
       .filter((t) => attr(t, 'hreflang'))

@@ -71,10 +71,17 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     out.push(f('warn', 'robots-missing', 'No robots.txt',
       `HTTP ${robots.status}. Not fatal, but it is where the sitemap is advertised.`, robots.url));
   } else {
-    if (/^\s*disallow:\s*\/\s*$/im.test(robots.body) && /user-agent:\s*\*/i.test(robots.body)) {
+    const groups = parseRobots(robots.body);
+
+    // Asked of the parser rather than by pattern-matching the file. The old
+    // test was "some line says Disallow: / and some line says User-agent: *",
+    // which are routinely different groups: gov.uk blocks deepcrawl and
+    // python.org blocks HTTrack, and both were reported as blocking the entire
+    // site from everyone.
+    if (!robotsVerdict(groups, '/').allowed) {
       blocksAll = true;
       out.push(f('error', 'robots-blocks-all', 'robots.txt blocks the whole site',
-        'Disallow: / for User-agent: *. Nothing will be indexed.', robots.url));
+        'Disallow: / applies to Googlebot. Nothing will be indexed.', robots.url));
     }
     if (!/sitemap:/i.test(robots.body)) {
       out.push(f('info', 'robots-no-sitemap', 'robots.txt does not list a sitemap',
@@ -85,7 +92,6 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     // says do not crawl it. Skipped when the whole site is blocked, because
     // that is already reported above and this would restate it once per URL.
     if (!blocksAll) {
-      const groups = parseRobots(robots.body);
       const blocked = [];
       for (const listed of opts.sitemapUrls ?? []) {
         let path;

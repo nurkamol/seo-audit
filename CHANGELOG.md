@@ -5,6 +5,35 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+A second sweep, against gov.uk, blog.cloudflare.com, smashingmagazine.com,
+nextjs.org and python.org. 41 errors reported; 22 of them were the tool's fault.
+
+- **`robots-blocks-all` did not read groups.** It tested for a `Disallow: /`
+  line and a `User-agent: *` line existing *somewhere* in the file, which are
+  routinely different groups. gov.uk blocks `deepcrawl` and python.org blocks
+  `HTTrack`; both were reported as blocking their entire site from everyone, at
+  error level. It now asks `src/robots.mjs` — the correct matcher that had been
+  sitting unused since 1.3.0 — whether Googlebot may fetch `/`.
+
+- **Markup built inside a `<script>` was read as page content.**
+  smashingmagazine.com's offline-article list assembles `<li><a href="'+a.url+'">`
+  by string concatenation, and ten pages were reported as linking to a page that
+  does not exist. Elements are now read from markup with `<script>` and
+  `<style>` contents removed. JSON-LD is still read from the original, because
+  it lives inside a script.
+
+- **Unquoted attribute values were invisible.** HTML permits `name=viewport`
+  without quotes and minifiers emit it; `attr()` read only quoted and bare
+  forms, so smashingmagazine.com had ten pages reported as having no viewport
+  meta at all.
+
+Fixing the last two revealed three findings that had been masked, each verified
+by hand: gov.uk really does list `/search/all` in its sitemap while `robots.txt`
+disallows it, and smashingmagazine.com's canonicals really do point at URLs that
+301 elsewhere. Reading an unquoted attribute is what made that canonical
+visible in the first place.
+
 ## [1.5.1] — 2026-08-14
 
 ### Fixed

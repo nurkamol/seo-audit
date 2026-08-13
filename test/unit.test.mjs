@@ -26,6 +26,49 @@ test('attr decodes entities', () => {
   assert.equal(attr('<meta content="Tea &amp; Cake">', 'content'), 'Tea & Cake');
 });
 
+test('attr reads an unquoted value, which HTML permits', () => {
+  // smashingmagazine.com ships `<meta name=viewport content="…">`. Reading only
+  // quoted values reported nine of its pages as having no viewport at all.
+  assert.equal(attr('<meta name=viewport content="width=device-width">', 'name'), 'viewport');
+  assert.equal(attr('<img src=/a.png alt=hello>', 'src'), '/a.png');
+  assert.equal(attr('<img src=/a.png alt=hello>', 'alt'), 'hello');
+  // The quoted forms still win, and a bare attribute is still empty-not-missing.
+  assert.equal(attr('<img alt="a b">', 'alt'), 'a b');
+  assert.equal(attr('<img alt>', 'alt'), '');
+});
+
+test('an unquoted viewport is found, not reported as missing', () => {
+  const doc = parseHtml(
+    '<html lang="en"><head><meta name=viewport content="width=device-width,initial-scale=1"></head></html>',
+    'https://x.test/p/',
+  );
+  assert.equal(doc.viewport, 'width=device-width,initial-scale=1');
+});
+
+test('markup built inside a script is code, not links on the page', () => {
+  // smashingmagazine.com's offline-article list builds <li><a href="'+a.url+'">
+  // by concatenation. Nine pages were reported as linking to a page that does
+  // not exist, once per page that shipped the script.
+  const doc = parseHtml(
+    `<main>
+       <a href="/real/">a real link</a>
+       <script>var t = '<li><a href="' + a.url + '">' + a.url + '</a></li>';</script>
+       <style>.x::after { content: "<a href='/fake/'>"; }</style>
+     </main>`,
+    'https://x.test/p/',
+  );
+  assert.deepEqual(doc.links.internal, ['https://x.test/real/']);
+});
+
+test('JSON-LD still reaches the checks, even though it lives in a script', () => {
+  const doc = parseHtml(
+    `<head><script type="application/ld+json">{"@type":"Organization"}</script></head>`,
+    'https://x.test/p/',
+  );
+  assert.equal(doc.jsonld.length, 1);
+  assert.equal(doc.jsonld[0].data['@type'], 'Organization');
+});
+
 test('markup inside an attribute value is a code sample, not part of the page', () => {
   // astro.build stores a whole Astro component in a data-code attribute for its
   // copy button. The <img src={product.imageUrl}> in that string was read as a
@@ -490,6 +533,25 @@ test('a carve-out in robots.txt does not make the sitemap look blocked', async (
     sitemapUrls: [`${origin}/wp-admin/admin-ajax.php`, `${origin}/about/`],
   });
   assert.ok(!out.some((f) => f.id === 'robots-blocks-sitemap-url'));
+});
+
+test('blocking one badly-behaved crawler is not blocking the site', async () => {
+  // gov.uk blocks deepcrawl and python.org blocks HTTrack, each in its own
+  // group. Testing for "a Disallow: / somewhere and a User-agent: * somewhere"
+  // reported both as blocking the entire site from everyone.
+  const origin = 'https://x.test';
+  const body = [
+    'User-agent: *',
+    'Disallow: /search/all*',
+    'Sitemap: https://x.test/sitemap.xml',
+    '',
+    'User-agent: deepcrawl',
+    'Disallow: /',
+  ].join('\n');
+  const out = await siteChecks(origin, fakeFetcher((url) =>
+    url.endsWith('/robots.txt') ? { body } : notFound(url),
+  ), bareSite(origin), { sitemapUrls: [`${origin}/p/`] });
+  assert.ok(!out.some((f) => f.id === 'robots-blocks-all'));
 });
 
 test('a site blocked entirely is reported once, not once per sitemap URL', async () => {
