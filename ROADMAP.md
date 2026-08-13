@@ -4,9 +4,17 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Empty — both entries shipped and are awaiting a release. The next one is promoted from **Later** below.
+The hreflang and sitemap work, in one batch — the checks that fail on translated
+pages and in generated files, where nobody is looking.
+
+- **hreflang, past reciprocity** — a missing self-reference, a target that 404s, a malformed code like `en_US`, no `x-default`, and the good one: `<html lang="en">` on a page its own hreflang calls `ru`. That is the shape of the bug this tool was built for.
+- **`lastmod` hygiene** — a generator stamping build time on every URL makes `lastmod` identical everywhere, at which point Google ignores it. Changes `parseSitemap`'s return shape, so it touches discovery.
+- **robots.txt disallows a sitemap URL** — the site contradicting itself. Needs `Allow` matched as well as `Disallow`, longest-match-wins, or it invents false positives on every site with a carve-out.
 
 ## Shipped
+
+- **Soft 404s** (1.2.0) — a URL that cannot exist must answer 404. Follows the redirect chain, because the first hop says almost nothing.
+- **Broken images, `X-Robots-Tag`, relative `og:image`, redirecting internal links** (1.2.0) — the rest of the checks that only fail where nobody looks.
 
 - **Alt-text quality** (1.1.0) — a filename, a placeholder, the same alt on three images, or an alt too long to be read in one breath. Presence was never the interesting half.
 - **`--psi` for a whole section** (1.1.0) — `/journal/**` measures a deterministic sample of the pages under a path, and says how many it skipped.

@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-13
+
 ### Added
 - **Soft 404s** (`soft-404`). A URL that cannot exist has to answer 404; when it
   answers 200 instead, every typo, stale inbound link and crawler guess becomes
@@ -38,8 +40,18 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Internal links that redirect** (`link-redirects`, note). Aggregated into one
   finding, since keeping an old permalink alive on purpose is legitimate.
 
-- `maxImageChecks` bounds the image sweep, and `image-sweep-capped` reports when
-  it bites.
+- **Capped sweeps say so.** `link-sweep-capped`, `image-sweep-capped` and
+  `missing-from-sitemap-more`. A truncated run that stayed quiet described a
+  fraction of the site in the voice of a complete audit.
+
+- `maxImageChecks` bounds the image sweep. `maxLinkChecks` is now documented,
+  having been readable only from the source — which stopped being acceptable
+  the moment a finding started telling people to raise it.
+
+### Changed
+- Broken links and broken images are reported in source order rather than
+  whichever request finished first, so two runs of an unchanged site produce
+  identical reports and `--baseline` stops seeing movement that is not there.
 
 ### Fixed
 - `maxLinkChecks` now bounds the whole link sweep, not just half of it. The
@@ -53,16 +65,19 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   What was not free was everything past the cap, which the first pass had never
   requested.
 
-### Added
-- `link-sweep-capped` and `missing-from-sitemap-more`, so a sweep that stopped
-  early says so. A capped run that stayed quiet described a fraction of the
-  site in the voice of a complete audit.
-- `maxLinkChecks` is documented, having been readable only from the source.
+### Upgrading
+Nothing renamed, no exit code or config shape changed, so `@v1` moves forward.
+Read this one before upgrading a build that is currently green, though: unlike
+1.1.0, several of these checks are **errors**, so `--fail-on error` — the
+default — can turn red on a site that has not changed. `soft-404` is the likely
+one, because returning 200 for unknown URLs is the default behaviour of several
+popular hosts and frameworks.
 
-### Changed
-- Broken links are reported in link order rather than whichever request
-  finished first, so two runs of an unchanged site produce identical reports
-  and `--baseline` stops seeing phantom movement.
+That is the check doing its job, and it is worth fixing rather than silencing.
+If you need the build green while you get to it, `--fail-on new` with a
+`--baseline` tolerates the backlog you already have and fails only on a
+regression, which is what it was built for. `--ignore soft-404` is the blunter
+option.
 
 ## [1.1.0] — 2026-08-13
 
