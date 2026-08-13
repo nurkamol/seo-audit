@@ -394,6 +394,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | The TLS certificate is not expired, and not expiring within 14 days | error / warning |
 | HSTS, `X-Content-Type-Options`, `Referrer-Policy`, CSP headers | warning / note |
 | A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
+| There is something to audit at all — no sitemap *and* no crawlable homepage is `nothing-crawlable` | error |
 | Every internal link resolves — the site-wide 404 sweep | error |
 | Every `<img>` actually loads — 403 is hotlink protection, not a broken file, and is not reported | error |
 | Every `hreflang` alternate actually loads, including versions outside the crawl | error |
