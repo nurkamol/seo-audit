@@ -366,7 +366,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Images offer a `srcset` rather than one size for every screen | note |
 | Word count above ~300 | warning |
 | At least one link inside the content, not just navigation | note |
-| No `http://` resources on an HTTPS page | error |
+| No `http://` **subresources** on an HTTPS page — a hyperlink to one is not mixed content | error |
+| Images declared decorative by `alt=""` **or** `role="presentation"` are left alone | — |
 
 ### Across pages
 

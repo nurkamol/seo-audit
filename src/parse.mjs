@@ -31,7 +31,21 @@ export function attr(tag, name) {
   return new RegExp(`${start}(?=[\\s/>])`, 'i').test(tag) ? '' : null;
 }
 
-export function parseHtml(html, pageUrl) {
+/** Blank out attribute values that contain whole tags.
+ *
+ *  Markup inside an attribute value is a code sample, not part of the page.
+ *  astro.build stores an entire Astro component in a `data-code` attribute for
+ *  its copy button, and the `<img src={product.imageUrl}>` in that string was
+ *  read as a real image with no alt — an error, on a site that has no such
+ *  problem.
+ *
+ *  Deliberately narrow: the value must contain something shaped like a tag, so
+ *  `title="a < b"` and `content="Tea & Cake"` are untouched. */
+export const stripMarkupInAttributes = (html) =>
+  html.replace(/="[^"]*<[a-z][^">]*>[^"]*"/gi, '=""');
+
+export function parseHtml(rawHtml, pageUrl) {
+  const html = stripMarkupInAttributes(rawHtml);
   const head = (html.match(/<head[\s\S]*?<\/head>/i) ?? [''])[0];
   const main = (html.match(/<main[\s\S]*?<\/main>/i) ?? [''])[0] || html;
 
@@ -83,6 +97,7 @@ export function parseHtml(html, pageUrl) {
       height: attr(tag, 'height'),
       srcset: attr(tag, 'srcset'),
       loading: attr(tag, 'loading'),
+      role: attr(tag, 'role'),
       // Inside a <picture> the sibling <source> may carry the srcset instead.
       inPicture: false,
     };

@@ -10,6 +10,8 @@
 //   warn  — worth fixing, judgement involved
 //   info  — worth knowing, may be deliberate
 
+import { attr, stripMarkupInAttributes } from './parse.mjs';
+
 // Defaults, overridable per site under `limits` in the config file. A
 // documentation site and a shop disagree about what "thin" means, and the tool
 // should not hold the opinion.
@@ -207,10 +209,19 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   }
 
   // --- Images -------------------------------------------------------------
-  const noAlt = doc.images.filter((i) => i.alt === null);
+  // role="presentation" (or "none") declares an image decorative in ARIA, which
+  // is the same statement alt="" makes and is honoured by screen readers.
+  // alt="" is still the more robust way to say it, but this is a deliberate
+  // choice rather than an oversight — mozilla.org's accessibility team ships it
+  // — and calling a deliberate choice an error is how a report gets ignored.
+  const decorativeByRole = (i) => /^(presentation|none)$/i.test(i.role ?? '');
+  const noAlt = doc.images.filter((i) => i.alt === null && !decorativeByRole(i));
   if (noAlt.length) {
+    // An <img> can have no src either — a lazy-loading placeholder, or markup
+    // waiting on JavaScript. Saying "First: null" helped nobody find it.
+    const where = noAlt[0].src ?? 'an <img> with no src attribute either';
     out.push(f('error', 'img-alt', `${noAlt.length} image(s) with no alt attribute`,
-      `First: ${noAlt[0].src}. Decorative images need alt="" — the attribute must exist either way.`, url));
+      `First: ${where}. Decorative images need alt="" — the attribute must exist either way.`, url));
   }
   // Alt text that exists but says nothing. alt="" is deliberate and correct for
   // a decorative image, so it is never judged here — only text a screen reader
@@ -303,14 +314,32 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       'Without it the browser guesses, and guesses wrongly on non-Latin text.', url));
   }
 
-    // --- Mixed content ------------------------------------------------------
+  // --- Mixed content ------------------------------------------------------
+  // Only things the page *loads*. A browser blocks an http:// script and warns
+  // about an http:// image; it does nothing whatever about <a href="http://…">,
+  // which is an ordinary link to somebody else's site — usually one the author
+  // does not control and cannot upgrade. Matching every href reported four
+  // errors across five real sites, all of them outbound links and a feed.
   if (url.startsWith('https://')) {
-    const insecure = [...(page.html ?? '').matchAll(/(?:src|href)="(http:\/\/[^"]+)"/gi)]
-      .map((m) => m[1])
-      .filter((u) => !u.startsWith('http://localhost'));
+    const insecure = [];
+    // Same reason as in parseHtml: a code sample stored in an attribute is not
+    // a resource this page loads.
+    for (const match of stripMarkupInAttributes(page.html ?? '').matchAll(/<([a-z0-9-]+)\b[^>]*>/gi)) {
+      const [tag, name] = [match[0], match[1].toLowerCase()];
+      let loaded = null;
+      if (SUBRESOURCE.test(name)) loaded = attr(tag, 'src');
+      // A stylesheet is the one <link> fetched to render the page. rel=alternate
+      // on a feed, and rel=canonical, are not fetched at all.
+      else if (name === 'link' && /\bstylesheet\b/i.test(attr(tag, 'rel') ?? '')) {
+        loaded = attr(tag, 'href');
+      }
+      if (loaded?.startsWith('http://') && !loaded.startsWith('http://localhost')) {
+        insecure.push(loaded);
+      }
+    }
     if (insecure.length) {
       out.push(f('error', 'mixed-content', 'Insecure resources on an HTTPS page',
-        `${insecure.length}, first: ${insecure[0]}`, url));
+        `${insecure.length}, first: ${insecure[0]}. Browsers block or refuse to render these.`, url));
     }
   }
 
@@ -321,6 +350,10 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
 
   return out;
 }
+
+// Elements whose src the browser fetches as part of rendering the page. These
+// are what "mixed content" means; a hyperlink is not one of them.
+const SUBRESOURCE = /^(img|script|iframe|video|audio|source|embed|track|input|object)$/;
 
 const DAY = 24 * 60 * 60 * 1000;
 

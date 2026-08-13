@@ -26,6 +26,32 @@ test('attr decodes entities', () => {
   assert.equal(attr('<meta content="Tea &amp; Cake">', 'content'), 'Tea & Cake');
 });
 
+test('markup inside an attribute value is a code sample, not part of the page', () => {
+  // astro.build stores a whole Astro component in a data-code attribute for its
+  // copy button. The <img src={product.imageUrl}> in that string was read as a
+  // real image with no alt, and reported as an error on a site that has no such
+  // problem.
+  const doc = parseHtml(
+    `<main>
+       <button data-code="&lt;x&gt;<img src={product.imageUrl} alt={product.imageAlt} /></x>">Copy</button>
+       <img src="/real.png" alt="a real one">
+     </main>`,
+    'https://x.test/p/',
+  );
+  assert.equal(doc.images.length, 1);
+  assert.equal(doc.images[0].src, '/real.png');
+});
+
+test('an attribute value that merely contains a < is left alone', () => {
+  // "a < b" is text, not markup, and blanking it would invent a missing
+  // description on a page that has one.
+  const doc = parseHtml(
+    '<head><meta name="description" content="when a < b, sort ascending"></head>',
+    'https://x.test/p/',
+  );
+  assert.equal(doc.description, 'when a < b, sort ascending');
+});
+
 test('attr does not match a longer attribute name', () => {
   // `data-alt` must not satisfy a request for `alt`.
   assert.equal(attr('<img data-src="x">', 'src'), null);
@@ -978,6 +1004,20 @@ test('an image with no alt attribute is an error; alt="" is not', () => {
   assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>'))).includes('img-alt'));
 });
 
+test('role="presentation" says decorative just as alt="" does', () => {
+  // ARIA's way of declaring the same intent, and honoured by screen readers.
+  // mozilla.org's accessibility team ships it, which is about as good as
+  // evidence gets that it is deliberate rather than an oversight.
+  for (const role of ['presentation', 'none']) {
+    assert.ok(
+      !ids(pageChecks(page(`<main><img src="/a.png" role="${role}"></main>`))).includes('img-alt'),
+      `role="${role}" should count as declared decorative`,
+    );
+  }
+  // Any other role is not a statement about decoration.
+  assert.ok(ids(pageChecks(page('<main><img src="/a.png" role="img"></main>'))).includes('img-alt'));
+});
+
 // --- hreflang -------------------------------------------------------------
 
 const alternates = (...links) =>
@@ -1161,6 +1201,46 @@ test('mixed content is only reported on an https page', () => {
   const insecure = '<main><img src="http://x.test/a.png" alt=""></main>';
   assert.ok(ids(pageChecks(page(insecure, 'https://x.test/p/'))).includes('mixed-content'));
   assert.ok(!ids(pageChecks(page(insecure, 'http://x.test/p/'))).includes('mixed-content'));
+});
+
+test('a plain link to an http page is not mixed content', () => {
+  // Browsers block an http script and warn about an http image. They do nothing
+  // at all about <a href="http://…">, which is a link to somebody else's site —
+  // usually one the author cannot upgrade. Matching every href reported four
+  // errors across five real sites, every one of them an outbound link or a feed.
+  const cases = [
+    '<main><a href="http://old-friend.test/">a friend</a></main>',
+    '<head><link rel="alternate" type="application/rss+xml" href="http://x.test/feed/"></head>',
+    '<head><link rel="canonical" href="http://x.test/p/"></head>',
+  ];
+  for (const html of cases) {
+    assert.ok(
+      !ids(pageChecks(page(html, 'https://x.test/p/'))).includes('mixed-content'),
+      `should not be mixed content: ${html}`,
+    );
+  }
+});
+
+test('subresources over http are still reported', () => {
+  const loaded = [
+    '<script src="http://x.test/a.js"></script>',
+    '<head><link rel="stylesheet" href="http://x.test/a.css"></head>',
+    '<main><iframe src="http://x.test/f"></iframe></main>',
+    '<main><video src="http://x.test/v.mp4"></video></main>',
+  ];
+  for (const html of loaded) {
+    assert.ok(
+      ids(pageChecks(page(html, 'https://x.test/p/'))).includes('mixed-content'),
+      `should be mixed content: ${html}`,
+    );
+  }
+});
+
+test('an image with neither src nor alt is described, not printed as null', () => {
+  const found = pageChecks(page('<main><img data-src="/lazy.png"></main>'));
+  const finding = found.find((x) => x.id === 'img-alt');
+  assert.ok(finding);
+  assert.ok(!finding.detail.includes('null'), finding.detail);
 });
 
 test('one-way hreflang is reported, reciprocal is not', () => {

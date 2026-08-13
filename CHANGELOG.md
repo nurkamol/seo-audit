@@ -5,6 +5,35 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+Three false positives, all found by running 1.5.0 against five real sites and
+checking every error it reported. Ten errors across those sites; six were the
+tool's fault.
+
+- **`mixed-content` fired on ordinary hyperlinks.** It matched any
+  `href="http://…"`, so `<a href="http://old-friend.test/">` and an RSS
+  `<link rel="alternate">` were reported as insecure resources — at error level,
+  on wordpress.org, developer.mozilla.org and vite.dev, every instance an
+  outbound link to somebody else's site. Mixed content means a subresource the
+  browser *loads*: `src` on img, script, iframe, video and friends, and `href`
+  on a stylesheet link. A hyperlink is not one, and a browser does nothing about
+  it.
+
+- **Markup inside an attribute value was read as part of the page.**
+  astro.build stores an entire Astro component in a `data-code` attribute for
+  its copy button, and the `<img src={product.imageUrl}>` inside that string was
+  reported as an image with no alt. Attribute values containing whole tags are
+  now blanked before anything is extracted — narrowly, so `title="a < b"` and a
+  meta description containing a `<` are untouched.
+
+- **`role="presentation"` now counts as declaring an image decorative**, the
+  same as `alt=""`. It is the ARIA way of saying it, screen readers honour it,
+  and mozilla.org's accessibility team ships it — which is about as good as
+  evidence gets that it is a deliberate choice rather than an oversight.
+  Reporting a deliberate choice as an error is how a report gets ignored.
+
+Also: an `<img>` with neither `src` nor `alt` described itself as `First: null`.
+
 ## [1.5.0] — 2026-08-14
 
 ### Added
