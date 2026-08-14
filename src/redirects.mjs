@@ -47,7 +47,7 @@ const bare = (u) => (u ?? '').replace(/\/$/, '');
  * entries, and one finding per entry would be a wall nobody reads. Each one
  * names the first few and says how many more there are.
  */
-export async function redirectChecks(rules, fetcher, origin, { limit = 200 } = {}) {
+export async function redirectChecks(rules, fetcher, origin, { limit = 200, onProgress } = {}) {
   const out = [];
   if (!rules.length) return out;
 
@@ -76,6 +76,7 @@ export async function redirectChecks(rules, fetcher, origin, { limit = 200 } = {
         return null;
       }
       const { hops, final } = await fetcher.chain(from);
+      onProgress?.({ phase: 'redirects', status: hops[0]?.status ?? 0, url: rule.from, detail: `→ ${final.url}` });
       return { rule, from, hops, final, first: hops[0]?.status ?? 0 };
     }),
   );

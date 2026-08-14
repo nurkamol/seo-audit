@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { audit } from '../src/audit.mjs';
-import { terminal, markdown, html, diffReport, counts, portfolio, portfolioMarkdown, portfolioHtml } from '../src/report.mjs';
+import { terminal, markdown, html, diffReport, counts, portfolio, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
 import { loadConfig, resolveSites, optionsForSite } from '../src/config.mjs';
 import { readFileSync as read } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,9 @@ const HELP = `
     --html <file>      write a self-contained HTML report (one file, no assets)
     --json <file>      write a JSON report (also usable as a baseline)
     --quiet            print nothing; rely on the exit code and the files
+    --verbose          print each request as it happens, to stderr. A long
+                       crawl is otherwise silent from start to finish, and a
+                       slow site looks exactly like a hung one
 
   Comparing
     --baseline <file>  compare against a previous --json run and show only
@@ -87,6 +90,7 @@ function parseArgs(argv) {
     else if (arg === '--against') opts.against = value();
     else if (arg === '--settle') opts.settle = Number(value());
     else if (arg === '--quiet' || arg === '-q') opts.quiet = true;
+    else if (arg === '--verbose') opts.verbose = true;
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
     else if (arg === '--json') opts.json = value();
@@ -169,6 +173,14 @@ if (opts.redirects) {
   }
 }
 
+// Live progress, on stderr so it never contaminates a piped report. --quiet
+// wins over --verbose: asking for silence and getting a running commentary
+// would be the more surprising of the two.
+const live = (origin) =>
+  opts.verbose && !opts.quiet
+    ? (event) => process.stderr.write(`${progressLine(event, origin)}\n`)
+    : undefined;
+
 // One site or twenty: the same options, resolved the same way. A site entry in
 // the config may carry its own overrides, which land on top of the shared ones.
 let sites = resolveSites(cli.targets ?? [], file);
@@ -225,6 +237,7 @@ if (sites.length > 1) {
     const { findings, meta } = await audit(site.url, {
       ...siteOpts,
       onNote: (m) => !opts.quiet && process.stderr.write(`      ${m}\n`),
+      onProgress: live(site.url),
     });
     runs.push({ findings, meta });
   }
@@ -268,6 +281,7 @@ if (!opts.quiet && opts.settle) {
 const { findings, meta } = await audit(target, {
   ...opts,
   onNote: (m) => !opts.quiet && process.stderr.write(`  ${m}\n`),
+  onProgress: live(target),
 });
 
 // --- Compare against another deployment, if asked -----------------------

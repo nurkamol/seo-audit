@@ -5,7 +5,7 @@ import { attr, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
-import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml } from '../src/report.mjs';
+import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
@@ -443,6 +443,47 @@ test('findings are aggregated, so a big map does not produce a wall', async () =
   assert.equal(dead.length, 1, 'one finding, not twelve');
   assert.match(dead[0].title, /12 old URL/);
   assert.match(dead[0].detail, /and 9 more/);
+});
+
+// --- live progress --------------------------------------------------------
+
+test('a progress line shows the phase, the status, the time and the path', () => {
+  const line = progressLine(
+    { phase: 'crawl', status: 200, ms: 128, url: 'https://x.test/about/' },
+    'https://x.test',
+  );
+  assert.match(line, /crawl/);
+  assert.match(line, /200/);
+  assert.match(line, /128ms/);
+  // The origin is already on screen from the header; a path reads better in a
+  // long column.
+  assert.match(line, /\/about\//);
+  assert.ok(!line.includes('https://x.test/about/'), 'origin should be trimmed');
+});
+
+test('an off-origin URL keeps its host', () => {
+  const line = progressLine(
+    { phase: 'images', status: 200, url: 'https://cdn.other.test/a.png' },
+    'https://x.test',
+  );
+  assert.match(line, /cdn\.other\.test/);
+});
+
+test('the homepage is a slash, not an empty string', () => {
+  assert.match(progressLine({ phase: 'crawl', url: 'https://x.test' }, 'https://x.test'), / \/$/);
+});
+
+test('a phase with only a detail renders without blank columns', () => {
+  const line = progressLine({ phase: 'links', detail: '87 distinct targets to check' });
+  assert.match(line, /links\s+87 distinct targets/);
+});
+
+test('progress carries what a stalled crawl needs to be diagnosed', () => {
+  // A timeout arrives as status 0; it has to be visible rather than blank,
+  // because the whole point is telling a slow site from a hung one.
+  const line = progressLine({ phase: 'crawl', status: 0, ms: 20000, url: 'https://x.test/slow/' }, 'https://x.test');
+  assert.match(line, /\b0\b/);
+  assert.match(line, /20000ms/);
 });
 
 // --- portfolios -----------------------------------------------------------

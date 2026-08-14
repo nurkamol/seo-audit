@@ -113,6 +113,35 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 npx github:nurkamol/seo-audit one.example two.example three.example
 ```
 
+### Watching a run
+
+A crawl of any size is otherwise silent from the first line to the last, which
+makes a slow site look exactly like a hung one. `--verbose` prints each request
+as it happens:
+
+```
+  sitemap    /sitemap-index.xml  42 URLs
+  crawl      200    128ms  /
+  crawl      200    180ms  /faq/
+  crawl      200    343ms  /about/
+  crawl      42 pages in 6.8s
+  links      87 distinct targets to check
+  links      404     92ms  /old-page/
+  images     26 distinct images to check
+  psi        measuring 1 of 3 (~12s)  /
+```
+
+Plain lines rather than a spinner, deliberately: a long run is exactly the one
+whose output gets piped to a file or read back out of a CI log, and neither can
+show a cursor trick. It also means the page a crawl is stuck on stays on screen
+instead of being overwritten — a timeout arrives as status `0`, so a stall is
+visible rather than blank.
+
+Everything goes to **stderr**, so `--json` and `--md` are unaffected and
+`… --verbose --json report.json` still writes clean JSON. `--quiet` wins over
+`--verbose`: asking for silence and getting a running commentary would be the
+more surprising of the two.
+
 ### Checking a migration's redirects
 
 A redirect map is written once, verified once, and then rots quietly: a later
@@ -216,6 +245,7 @@ reason.
 | `--fail-on <level>` | `error` | Exit 1 at `error`, `warn`, `new`, or `never` |
 | `--version` | — | Print the version |
 | `--quiet` | — | Print nothing; use the exit code and the files |
+| `--verbose` | — | Print each request as it happens, to stderr (see below) |
 
 ---
 
@@ -455,7 +485,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.5.5` | Exactly that release, forever |
+| `@v1.6.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

@@ -68,7 +68,7 @@ const NOT_A_PAGE =
  * robots.txt is obeyed. A crawler that ignores it is rude, and here it would
  * also spend the budget on exactly the pages nobody wants indexed.
  */
-async function crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups }) {
+async function crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups, onProgress }) {
   const start = new URL('/', origin).toString();
   const queued = new Set([start]);
   const visited = new Set();
@@ -86,6 +86,7 @@ async function crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups 
     const fetched = await mapLimit(batch, concurrency, async (pageUrl) => {
       const { final } = await fetcher.chain(pageUrl);
       const isHtml = /text\/html/i.test(final.headers.get('content-type') ?? '');
+      onProgress?.({ phase: 'crawl', status: final.status, ms: final.ms, url: final.url });
       return {
         url: final.url,
         res: final,
@@ -148,6 +149,9 @@ export async function audit(target, opts = {}) {
   const findings = [];
   const limit = opts.limit ?? 200;
   const concurrency = opts.concurrency ?? 6;
+  const onProgress = opts.onProgress;
+
+  if (source) onProgress?.({ phase: 'sitemap', url: source, detail: `${urls.length} URLs` });
 
   // A host that never answered is not a sitemap problem, and following links
   // from a page that does not load would find nothing either.
@@ -186,6 +190,7 @@ export async function audit(target, opts = {}) {
     pages = await mapLimit(list, concurrency, async (pageUrl) => {
       const res = await fetcher.get(pageUrl);
       const isHtml = /text\/html/i.test(res.headers.get('content-type') ?? '');
+      onProgress?.({ phase: 'crawl', status: res.status, ms: res.ms, url: pageUrl });
       return {
         url: pageUrl,
         res,
@@ -201,7 +206,12 @@ export async function audit(target, opts = {}) {
     const robotsRes = await fetcher.get(new URL('/robots.txt', origin).toString());
     const robotsGroups = robotsRes.ok ? parseRobots(robotsRes.body) : [];
 
-    const crawled = await crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups });
+    const crawled = await crawlByLinks(origin, fetcher, {
+      limit,
+      concurrency,
+      robotsGroups,
+      onProgress,
+    });
     pages = crawled.pages;
     truncated = crawled.remaining;
 
@@ -230,10 +240,13 @@ export async function audit(target, opts = {}) {
     }
   }
 
+  onProgress?.({ phase: 'crawl', detail: `${pages.length} pages in ${((Date.now() - started) / 1000).toFixed(1)}s` });
+
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   findings.push(...crossPageChecks(pages));
   findings.push(...sitemapChecks(entries, source));
   findings.push(...expectationChecks(pages, opts.expect));
+  onProgress?.({ phase: 'checks', detail: `${findings.length} findings from the pages themselves` });
   findings.push(
     ...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls, bySitemap })),
   );
@@ -245,6 +258,7 @@ export async function audit(target, opts = {}) {
     findings.push(
       ...(await redirectChecks(opts.redirectRules, fetcher, origin, {
         limit: opts.maxRedirectChecks ?? 200,
+        onProgress,
       })),
     );
   }
@@ -263,7 +277,7 @@ export async function audit(target, opts = {}) {
         `measuring ${targets.length} page(s) with PageSpeed Insights — about ` +
           `${Math.ceil(estimateSeconds(targets.length) / 60)} min …`,
       );
-      findings.push(...(await psiChecks(targets, { strategy: opts.psiStrategy })));
+      findings.push(...(await psiChecks(targets, { strategy: opts.psiStrategy, onProgress })));
     }
   }
 

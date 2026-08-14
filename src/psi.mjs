@@ -119,11 +119,14 @@ export function psiTargets(entries, pageUrls, { origin, sample = DEFAULT_SAMPLE 
  * @param {string[]} urls pages to measure — a handful, not a sitemap
  * @param {{strategy?: 'mobile'|'desktop', key?: string|null}} opts
  */
-export async function psiChecks(urls, { strategy = 'mobile', key = findKey() } = {}) {
+export async function psiChecks(urls, { strategy = 'mobile', key = findKey(), onProgress } = {}) {
   const out = [];
 
-  for (const url of urls) {
+  for (const [i, url] of urls.entries()) {
     let data;
+    // Announced before rather than after: each call takes about twelve seconds,
+    // which is a long time to sit looking at nothing.
+    onProgress?.({ phase: 'psi', url, detail: `measuring ${i + 1} of ${urls.length} (~12s)` });
     try {
       data = await run(url, strategy, key);
     } catch (err) {

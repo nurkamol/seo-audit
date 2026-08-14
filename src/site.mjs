@@ -247,8 +247,10 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   const all = [...seen.keys()];
   const limit = opts.maxLinkChecks ?? 200;
   const targets = all.slice(0, limit);
+  opts.onProgress?.({ phase: 'links', detail: `${targets.length} distinct targets to check` });
   const results = await mapLimit(targets, 6, async (target) => {
     const res = await fetcher.get(target);
+    opts.onProgress?.({ phase: 'links', status: res.status, ms: res.ms, url: target });
     return { target, status: res.status, type: res.headers.get('content-type') ?? '' };
   });
 
@@ -324,10 +326,12 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   }
   const imageLimit = opts.maxImageChecks ?? 200;
   const imageTargets = [...imageSources.keys()].slice(0, imageLimit);
+  opts.onProgress?.({ phase: 'images', detail: `${imageTargets.length} distinct images to check` });
   const imageResults = await mapLimit(imageTargets, 6, async (src) => {
     let res = await fetcher.get(src, { method: 'HEAD' });
     // Some hosts answer HEAD with 405 or 501 and serve the file perfectly well.
     if (res.status === 405 || res.status === 501) res = await fetcher.get(src);
+    opts.onProgress?.({ phase: 'images', status: res.status, ms: res.ms, url: src });
     return { src, status: res.status, error: res.error };
   });
   // In source order, not completion order, so two runs of an unchanged site

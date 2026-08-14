@@ -133,6 +133,39 @@ export function markdown(findings, meta) {
   return out.join('\n');
 }
 
+// --- Live progress ----------------------------------------------------------
+// One line per event, written as it happens. Deliberately not a spinner or a
+// redrawing counter: a long run is exactly the run whose output gets piped to a
+// file or read back out of a CI log, and neither of those can show a cursor
+// trick. Plain lines are also greppable, and make the page the crawl is stuck
+// on visible rather than hidden behind an animation.
+
+const statusColour = (status) => {
+  if (status >= 500 || status === 0) return red;
+  if (status >= 400) return red;
+  if (status >= 300) return yellow;
+  return dim;
+};
+
+/** A single progress line. `phase` names the stage; the rest is what happened. */
+export function progressLine({ phase, status, ms, url, detail }, origin) {
+  const parts = [dim(String(phase).padEnd(9))];
+
+  if (status !== undefined) parts.push(statusColour(status)(String(status).padStart(3)));
+  if (ms !== undefined) parts.push(dim(`${String(ms).padStart(5)}ms`));
+
+  if (url) {
+    // The origin is already on screen from the header, so a path reads better
+    // in a long column. Anything off-origin keeps its host.
+    let shown = url;
+    if (origin && url.startsWith(origin)) shown = url.slice(origin.length) || '/';
+    parts.push(shown);
+  }
+  if (detail) parts.push(status === undefined && !url ? detail : dim(detail));
+
+  return `  ${parts.join('  ')}`;
+}
+
 // --- Portfolio --------------------------------------------------------------
 // One command over several sites, and one table. The point is the comparison:
 // which of the twenty sites regressed this week is a question no per-site
