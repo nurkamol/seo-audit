@@ -113,6 +113,35 @@ npx github:nurkamol/seo-audit http://localhost:4321 --limit 50
 npx github:nurkamol/seo-audit one.example two.example three.example
 ```
 
+### How the report is organised
+
+Findings are grouped by **area**, not just by severity — Indexability, Content,
+Links, Redirects, Images, Social, Structured data, Multilingual, Sitemap &
+robots, Site & security, Performance. Severity says how loudly to complain; the
+area says who fixes it. Thirty findings sorted only by severity is a list you
+read once; the same thirty under *Images* and *Multilingual* is a list you can
+hand to two people.
+
+Findings on a page that **won't be indexed** — it carries `noindex`, or its
+canonical points somewhere else — are marked `not indexable`. The same thin
+page is a problem when Google will index it and noise when it won't, and that
+distinction is often more useful than the severity.
+
+### Checking outbound links
+
+Off by default, and that's a judgement rather than an omission:
+
+```bash
+npx github:nurkamol/seo-audit https://example.com --check-external
+```
+
+These are other people's servers. They rate-limit, they bot-block, and plenty
+answer `403` to anything without a browser's fingerprint — so only a **404, a
+410, or no answer at all** is ever reported as broken. An outbound link that
+merely redirects is a note, not a problem. `maxExternalChecks` bounds the sweep
+(default 100), because one machine hammering a hundred third parties is rude at
+scale.
+
 ### Watching a run
 
 A crawl of any size is otherwise silent from the first line to the last, which
@@ -234,6 +263,7 @@ reason.
 | `--concurrency <n>` | 6 | Parallel requests |
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path. Without any sitemap, the crawl follows links instead |
 | `--redirects <file>` | — | Check a migration's redirect map against the live site (see below) |
+| `--check-external` | — | Also check links pointing off the site (see below) |
 | `--user-agent <ua>` | `seo-audit …` | Identify as something else |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
@@ -299,6 +329,8 @@ Drop a `seo-audit.config.json` next to where you run it:
   quietly describing a fraction of the site.
 - **`maxImageChecks`** — the same bound for the image sweep, default 200. An
   image-heavy site can reference thousands of distinct files.
+- **`maxExternalChecks`** — how many outbound links `--check-external` fetches,
+  default 100. Third-party hosts are somebody else's to hammer.
 - **`redirects`** — path to a redirect map, the same as `--redirects`.
   **`maxRedirectChecks`** bounds how many of its rules are tested, default 200.
 - **`psi`** — pages to measure with PageSpeed Insights, as paths. A path glob
@@ -374,6 +406,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Page returns 200 and is not a redirect listed in the sitemap | error |
 | `noindex` on a page the sitemap advertises | error |
 | `X-Robots-Tag: noindex` — the same instruction as a header, invisible in the HTML | error |
+| `nofollow` on the page — Google follows none of its links, navigation included | warning |
+| Internal links aren't `rel="nofollow"` — a page refusing to pass through its own site | note |
 | `<title>` present, 15–60 characters | error / warning |
 | Meta description present, 70–160 characters | warning |
 | Exactly one `<h1>` | error / warning |
@@ -426,6 +460,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
 | There is something to audit at all — no sitemap *and* no crawlable homepage is `nothing-crawlable` | error |
 | Every internal link resolves — the site-wide 404 sweep | error |
+| Outbound links resolve, with `--check-external` — only a 404, 410 or no answer counts | warning / note |
 | Every `<img>` actually loads — 403 is hotlink protection, not a broken file, and is not reported | error |
 | Every `hreflang` alternate actually loads, including versions outside the crawl | error |
 | Internal links point at final URLs rather than redirects | note |
@@ -485,7 +520,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.6.0` | Exactly that release, forever |
+| `@v1.7.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

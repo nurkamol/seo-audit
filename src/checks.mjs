@@ -99,6 +99,20 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       `X-Robots-Tag: "${xRobots}" — invisible in the HTML, and the page is in the sitemap.`, url));
   }
 
+  // nofollow on the page tells Google to follow none of its links — every one
+  // of them, including the navigation. On a page that exists to lead somewhere
+  // that is a dead end, and it is far less often deliberate than noindex.
+  const robotsDirectives = `${doc.robots ?? ''} ${xRobots}`;
+  if (/(^|[\s,])nofollow([\s,]|$)/i.test(robotsDirectives)) {
+    const alsoNoindex = /noindex/i.test(robotsDirectives);
+    out.push(f('warn', 'nofollow-page', alsoNoindex ? 'Page is noindex and nofollow' : 'Page is nofollow',
+      alsoNoindex
+        ? `"${robotsDirectives.trim()}" — nothing here is indexed and no link out of it is followed, so this ` +
+          'page is a full stop for a crawler. Deliberate for a private area; a mistake on anything else.'
+        : `"${robotsDirectives.trim()}" — Google will follow none of the links on this page, navigation ` +
+          'included, so everything it links to loses that path in.', url));
+  }
+
   // --- Title & description ------------------------------------------------
   if (!doc.title) {
     out.push(f('error', 'title-missing', 'No <title>', 'Every page needs one.', url));
@@ -279,6 +293,16 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     out.push(f('warn', 'thin-content', 'Thin page',
       `${doc.words} words. Under ~${LIMITS.thinWords} rarely ranks for anything competitive.`, url));
   }
+  // A nofollow on an internal link is a page telling Google not to walk its own
+  // site. Sometimes deliberate — a login or a faceted filter nobody wants
+  // crawled — so a note, not a complaint.
+  const nofollowed = doc.links.nofollowInternal ?? [];
+  if (nofollowed.length) {
+    out.push(f('info', 'internal-nofollow', `${nofollowed.length} internal link(s) marked nofollow`,
+      `First: ${nofollowed.slice(0, 3).join(', ')}. Fair for a login or a filter nobody should crawl; ` +
+        'on an ordinary page it withholds a path through your own site for no gain.', url));
+  }
+
   if (doc.links.inMain.length === 0) {
     out.push(f('info', 'no-editorial-links', 'No links inside the content',
       'Only navigation links out of this page — nothing passes authority to related pages.', url));

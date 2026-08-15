@@ -32,6 +32,12 @@ inputs:
       under it, sampled. Set the PSI_API_KEY env var from a secret to lift the
       quota.
     required: false
+  check-external:
+    description: >
+      Also check links pointing off the site. Off by default because other
+      people's servers rate-limit and bot-block; only a 404, a 410 or no answer
+      at all is ever reported. Set to any non-empty value.
+    required: false
   verbose:
     description: >
       Log every request as it happens. Useful when a run is slow or a site
@@ -104,6 +110,7 @@ runs:
         INPUT_PSI: ${{ inputs.psi }}
         INPUT_PSI_SAMPLE: ${{ inputs.psi-sample }}
         INPUT_VERBOSE: ${{ inputs.verbose }}
+        INPUT_CHECK_EXTERNAL: ${{ inputs.check-external }}
         INPUT_SETTLE: ${{ inputs.settle }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT: ${{ inputs.report }}
@@ -116,6 +123,7 @@ runs:
         [ -n "$INPUT_PSI" ]      && args+=(--psi "$INPUT_PSI")
         [ -n "$INPUT_PSI_SAMPLE" ] && args+=(--psi-sample "$INPUT_PSI_SAMPLE")
         [ -n "$INPUT_VERBOSE" ]  && args+=(--verbose)
+        [ -n "$INPUT_CHECK_EXTERNAL" ] && args+=(--check-external)
         [ -n "$INPUT_SETTLE" ]   && args+=(--settle "$INPUT_SETTLE")
 
         node "$SEO_AUDIT_BIN" "${args[@]}"

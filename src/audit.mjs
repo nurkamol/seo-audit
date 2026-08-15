@@ -296,6 +296,29 @@ export async function audit(target, opts = {}) {
     });
   }
 
+  // Where a finding sits matters nearly as much as what it is. A thin page
+  // Google will index is a problem; the same page carrying noindex, or handing
+  // its ranking to a canonical elsewhere, is one nobody needs to act on. Tagged
+  // in a single pass at the end rather than threaded through every check, since
+  // it is a property of the page rather than of any one thing found on it.
+  const notIndexable = new Set();
+  for (const page of pages) {
+    if (!page.res.ok) {
+      notIndexable.add(page.url);
+      continue;
+    }
+    if (!page.doc) continue;
+    const header = page.res.headers?.get?.('x-robots-tag') ?? '';
+    const noindexed = /noindex/i.test(page.doc.robots ?? '') || /noindex/i.test(header);
+    const canonical = page.doc.canonical?.[0];
+    const defersElsewhere =
+      canonical && canonical.replace(/\/$/, '') !== page.url.replace(/\/$/, '');
+    if (noindexed || defersElsewhere) notIndexable.add(page.url);
+  }
+  for (const finding of findings) {
+    if (finding.url && notIndexable.has(finding.url)) finding.indexable = false;
+  }
+
   // What the site has decided to live with is dropped last, so an ignore rule
   // can silence a site-wide check as easily as a per-page one.
   const [kept, ignored] = applyIgnores(findings, opts.ignore);
@@ -306,6 +329,7 @@ export async function audit(target, opts = {}) {
       ignored,
       origin,
       pages: pages.length,
+      notIndexable: notIndexable.size,
       requests: fetcher.count,
       ms: Date.now() - started,
       date: new Date().toISOString().slice(0, 10),

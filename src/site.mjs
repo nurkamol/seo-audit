@@ -347,6 +347,56 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       `The sweep stops at ${imageLimit} distinct images. Raise it with maxImageChecks in the config.`, origin));
   }
 
+  // --- Outbound links -------------------------------------------------------
+  // Off by default, and that is a judgement rather than laziness. These are
+  // other people's servers: they rate-limit, they bot-block, they answer 403 to
+  // anything without a browser's fingerprint. Reporting that as a broken link
+  // would be the most productive false positive this tool could invent, so only
+  // 404, 410 and a dead connection count — and even then it is opt-in, because
+  // one machine hammering a hundred third parties is rude at scale.
+  if (opts.checkExternal) {
+    const outbound = new Map();
+    for (const page of pages) {
+      for (const href of page.doc?.links.external ?? []) {
+        if (!/^https?:/i.test(href)) continue;
+        if (!outbound.has(href)) outbound.set(href, page.url);
+      }
+    }
+    const externalLimit = opts.maxExternalChecks ?? 100;
+    const externalTargets = [...outbound.keys()].slice(0, externalLimit);
+    opts.onProgress?.({ phase: 'external', detail: `${externalTargets.length} outbound links to check` });
+
+    const externalResults = await mapLimit(externalTargets, 4, async (href) => {
+      const { hops, final } = await fetcher.chain(href);
+      opts.onProgress?.({ phase: 'external', status: final.status, ms: final.ms, url: href });
+      return { href, first: hops[0]?.status ?? 0, final };
+    });
+
+    const dead = externalResults.filter(
+      (r) => r.final.status === 404 || r.final.status === 410 || r.final.status === 0,
+    );
+    if (dead.length) {
+      out.push(f('warn', 'external-broken', `${dead.length} outbound link(s) do not resolve`,
+        `${dead.slice(0, 3).map((r) => `${r.href} (${r.final.status || r.final.error})`).join(', ')}` +
+          `${dead.length > 3 ? `, and ${dead.length - 3} more` : ''}. A link out that goes nowhere is a dead ` +
+          'end for a reader. Checked leniently — anything but a 404, a 410 or no answer at all is left alone.',
+        origin));
+    }
+
+    const moved = externalResults.filter((r) => r.first >= 300 && r.first < 400 && r.final.ok);
+    if (moved.length) {
+      out.push(f('info', 'external-redirects', `${moved.length} outbound link(s) point at a redirect`,
+        `${moved.slice(0, 3).map((r) => `${r.href} → ${r.final.url}`).join(', ')}` +
+          `${moved.length > 3 ? `, and ${moved.length - 3} more` : ''}. They work; linking to the final ` +
+          'URL is tidier and survives the day the redirect is removed.', origin));
+    }
+
+    if (outbound.size > externalTargets.length) {
+      out.push(f('info', 'external-sweep-capped', `${outbound.size - externalTargets.length} outbound links were not checked`,
+        `The sweep stops at ${externalLimit}. Raise it with maxExternalChecks.`, origin));
+    }
+  }
+
   // --- hreflang targets load ----------------------------------------------
   // A version that does not load is dropped from the set, and the pages that
   // pointed at it lose the annotation with it. Targets already crawled and

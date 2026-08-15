@@ -209,6 +209,20 @@ export function parseHtml(rawHtml, pageUrl) {
       internal: [...new Set(internal(anchors))],
       inMain: [...new Set(internal(mainAnchors))],
       external: [...new Set(hrefs(anchors).filter((h) => !h.startsWith(origin)))],
+      // Internal links the page tells Google not to follow. `rel` carries a
+      // space-separated list, so nofollow travels with noopener and friends.
+      //
+      // Fragments are stripped and self-links dropped: WordPress marks its
+      // comment-reply links rel="nofollow" pointing at #respond on the page
+      // they are already on, and every article on a WordPress site would report
+      // a withheld path that leads nowhere new.
+      nofollowInternal: [
+        ...new Set(
+          internal(anchors.filter((t) => /(^|\s)nofollow(\s|$)/i.test(attr(t, 'rel') ?? '')))
+            .map((h) => h.split('#')[0])
+            .filter((h) => h.replace(/\/$/, '') !== pageUrl.split('#')[0].replace(/\/$/, '')),
+        ),
+      ],
     },
     words: countWords(bodyText),
   };

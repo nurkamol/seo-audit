@@ -55,20 +55,26 @@ export function terminal(findings, meta) {
     return lines.join('\n');
   }
 
-  for (const entry of group(findings)) {
-    const paint = PAINT[entry.level];
-    const count = entry.items.length;
-    lines.push(
-      `  ${paint(MARK[entry.level])} ${bold(entry.title)}${count > 1 ? dim(` ×${count}`) : ''}`,
-    );
-    // One example in full, then the other pages by URL only — the detail
-    // repeats and the list is what you act on.
-    lines.push(`    ${dim(entry.items[0].detail)}`);
-    for (const item of entry.items.slice(0, 8)) {
-      lines.push(`    ${dim('·')} ${item.url ?? ''}`);
-    }
-    if (count > 8) lines.push(`    ${dim(`… and ${count - 8} more`)}`);
+  for (const { name, entries } of byCategory(findings)) {
+    lines.push(dim(`  ── ${name} ${'─'.repeat(Math.max(0, 58 - name.length))}`));
     lines.push('');
+    for (const entry of entries) {
+      const paint = PAINT[entry.level];
+      const count = entry.items.length;
+      lines.push(
+        `  ${paint(MARK[entry.level])} ${bold(entry.title)}${count > 1 ? dim(` ×${count}`) : ''}`,
+      );
+      // One example in full, then the other pages by URL only — the detail
+      // repeats and the list is what you act on.
+      lines.push(`    ${dim(entry.items[0].detail)}`);
+      for (const item of entry.items.slice(0, 8)) {
+        // A page Google will not index is a page whose problems cost nothing.
+        const aside = item.indexable === false ? dim('  (not indexable)') : '';
+        lines.push(`    ${dim('·')} ${item.url ?? ''}${aside}`);
+      }
+      if (count > 8) lines.push(`    ${dim(`… and ${count - 8} more`)}`);
+      lines.push('');
+    }
   }
 
   lines.push(
@@ -97,26 +103,27 @@ export function markdown(findings, meta) {
 
   out.push('## Summary');
   out.push('');
-  out.push('| | Finding | Pages |');
-  out.push('|---|---|---:|');
-  for (const entry of group(findings)) {
-    out.push(`| ${MARK[entry.level]} | ${entry.title} | ${entry.items.length} |`);
+  out.push('| | Area | Finding | Pages |');
+  out.push('|---|---|---|---:|');
+  for (const { name, entries } of byCategory(findings)) {
+    for (const entry of entries) {
+      out.push(`| ${MARK[entry.level]} | ${name} | ${entry.title} | ${entry.items.length} |`);
+    }
   }
   out.push('');
 
-  for (const level of ['error', 'warn', 'info']) {
-    const entries = group(findings).filter((e) => e.level === level);
-    if (!entries.length) continue;
-    out.push(`## ${{ error: 'Errors', warn: 'Warnings', info: 'Notes' }[level]}`);
+  for (const { name, entries } of byCategory(findings)) {
+    out.push(`## ${name}`);
     out.push('');
     for (const entry of entries) {
-      out.push(`### ${entry.title}`);
+      out.push(`### ${MARK[entry.level]} ${entry.title}`);
       out.push('');
       // Every item carries its own detail (word counts, filenames, hop
       // chains), so each line stands alone rather than repeating a shared
       // preamble that only fits the first one.
       for (const item of entry.items) {
-        out.push(`- ${item.url ?? ''}${item.detail ? `  \n  ${item.detail}` : ''}`);
+        const aside = item.indexable === false ? ' _(not indexable)_' : '';
+        out.push(`- ${item.url ?? ''}${aside}${item.detail ? `  \n  ${item.detail}` : ''}`);
       }
       out.push('');
     }
@@ -131,6 +138,114 @@ export function markdown(findings, meta) {
   );
   out.push('');
   return out.join('\n');
+}
+
+// --- Categories -------------------------------------------------------------
+// Severity says how loudly to complain; a category says who fixes it. Thirty
+// findings sorted only by severity is a list you read once. The same thirty
+// under "Images" and "Multilingual" is a list somebody can divide up.
+//
+// Ordered by what a crawler hits first: whether the page can be indexed at all,
+// then what it says, then what it links to, then everything else.
+export const CATEGORIES = [
+  'Indexability',
+  'Content',
+  'Links',
+  'Redirects',
+  'Images',
+  'Social',
+  'Structured data',
+  'Multilingual',
+  'Sitemap & robots',
+  'Site & security',
+  'Performance',
+];
+
+const CATEGORY_OF = {
+  // Indexability
+  noindex: 'Indexability', 'x-robots-noindex': 'Indexability', 'nofollow-page': 'Indexability',
+  'page-status': 'Indexability', unreachable: 'Indexability', 'nothing-crawlable': 'Indexability',
+  'canonical-missing': 'Indexability', 'canonical-multiple': 'Indexability',
+  'canonical-other': 'Indexability', 'canonical-dead': 'Indexability',
+  'canonical-redirects': 'Indexability', 'soft-404': 'Indexability',
+
+  // Content
+  'title-missing': 'Content', 'title-long': 'Content', 'title-short': 'Content',
+  'desc-missing': 'Content', 'desc-long': 'Content', 'desc-short': 'Content',
+  'h1-missing': 'Content', 'h1-multiple': 'Content', 'heading-skip': 'Content',
+  'thin-content': 'Content', 'duplicate-title': 'Content', 'duplicate-description': 'Content',
+  'lang-missing': 'Content', 'charset-missing': 'Content', 'viewport-missing': 'Content',
+
+  // Links
+  'broken-link': 'Links', 'orphan-page': 'Links', 'no-editorial-links': 'Links',
+  'link-redirects': 'Links', 'link-sweep-capped': 'Links', 'internal-nofollow': 'Links',
+  'missing-from-sitemap': 'Links', 'missing-from-sitemap-more': 'Links',
+  'external-broken': 'Links', 'external-redirects': 'Links', 'external-sweep-capped': 'Links',
+
+  // Redirects
+  'sitemap-redirect': 'Redirects', 'redirect-chain': 'Redirects', 'host-variant-dead': 'Redirects',
+  'trailing-slash': 'Redirects', 'redirect-dead': 'Redirects', 'redirect-broken': 'Redirects',
+  'redirect-not-applied': 'Redirects', 'redirect-hops': 'Redirects',
+  'redirect-elsewhere': 'Redirects', 'redirect-temporary': 'Redirects',
+  'redirect-pattern-skipped': 'Redirects', 'redirect-map-capped': 'Redirects',
+
+  // Images
+  'img-alt': 'Images', 'img-alt-filename': 'Images', 'img-alt-placeholder': 'Images',
+  'img-alt-duplicate': 'Images', 'img-alt-long': 'Images', 'img-dimensions': 'Images',
+  'img-srcset': 'Images', 'broken-image': 'Images', 'image-sweep-capped': 'Images',
+
+  // Social
+  'og-missing': 'Social', 'og-webp': 'Social', 'og-no-dimensions': 'Social',
+  'og-image-relative': 'Social', 'og-image-broken': 'Social', 'og-image-heavy': 'Social',
+
+  // Structured data
+  'jsonld-invalid': 'Structured data', 'jsonld-no-type': 'Structured data',
+  'schema-expected': 'Structured data',
+
+  // Multilingual
+  'hreflang-one-way': 'Multilingual', 'hreflang-no-self': 'Multilingual',
+  'hreflang-lang-mismatch': 'Multilingual', 'hreflang-invalid': 'Multilingual',
+  'hreflang-no-x-default': 'Multilingual', 'hreflang-dead': 'Multilingual',
+
+  // Sitemap & robots
+  'no-sitemap': 'Sitemap & robots', truncated: 'Sitemap & robots',
+  'robots-missing': 'Sitemap & robots', 'robots-blocks-all': 'Sitemap & robots',
+  'robots-no-sitemap': 'Sitemap & robots', 'robots-blocks-sitemap-url': 'Sitemap & robots',
+  'sitemap-lastmod-missing': 'Sitemap & robots', 'sitemap-lastmod-identical': 'Sitemap & robots',
+  'sitemap-lastmod-future': 'Sitemap & robots', 'llms-missing': 'Sitemap & robots',
+
+  // Site & security
+  'mixed-content': 'Site & security', 'tls-expiring': 'Site & security',
+  'tls-expired': 'Site & security', 'url-uppercase': 'Site & security',
+  'url-underscore': 'Site & security', 'url-space': 'Site & security',
+  'header-strict-transport-security': 'Site & security',
+  'header-x-content-type-options': 'Site & security',
+  'header-referrer-policy': 'Site & security',
+  'header-content-security-policy': 'Site & security',
+
+  // Performance
+  slow: 'Performance', 'psi-score': 'Performance', 'psi-lcp': 'Performance',
+  'psi-cls': 'Performance', 'psi-inp': 'Performance', 'psi-opportunity': 'Performance',
+  'psi-failed': 'Performance', 'psi-no-field-data': 'Performance',
+  'psi-field-lcp': 'Performance', 'psi-field-cls': 'Performance', 'psi-field-inp': 'Performance',
+  'psi-sampled': 'Performance', 'psi-no-match': 'Performance',
+};
+
+/** The category a check belongs to. Unknown ids fall to "Other" rather than
+ *  disappearing — and a test asserts nothing in src/ ever lands there. */
+export const categoryOf = (id) => CATEGORY_OF[id] ?? 'Other';
+
+/** Findings grouped by category, in the fixed order above, worst first inside. */
+export function byCategory(findings) {
+  const buckets = new Map();
+  for (const entry of group(findings)) {
+    const name = categoryOf(entry.id);
+    buckets.set(name, [...(buckets.get(name) ?? []), entry]);
+  }
+  const order = [...CATEGORIES, 'Other'];
+  return [...buckets]
+    .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+    .map(([name, entries]) => ({ name, entries }));
 }
 
 // --- Live progress ----------------------------------------------------------
@@ -352,14 +467,14 @@ export function html(findings, meta) {
 
   const LABEL = { error: 'Error', warn: 'Warning', info: 'Note' };
   const HEADING = { error: 'Errors', warn: 'Warnings', info: 'Notes' };
-  const entries = group(findings);
+  const groups = byCategory(findings);
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-  const section = (level) => {
-    const list = entries.filter((e) => e.level === level);
+  const section = ({ name, entries: list }) => {
     if (!list.length) return '';
+    const slug = name.toLowerCase().replace(/[^a-z]+/g, '-');
     return `
-    <h2 id="${level}"><span>${HEADING[level]}</span><span class="rule"></span><span class="tick">${list.length}</span></h2>
+    <h2 id="${slug}"><span>${esc(name)}</span><span class="rule"></span><span class="tick">${list.length}</span></h2>
     ${list
       .map(
         (entry) => `
@@ -375,6 +490,7 @@ export function html(findings, meta) {
           .map(
             (item) => `<li>
           ${item.url ? `<a href="${esc(item.url)}">${esc(item.url)}</a>` : ''}
+          ${item.indexable === false ? '<span class="noidx">not indexable</span>' : ''}
           <span class="detail">${esc(item.detail)}</span>
         </li>`,
           )
@@ -560,6 +676,12 @@ export function html(findings, meta) {
   }
   .finding li a:hover { text-decoration: underline; text-underline-offset: 2px; }
   .detail { display: block; color: var(--muted); font-size: .83rem; margin-top: .12rem; }
+  .noidx {
+    display: inline-block; margin-left: .4rem; padding: .04rem .34rem; border-radius: 4px;
+    border: 1px solid var(--line-strong); color: var(--faint);
+    font-size: .625rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+    vertical-align: 1px; white-space: nowrap;
+  }
 
   /* --- Clean bill ------------------------------------------------------ */
   .clean {
@@ -604,6 +726,7 @@ export function html(findings, meta) {
     ${meta.requests ? `<li><b>${meta.requests}</b> requests</li>` : ''}
     ${meta.ms ? `<li><b>${(meta.ms / 1000).toFixed(1)}s</b> elapsed</li>` : ''}
     ${meta.ignored ? `<li><b>${meta.ignored}</b> silenced by config</li>` : ''}
+    ${meta.notIndexable ? `<li><b>${meta.notIndexable}</b> pages not indexable</li>` : ''}
   </ul>
 
   <div class="tally">
@@ -615,17 +738,19 @@ export function html(findings, meta) {
   ${
     findings.length
       ? `<div class="scroll"><table>
-    <thead><tr><th>Level</th><th>Finding</th><th class="n">Pages</th></tr></thead>
-    <tbody>${entries
-      .map(
-        (e) =>
-          `<tr><td><span class="pill ${e.level}">${LABEL[e.level]}</span></td><td>${esc(
-            e.title,
-          )}</td><td class="n">${e.items.length}</td></tr>`,
+    <thead><tr><th>Level</th><th>Area</th><th>Finding</th><th class="n">Pages</th></tr></thead>
+    <tbody>${groups
+      .flatMap(({ name, entries: list }) =>
+        list.map(
+          (e) =>
+            `<tr><td><span class="pill ${e.level}">${LABEL[e.level]}</span></td>` +
+            `<td><a href="#${name.toLowerCase().replace(/[^a-z]+/g, '-')}">${esc(name)}</a></td>` +
+            `<td>${esc(e.title)}</td><td class="n">${e.items.length}</td></tr>`,
+        ),
       )
       .join('')}</tbody>
   </table></div>
-  ${section('error')}${section('warn')}${section('info')}`
+  ${groups.map(section).join('')}`
       : `<div class="clean"><b>Nothing to report</b><span>Every check passed on all ${meta.pages ?? 0} pages.</span></div>`
   }
 

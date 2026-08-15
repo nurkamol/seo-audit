@@ -5,6 +5,44 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-08-15
+
+### Added
+- **`nofollow`.** `noindex` was checked and its counterpart never was.
+  `nofollow-page` covers the meta tag and the header, and names the combination
+  when both are set — a page that is neither indexed nor followed is a full stop
+  for a crawler. `internal-nofollow` (note) reports internal links the page tells
+  Google not to follow.
+
+  Fragments are stripped and self-links dropped from that second check, because
+  WordPress marks every comment-reply link `rel="nofollow"` pointing at
+  `#respond` on the page it is already on — which withholds no path anywhere and
+  would have fired on every article of every WordPress site. Found on the first
+  real run.
+
+- **Findings are grouped by area**, not only by severity: Indexability, Content,
+  Links, Redirects, Images, Social, Structured data, Multilingual, Sitemap &
+  robots, Site & security, Performance. Severity says how loudly to complain;
+  the area says who fixes it. In the terminal, the Markdown and the HTML.
+
+  A test walks `src/` for every check id and fails if any lacks a category, so
+  this cannot quietly rot. It caught `viewport-missing` the first time it ran.
+
+- **Pages that will not be indexed are marked.** A finding on a page carrying
+  `noindex`, or whose canonical points elsewhere, is tagged `not indexable` in
+  all three formats, and the count appears in the HTML header. The same thin
+  page is a problem when Google will index it and noise when it will not, and
+  that distinction is often more useful than the severity.
+
+- **`--check-external`** sweeps outbound links, off by default. Only a 404, a
+  410 or no answer at all counts as broken: these are other people's servers,
+  they rate-limit and bot-block, and a 403 from someone else's WAF is the most
+  productive false positive this tool could invent. An outbound link that merely
+  redirects is a note. `maxExternalChecks` bounds it at 100, because one machine
+  hammering a hundred third parties is rude at scale.
+
+  Both new flags are exposed on the Action too.
+
 ## [1.6.0] — 2026-08-15
 
 ### Added

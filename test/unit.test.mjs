@@ -5,11 +5,13 @@ import { attr, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
-import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
+import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
 import { parseRedirectMap, redirectChecks } from '../src/redirects.mjs';
+import { audit } from '../src/audit.mjs';
+import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 
 // --- parse ----------------------------------------------------------------
@@ -443,6 +445,122 @@ test('findings are aggregated, so a big map does not produce a wall', async () =
   assert.equal(dead.length, 1, 'one finding, not twelve');
   assert.match(dead[0].title, /12 old URL/);
   assert.match(dead[0].detail, /and 9 more/);
+});
+
+// --- categories -----------------------------------------------------------
+
+test('every check the tool can emit has a category', async () => {
+  // The guard that keeps this from drifting: a new check with no category would
+  // silently land in "Other" and the grouping would quietly stop being useful.
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const ids = new Set();
+  for (const file of readdirSync('src').filter((f) => f.endsWith('.mjs'))) {
+    const src = readFileSync(`src/${file}`, 'utf8');
+    for (const m of src.matchAll(/f\('(?:error|warn|info)',\s*'([a-z0-9-]+)'/g)) ids.add(m[1]);
+    for (const m of src.matchAll(/id:\s*'([a-z0-9-]+)'/g)) ids.add(m[1]);
+  }
+  assert.ok(ids.size > 60, `expected to find the checks, found ${ids.size}`);
+  const uncategorised = [...ids].filter((id) => categoryOf(id) === 'Other').sort();
+  assert.deepEqual(uncategorised, [], `these checks need a category in report.mjs: ${uncategorised}`);
+});
+
+test('categories come out in a fixed order, worst finding first inside each', () => {
+  const mk = (level, id) => ({ level, id, title: id, detail: 'd', url: 'https://x.test/p/' });
+  const groups = byCategory([
+    mk('info', 'img-srcset'),
+    mk('error', 'broken-link'),
+    mk('error', 'noindex'),
+    mk('warn', 'img-alt'),
+  ]);
+  // Indexability before Links before Images, as declared.
+  assert.deepEqual(groups.map((g) => g.name), ['Indexability', 'Links', 'Images']);
+  // Inside Images, the warning outranks the note.
+  assert.deepEqual(groups[2].entries.map((e) => e.id), ['img-alt', 'img-srcset']);
+});
+
+test('an unknown id lands in Other rather than vanishing', () => {
+  const groups = byCategory([
+    { level: 'warn', id: 'not-a-real-check', title: 't', detail: 'd', url: 'https://x.test/' },
+  ]);
+  assert.deepEqual(groups.map((g) => g.name), ['Other']);
+});
+
+// --- outbound links ---------------------------------------------------------
+
+const linkingOut = (origin, external) =>
+  bareSite(origin, { links: { internal: [], inMain: [], external, nofollowInternal: [] } });
+
+test('outbound links are left alone unless asked for', async () => {
+  const fetcher = fakeFetcher(notFound);
+  await siteChecks('https://x.test', fetcher, linkingOut('https://x.test', ['https://other.test/a']), {
+    sitemapUrls: ['https://x.test/p/'],
+  });
+  assert.ok(!fetcher.calls.some((u) => u.includes('other.test')), 'should not touch third parties');
+});
+
+test('an outbound 404 is reported when asked for', async () => {
+  const out = await siteChecks(
+    'https://x.test',
+    fakeFetcher((url) => (url.includes('other.test') ? { status: 404 } : notFound(url))),
+    linkingOut('https://x.test', ['https://other.test/gone']),
+    { sitemapUrls: ['https://x.test/p/'], checkExternal: true },
+  );
+  const finding = out.find((f) => f.id === 'external-broken');
+  assert.ok(finding);
+  assert.equal(finding.level, 'warn');
+});
+
+test('a third party blocking us is not a broken link', async () => {
+  // 403 and 429 are what someone else's bot protection says, not what a dead
+  // page says. Reporting them would be the most productive false positive
+  // this tool could invent.
+  for (const status of [403, 429, 401, 500]) {
+    const out = await siteChecks(
+      'https://x.test',
+      fakeFetcher((url) => (url.includes('other.test') ? { status } : notFound(url))),
+      linkingOut('https://x.test', ['https://other.test/a']),
+      { sitemapUrls: ['https://x.test/p/'], checkExternal: true },
+    );
+    assert.ok(!out.some((f) => f.id === 'external-broken'), `${status} should not be called broken`);
+  }
+});
+
+test('an outbound link that redirects and works is only a note', async () => {
+  const out = await siteChecks(
+    'https://x.test',
+    fakeFetcher((url) => {
+      if (!url.includes('other.test')) return notFound(url);
+      return url.endsWith('/old') ? { status: 301, location: 'https://other.test/new' } : { status: 200 };
+    }),
+    linkingOut('https://x.test', ['https://other.test/old']),
+    { sitemapUrls: ['https://x.test/p/'], checkExternal: true },
+  );
+  assert.ok(!out.some((f) => f.id === 'external-broken'));
+  const note = out.find((f) => f.id === 'external-redirects');
+  assert.equal(note.level, 'info');
+});
+
+// --- indexability -----------------------------------------------------------
+
+test('a page that will not be indexed is marked, in every format', async () => {
+  const site = await startFixtureSite();
+  try {
+    const { findings, meta } = await audit(site.origin, { concurrency: 2 });
+    // The fixture's /hidden/ carries noindex.
+    const hidden = findings.filter((f) => (f.url ?? '').includes('/hidden/'));
+    assert.ok(hidden.length, 'expected findings on the noindexed page');
+    assert.ok(hidden.every((f) => f.indexable === false), 'they should be marked not indexable');
+    assert.ok(meta.notIndexable >= 1);
+
+    // And a page that is perfectly indexable is left unmarked.
+    const home = findings.filter((f) => f.url === `${site.origin}/`);
+    assert.ok(home.every((f) => f.indexable !== false));
+
+    assert.match(markdown(findings, meta), /_\(not indexable\)_/);
+    assert.match(html(findings, meta), /class="noidx"/);
+  } finally {
+    await site.stop();
+  }
 });
 
 // --- live progress --------------------------------------------------------
@@ -1313,6 +1431,67 @@ test('an hreflang target already crawled and healthy is not fetched again', asyn
     sitemapUrls: [`${origin}/p/`],
   });
   assert.equal(fetcher.calls.filter((u) => u === `${origin}/p/`).length, 0);
+});
+
+test('nofollow on the page is reported, and named for what it is with noindex', () => {
+  const meta = (content) => page(`<head><meta name="robots" content="${content}"></head><main><p>x</p></main>`);
+  const only = pageChecks(meta('nofollow')).find((x) => x.id === 'nofollow-page');
+  assert.ok(only);
+  assert.equal(only.title, 'Page is nofollow');
+
+  const both = pageChecks(meta('noindex, nofollow')).find((x) => x.id === 'nofollow-page');
+  assert.equal(both.title, 'Page is noindex and nofollow');
+
+  // "follow" is the opposite instruction and must not match.
+  assert.ok(!ids(pageChecks(meta('index, follow'))).includes('nofollow-page'));
+  assert.ok(!ids(pageChecks(meta('noindex'))).includes('nofollow-page'));
+});
+
+test('a nofollow sent as a header counts too', () => {
+  const headed = page('<main><p>x</p></main>', 'https://x.test/p/', {
+    res: { ok: true, status: 200, ms: 1, headers: new Headers({ 'x-robots-tag': 'nofollow' }) },
+  });
+  assert.ok(ids(pageChecks(headed)).includes('nofollow-page'));
+});
+
+test('internal links marked nofollow are collected and noted', () => {
+  const doc = parseHtml(
+    `<main>
+       <a href="/plain/">plain</a>
+       <a href="/login/" rel="nofollow">login</a>
+       <a href="/filter/" rel="noopener nofollow">filter</a>
+       <a href="https://other.test/" rel="nofollow">external</a>
+     </main>`,
+    'https://x.test/p/',
+  );
+  // External nofollow is ordinary and not this tool's business.
+  assert.deepEqual(doc.links.nofollowInternal, ['https://x.test/login/', 'https://x.test/filter/']);
+
+  const finding = pageChecks(page(
+    '<main><a href="/login/" rel="nofollow">login</a></main>',
+  )).find((x) => x.id === 'internal-nofollow');
+  assert.ok(finding);
+  assert.equal(finding.level, 'info');
+});
+
+test('a nofollow fragment on the same page is not a withheld path', () => {
+  // WordPress marks every comment-reply link rel="nofollow" pointing at
+  // #respond on the page it is already on. Counting those reported a withheld
+  // path on every article of every WordPress site, leading nowhere new.
+  const doc = parseHtml(
+    `<main>
+       <a href="/p/#respond" rel="nofollow">reply</a>
+       <a href="#respond" rel="nofollow">reply again</a>
+       <a href="/elsewhere/#section" rel="nofollow">a real one</a>
+     </main>`,
+    'https://x.test/p/',
+  );
+  assert.deepEqual(doc.links.nofollowInternal, ['https://x.test/elsewhere/']);
+});
+
+test('rel="nofollowing" is not nofollow', () => {
+  const doc = parseHtml('<main><a href="/a/" rel="nofollowing">x</a></main>', 'https://x.test/p/');
+  assert.deepEqual(doc.links.nofollowInternal, []);
 });
 
 test('a noindex sent as a header is reported like the meta tag', () => {

@@ -47,6 +47,9 @@ const HELP = `
     --redirects <file> a migration's redirect map (Netlify _redirects shape:
                        "/old /new 301" per line). Every old URL is asked for,
                        and what actually happens is reported
+    --check-external   also check links pointing off the site. Off by default:
+                       other people's servers rate-limit and bot-block, so only
+                       a 404, a 410 or no answer at all is ever reported
     --user-agent <ua>  identify as something else. Some hosts stall clients
                        that do not look like a browser
 
@@ -100,6 +103,7 @@ function parseArgs(argv) {
     else if (arg === '--concurrency') opts.concurrency = Number(value());
     else if (arg === '--sitemap') opts.sitemap = value();
     else if (arg === '--redirects') opts.redirects = value();
+    else if (arg === '--check-external') opts.checkExternal = true;
     else if (arg === '--user-agent') opts.userAgent = value();
     else if (arg === '--config') opts.config = value();
     else if (arg === '--ignore') opts.ignore = value().split(',').map((s) => s.trim()).filter(Boolean);
