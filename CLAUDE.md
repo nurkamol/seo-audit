@@ -11,7 +11,7 @@ node bin/seo-audit.mjs https://example.com --html r.html --md r.md --json r.json
 node bin/seo-audit.mjs https://example.com --psi https://example.com/
 node bin/seo-audit.mjs https://example.com --psi "/journal/**" --psi-sample 3
 node bin/seo-audit.mjs https://example.com --verbose             # watch it work
-npm test                                                # 174 tests, no install
+npm test                                                # 177 tests, no install
 ```
 
 Node 22 (`nvm use 22`). There is nothing to install and no build step.

@@ -1547,6 +1547,33 @@ test('decorative alt="" is never judged for quality', () => {
   assert.ok(!found.some((id) => id.startsWith('img-alt-')));
 });
 
+test('an image with no title is never a finding', () => {
+  // The check most tools ship. A hover tooltip is invisible on touch and unread
+  // by Google, so its absence is not a defect — reporting it would fire on
+  // almost every image on almost every site.
+  const found = ids(pageChecks(page('<main><img src="/a.png" alt="a real description"></main>')));
+  assert.ok(!found.some((id) => id.startsWith('img-title')));
+});
+
+test('a title repeating the alt is a note', () => {
+  const found = ids(pageChecks(page('<main><img src="/a.png" alt="A blue vase" title="A blue vase"></main>')));
+  assert.ok(found.includes('img-title-duplicates-alt'));
+  // A title that says something different is the author adding, not repeating.
+  assert.ok(!ids(pageChecks(page(
+    '<main><img src="/a.png" alt="A blue vase" title="Photographed in Kyoto, 2019"></main>',
+  ))).includes('img-title-duplicates-alt'));
+});
+
+test('a title on an image declared decorative contradicts itself', () => {
+  assert.ok(ids(pageChecks(page('<main><img src="/a.png" alt="" title="A blue vase"></main>')))
+    .includes('img-title-on-decorative'));
+  assert.ok(ids(pageChecks(page('<main><img src="/a.png" role="presentation" title="A blue vase"></main>')))
+    .includes('img-title-on-decorative'));
+  // Decorative and silent is correct, and says nothing.
+  assert.ok(!ids(pageChecks(page('<main><img src="/a.png" alt=""></main>')))
+    .includes('img-title-on-decorative'));
+});
+
 test('very long alt text is a note', () => {
   const long = 'a '.repeat(100);
   assert.ok(ids(pageChecks(page(`<main><img src="/a.png" alt="${long}"></main>`))).includes('img-alt-long'));

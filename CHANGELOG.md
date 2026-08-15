@@ -5,6 +5,28 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-08-15
+
+### Added
+- **Two checks on the image `title` attribute** — `img-title-duplicates-alt`
+  and `img-title-on-decorative`, both notes.
+
+  Deliberately *not* a "missing title" check, which is what tools normally ship
+  here. A `title` is a hover tooltip: invisible on touch, unread by Google, and
+  W3C guidance discourages putting anything that matters in it. An image without
+  one has nothing wrong with it, so that check would fire on nearly every image
+  on nearly every site.
+
+  What is worth reporting is when `title` contradicts something on the same tag.
+  Repeating `alt` verbatim adds nothing for a sighted visitor and is read twice
+  by a screen reader that surfaces both — usually one CMS field populating both
+  attributes. And a `title` on an image declared decorative by `alt=""` or
+  `role="presentation"` is markup saying "ignore this" while attaching a tooltip
+  to it; one of the two statements is wrong.
+
+  Verified against wpbeginner.com, which carries a `title` on 26 of its 117
+  images: 14 identical to the `alt`, 6 on decorative images.
+
 ## [1.7.0] — 2026-08-15
 
 ### Added

@@ -426,6 +426,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `alt` isn't a placeholder — `alt="image"`, `alt="logo"` name the medium, not the content | warning |
 | Three or more images don't share one `alt` | note |
 | `alt` is under 125 characters — it's read in one breath, with no way to skim | note |
+| `title` doesn't just repeat `alt` — one field filling both adds nothing and can be read twice | note |
+| `title` isn't attached to an image declared decorative — the markup contradicts itself | note |
 | Every `<img>` has `width` and `height` — otherwise the page reflows | warning |
 | Images offer a `srcset` rather than one size for every screen | note |
 | Word count above ~300 — Japanese, Chinese and Thai are counted by character, since they don't space words | warning |
@@ -520,7 +522,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.7.0` | Exactly that release, forever |
+| `@v1.8.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

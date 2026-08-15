@@ -142,6 +142,9 @@ export function parseHtml(rawHtml, pageUrl) {
       srcset: attr(tag, 'srcset'),
       loading: attr(tag, 'loading'),
       role: attr(tag, 'role'),
+      // Captured for the two things it can contradict, never for its absence:
+      // an image with no title has nothing wrong with it.
+      title: attr(tag, 'title'),
       // `:alt="item.title"` is alt text the framework fills in on render. The
       // value cannot be read from here, but the author plainly provided one,
       // and calling that a missing alt is guessing wrong at error level.

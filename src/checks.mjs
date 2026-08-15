@@ -271,6 +271,28 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     }
   }
 
+  // The `title` attribute is never reported for being absent — an image without
+  // one has nothing wrong with it, it is a hover tooltip that touch devices
+  // cannot show and Google does not read. What is worth saying is when it
+  // contradicts something else on the same tag.
+  const titledSameAsAlt = doc.images.filter(
+    (i) => i.title && i.alt && i.title.trim() === i.alt.trim(),
+  );
+  if (titledSameAsAlt.length) {
+    out.push(f('info', 'img-title-duplicates-alt', `${titledSameAsAlt.length} image(s) repeat the alt text as a title`,
+      `First: "${titledSameAsAlt[0].title}" on ${titledSameAsAlt[0].src}. One field filling both is the usual ` +
+        'cause. It adds nothing for a sighted visitor and a screen reader that surfaces both reads it twice.', url));
+  }
+
+  const titledDecorative = doc.images.filter(
+    (i) => i.title && (i.alt === '' || decorativeByRole(i)),
+  );
+  if (titledDecorative.length) {
+    out.push(f('info', 'img-title-on-decorative', `${titledDecorative.length} decorative image(s) carry a title`,
+      `First: "${titledDecorative[0].title}" on ${titledDecorative[0].src}. The markup declares the image ` +
+        'decorative and then attaches a tooltip to it — one of the two is wrong.', url));
+  }
+
   const longAlt = described.filter((i) => i.alt.length > ALT_MAX);
   if (longAlt.length) {
     out.push(f('info', 'img-alt-long', `${longAlt.length} image(s) with very long alt text`,

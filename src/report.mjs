@@ -193,6 +193,7 @@ const CATEGORY_OF = {
   'img-alt': 'Images', 'img-alt-filename': 'Images', 'img-alt-placeholder': 'Images',
   'img-alt-duplicate': 'Images', 'img-alt-long': 'Images', 'img-dimensions': 'Images',
   'img-srcset': 'Images', 'broken-image': 'Images', 'image-sweep-capped': 'Images',
+  'img-title-duplicates-alt': 'Images', 'img-title-on-decorative': 'Images',
 
   // Social
   'og-missing': 'Social', 'og-webp': 'Social', 'og-no-dimensions': 'Social',
