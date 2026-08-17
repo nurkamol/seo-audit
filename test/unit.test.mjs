@@ -690,6 +690,77 @@ test('both portfolio file formats render every site', () => {
   assert.equal((page.match(/class="site"/g) ?? []).length, 2);
 });
 
+// --- structured data completeness -------------------------------------------
+
+const ld = (data) =>
+  page(`<head><script type="application/ld+json">${JSON.stringify(data)}</script></head><main><p>x</p></main>`);
+
+test('a type Google can render is checked for the properties it requires', () => {
+  assert.ok(ids(pageChecks(ld({ '@type': 'Article', author: 'A' }))).includes('schema-incomplete'));
+  assert.ok(ids(pageChecks(ld({ '@type': 'BreadcrumbList' }))).includes('schema-incomplete'));
+  assert.ok(ids(pageChecks(ld({ '@type': 'Event', name: 'E' }))).includes('schema-incomplete'));
+
+  // Complete markup says nothing.
+  assert.ok(!ids(pageChecks(ld({ '@type': 'Article', headline: 'A headline' })))
+    .includes('schema-incomplete'));
+});
+
+test('a Product needs a name and something to show', () => {
+  assert.ok(ids(pageChecks(ld({ '@type': 'Product', name: 'Vase' }))).includes('schema-incomplete'));
+  // Any one of offers, review or aggregateRating satisfies it.
+  for (const key of ['offers', 'review', 'aggregateRating']) {
+    assert.ok(
+      !ids(pageChecks(ld({ '@type': 'Product', name: 'Vase', [key]: { '@type': 'Offer' } })))
+        .includes('schema-incomplete'),
+      `${key} should satisfy the requirement`,
+    );
+  }
+});
+
+test('a type the tool has no opinion about is left alone', () => {
+  // The list is short on purpose. Anything not on it must stay silent rather
+  // than be guessed at, because Google's requirements move.
+  assert.ok(!ids(pageChecks(ld({ '@type': 'WebSite' }))).includes('schema-incomplete'));
+  assert.ok(!ids(pageChecks(ld({ '@type': 'SoftwareApplication' }))).includes('schema-incomplete'));
+});
+
+test('a reference to a node defined elsewhere is not an incomplete node', () => {
+  // "publisher": { "@type": "Organization", "@id": "…#org" } points at a full
+  // definition made further down; reading it as a bare Organization with no
+  // name would report every site using @graph references.
+  const graph = {
+    '@graph': [
+      { '@type': 'Article', headline: 'H', publisher: { '@type': 'Organization', '@id': 'https://x.test/#org' } },
+      { '@type': 'Organization', '@id': 'https://x.test/#org', name: 'Acme' },
+    ],
+  };
+  assert.ok(!ids(pageChecks(ld(graph))).includes('schema-incomplete'));
+});
+
+test('nodes nested inside a graph are still checked', () => {
+  const graph = { '@graph': [{ '@type': 'Article', author: 'A' }] };
+  assert.ok(ids(pageChecks(ld(graph))).includes('schema-incomplete'));
+});
+
+// --- compression and weight -------------------------------------------------
+
+const served = (html, headers) =>
+  page(html, 'https://x.test/p/', {
+    res: { ok: true, status: 200, ms: 1, headers: new Headers(headers) },
+  });
+
+test('HTML served without compression is reported, once it is worth compressing', () => {
+  const big = `<main><p>${'word '.repeat(3000)}</p></main>`; // ~15KB
+  assert.ok(ids(pageChecks(served(big, {}))).includes('uncompressed'));
+  assert.ok(!ids(pageChecks(served(big, { 'content-encoding': 'br' }))).includes('uncompressed'));
+  assert.ok(!ids(pageChecks(served(big, { 'content-encoding': 'gzip' }))).includes('uncompressed'));
+});
+
+test('a small response is not worth compressing and is not mentioned', () => {
+  // Plenty of CDNs skip compression below a few KB, correctly.
+  assert.ok(!ids(pageChecks(served('<main><p>short</p></main>', {}))).includes('uncompressed'));
+});
+
 // --- conflicting directives and meta refresh --------------------------------
 
 test('the robots meta and header contradicting each other is reported', () => {

@@ -424,6 +424,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `hreflang` lists the page itself, not only its translations | warning |
 | `<html lang>` agrees with what the page's own `hreflang` calls it | warning |
 | JSON-LD parses and carries a `@type` (or a `@graph`) | error / warning |
+| Types Google can render carry the properties it requires — an `Article` with no `headline` gets no rich result | warning |
+| Images named in structured data actually load | warning |
 | Every `<img>` has an `alt` attribute (empty is correct for decorative) | error |
 | `alt` isn't a filename — `alt="DSC_0042.jpg"` is what a CMS fills in for you | warning |
 | `alt` isn't a placeholder — `alt="image"`, `alt="logo"` name the medium, not the content | warning |
@@ -436,6 +438,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Word count above ~300 — Japanese, Chinese and Thai are counted by character, since they don't space words | warning |
 | At least one link inside the content, not just navigation | note |
 | No `http://` **subresources** on an HTTPS page — a hyperlink to one is not mixed content | error |
+| HTML arrives compressed, once it's big enough to be worth compressing | warning |
 | Images declared decorative by `alt=""` **or** `role="presentation"` are left alone | — |
 
 ### Across pages
@@ -527,7 +530,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.9.0` | Exactly that release, forever |
+| `@v1.10.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

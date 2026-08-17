@@ -63,6 +63,59 @@ const withoutSlash = (u) => (u ?? '').replace(/\/$/, '');
 // filled in, so only report from three up.
 const ALT_DUP_MIN = 3;
 
+// Below this a response is not worth compressing and plenty of CDNs skip it.
+const COMPRESSIBLE_FROM = 5 * 1024;
+// Deliberately far above anything ordinary. Google's own limit is 15MB, so this
+// is a signal rather than a threshold — and set high enough that a page has to
+// be genuinely extraordinary to trip it.
+const HUGE_HTML = 1024 * 1024;
+
+// --- Structured data --------------------------------------------------------
+// Google's documented requirements, for the types people actually ship and only
+// the fields that have been stable for years. A rich result is refused outright
+// when one is missing and nothing on the page says so — the markup validates,
+// the type is right, and the result never appears.
+//
+// Deliberately short. Google's requirements move, and a list that goes stale
+// invents findings on correct markup, which is the one failure this tool cannot
+// afford. Anything uncertain is left out rather than guessed at.
+const SCHEMA_REQUIRED = {
+  Article: ['headline'],
+  NewsArticle: ['headline'],
+  BlogPosting: ['headline'],
+  BreadcrumbList: ['itemListElement'],
+  FAQPage: ['mainEntity'],
+  Event: ['name', 'startDate', 'location'],
+  Organization: ['name'],
+  LocalBusiness: ['name', 'address'],
+  VideoObject: ['name', 'thumbnailUrl', 'uploadDate'],
+  Recipe: ['name', 'image'],
+};
+
+// A Product needs a name and something to show: Google will not render a product
+// result with no price, no review and no rating.
+const PRODUCT_ONE_OF = ['offers', 'review', 'aggregateRating'];
+
+/** Every node in a JSON-LD block that declares a type, references excluded.
+ *
+ *  A node carrying `@id` and little else is a pointer to a definition made
+ *  elsewhere — `"publisher": { "@id": "…#org" }` — not an incomplete node. */
+export function schemaNodes(blocks) {
+  const found = [];
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    const isReference = node['@id'] && Object.keys(node).length <= 2;
+    if (node['@type'] && !isReference) found.push(node);
+    for (const value of Object.values(node)) walk(value);
+  };
+  for (const block of blocks ?? []) if (block.ok) walk(block.data);
+  return found;
+}
+
+const present = (value) =>
+  value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && !value.length);
+
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
 /** Checks that only need the page itself. */
@@ -255,6 +308,27 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     }
   }
 
+  // The type is declared and the JSON parses, and the rich result still never
+  // appears because a property Google requires is not there.
+  const shortfalls = [];
+  for (const node of schemaNodes(doc.jsonld)) {
+    for (const type of [node['@type']].flat().filter((t) => typeof t === 'string')) {
+      const missing = (SCHEMA_REQUIRED[type] ?? []).filter((p) => !present(node[p]));
+      if (type === 'Product') {
+        if (!present(node.name)) missing.push('name');
+        if (!PRODUCT_ONE_OF.some((p) => present(node[p]))) {
+          missing.push(`one of ${PRODUCT_ONE_OF.join(', ')}`);
+        }
+      }
+      if (missing.length) shortfalls.push(`${type} is missing ${missing.join(' and ')}`);
+    }
+  }
+  if (shortfalls.length) {
+    out.push(f('warn', 'schema-incomplete', 'Structured data is missing a property Google requires',
+      `${[...new Set(shortfalls)].join('; ')}. The markup is valid and the type is right, so nothing ` +
+        'reports an error — the rich result simply never appears.', url));
+  }
+
   // --- Images -------------------------------------------------------------
   // role="presentation" (or "none") declares an image decorative in ARIA, which
   // is the same statement alt="" makes and is honoured by screen readers.
@@ -422,6 +496,25 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       out.push(f('error', 'mixed-content', 'Insecure resources on an HTTPS page',
         `${insecure.length}, first: ${insecure[0]}. Browsers block or refuse to render these.`, url));
     }
+  }
+
+  // Not an estimate, which is the line this tool does not cross: whether the
+  // response arrived compressed is a header, and how much HTML came back is a
+  // byte count. Neither is a guess about how the page renders.
+  //
+  // Only for documents worth compressing — a CDN skipping a 900-byte response
+  // is doing the right thing, and reporting it would be noise.
+  const bytes = (page.html ?? '').length;
+  if (!res.headers?.get?.('content-encoding') && bytes > COMPRESSIBLE_FROM) {
+    out.push(f('warn', 'uncompressed', 'HTML is served without compression',
+      `${(bytes / 1024).toFixed(0)}KB of HTML and no content-encoding. Gzip or Brotli typically takes ` +
+        'markup to a quarter of this, and it is a server setting rather than a change to the page.', url));
+  }
+  if (bytes > HUGE_HTML) {
+    out.push(f('info', 'huge-html', 'Very large HTML document',
+      `${(bytes / 1024 / 1024).toFixed(1)}MB before any images or scripts. Not a limit — Google reads far ` +
+        'more than this — but a document this size is usually a template inlining something it should link to.',
+      url));
   }
 
   if (res.ms > LIMITS.slowMs) {

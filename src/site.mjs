@@ -4,6 +4,7 @@ import { connect } from 'node:tls';
 import { mapLimit } from './http.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
 import { parseHtml } from './parse.mjs';
+import { schemaNodes } from './checks.mjs';
 
 // Two weeks is enough to renew by hand if the automation has quietly stopped,
 // which is the failure this is for — nobody is short of warning about a
@@ -396,6 +397,40 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       out.push(f('info', 'external-sweep-capped', `${outbound.size - externalTargets.length} outbound links were not checked`,
         `The sweep stops at ${externalLimit}. Raise it with maxExternalChecks.`, origin));
     }
+  }
+
+  // --- Images named in structured data ------------------------------------
+  // A logo or an image Google is told to use for a rich result, that does not
+  // load. Nothing on the page looks wrong — the markup is valid and the file is
+  // simply gone, usually a media library tidied up years after the JSON-LD was
+  // written. Same conservative rule as everywhere else: 404, 410 or no answer.
+  const schemaImages = new Map();
+  for (const page of pages) {
+    for (const node of schemaNodes(page.doc?.jsonld)) {
+      for (const key of ['image', 'logo', 'thumbnailUrl', 'contentUrl']) {
+        for (const value of [node[key]].flat()) {
+          const href = typeof value === 'string' ? value : value?.url;
+          if (typeof href !== 'string' || !/^https?:/i.test(href)) continue;
+          if (!schemaImages.has(href)) schemaImages.set(href, page.url);
+        }
+      }
+    }
+  }
+  const schemaTargets = [...schemaImages.keys()].slice(0, opts.maxImageChecks ?? 200);
+  const schemaResults = await mapLimit(schemaTargets, 4, async (href) => {
+    let res = await fetcher.get(href, { method: 'HEAD' });
+    if (res.status === 405 || res.status === 501) res = await fetcher.get(href);
+    return { href, status: res.status, error: res.error };
+  });
+  const deadSchemaImages = schemaResults.filter(
+    (r) => r.status === 404 || r.status === 410 || r.status === 0,
+  );
+  if (deadSchemaImages.length) {
+    out.push(f('warn', 'schema-image-broken', `${deadSchemaImages.length} image(s) named in structured data do not load`,
+      `${deadSchemaImages.slice(0, 3).map((r) => `${r.href} (${r.status || r.error})`).join(', ')}` +
+        `${deadSchemaImages.length > 3 ? `, and ${deadSchemaImages.length - 3} more` : ''}. Google is told to ` +
+        'use these for rich results and finds nothing there. The markup is valid, so nothing else reports it.',
+      deadSchemaImages[0] ? schemaImages.get(deadSchemaImages[0].href) : origin));
   }
 
   // --- hreflang targets load ----------------------------------------------

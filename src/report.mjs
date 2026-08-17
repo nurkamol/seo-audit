@@ -203,7 +203,8 @@ const CATEGORY_OF = {
 
   // Structured data
   'jsonld-invalid': 'Structured data', 'jsonld-no-type': 'Structured data',
-  'schema-expected': 'Structured data',
+  'schema-expected': 'Structured data', 'schema-incomplete': 'Structured data',
+  'schema-image-broken': 'Structured data',
 
   // Multilingual
   'hreflang-one-way': 'Multilingual', 'hreflang-no-self': 'Multilingual',
@@ -229,7 +230,7 @@ const CATEGORY_OF = {
   'header-content-security-policy': 'Site & security',
 
   // Performance
-  slow: 'Performance', 'psi-score': 'Performance', 'psi-lcp': 'Performance',
+  slow: 'Performance', uncompressed: 'Performance', 'huge-html': 'Performance', 'psi-score': 'Performance', 'psi-lcp': 'Performance',
   'psi-cls': 'Performance', 'psi-inp': 'Performance', 'psi-opportunity': 'Performance',
   'psi-failed': 'Performance', 'psi-no-field-data': 'Performance',
   'psi-field-lcp': 'Performance', 'psi-field-cls': 'Performance', 'psi-field-inp': 'Performance',

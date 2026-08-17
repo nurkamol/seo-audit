@@ -5,6 +5,38 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-08-17
+
+### Added
+- **`schema-incomplete`** — a type Google can render that is missing a property
+  it requires. The markup is valid, the type is right, nothing reports an error,
+  and the rich result simply never appears: an `Article` with no `headline`, a
+  `BreadcrumbList` with no `itemListElement`, a `Product` with nothing to show.
+
+  The list is deliberately short and covers only fields that have been stable
+  for years. Google's requirements move, and a list that goes stale invents
+  findings on correct markup — the one failure this tool cannot afford. A type
+  it has no opinion about stays silent rather than being guessed at.
+
+  Nodes that are references rather than definitions are skipped: `"publisher":
+  { "@type": "Organization", "@id": "…#org" }` points at a full definition made
+  elsewhere in the `@graph`, and reading it as a nameless Organization would
+  have fired on every site that uses `@id` references.
+
+- **`schema-image-broken`** — an image named in structured data that does not
+  load. Google is told to use it for a rich result and finds nothing there,
+  usually because a media library was tidied years after the JSON-LD was
+  written. Same conservative rule as the other sweeps: 404, 410 or no answer.
+
+- **`uncompressed`** — HTML served with no `content-encoding`. Not an estimate,
+  which is the line this tool does not cross: it is a header, read off the
+  response. Only for documents past 5KB, because a CDN skipping compression on
+  a 900-byte response is doing the right thing.
+
+- **`huge-html`** (note) — a document past 1MB before any images or scripts.
+  Google reads far more than that, so this is a signal rather than a limit, and
+  set high enough that a page has to be genuinely extraordinary to trip it.
+
 ## [1.9.0] — 2026-08-17
 
 ### Added
