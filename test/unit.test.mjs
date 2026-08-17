@@ -690,6 +690,37 @@ test('both portfolio file formats render every site', () => {
   assert.equal((page.match(/class="site"/g) ?? []).length, 2);
 });
 
+// --- host variants ----------------------------------------------------------
+
+const variantsAskedFor = async (origin) => {
+  const fetcher = fakeFetcher(notFound);
+  await siteChecks(origin, fetcher, bareSite(origin), { sitemapUrls: [`${origin}/p/`] });
+  return fetcher.calls.filter((u) => /^https?:\/\/(www\.)?[^/]+\/$/.test(u));
+};
+
+test('a www variant is only tried for a host that can have one', async () => {
+  // Asking a resolver for www.127.0.0.1 is a question with no sensible answer.
+  // It may decline instantly or sit on it, which is what made the fixture
+  // tests — all of which run against 127.0.0.1 — stall unpredictably.
+  for (const origin of ['http://127.0.0.1:8080', 'http://localhost:3000', 'https://[::1]:8443']) {
+    const asked = await variantsAskedFor(origin);
+    assert.ok(!asked.some((u) => u.includes('www.')), `${origin} should not ask for a www variant`);
+  }
+});
+
+test('a real domain still gets both www variants checked', async () => {
+  const asked = await variantsAskedFor('https://x.test');
+  assert.ok(asked.includes('https://www.x.test/'));
+  assert.ok(asked.includes('http://www.x.test/'));
+  assert.ok(asked.includes('http://x.test/'));
+});
+
+test('auditing the www host checks the bare one, not www.www', async () => {
+  const asked = await variantsAskedFor('https://www.x.test');
+  assert.ok(!asked.some((u) => u.includes('www.www.')), 'should not double the prefix');
+  assert.ok(asked.includes('https://www.x.test/'));
+});
+
 // --- structured data completeness -------------------------------------------
 
 const ld = (data) =>

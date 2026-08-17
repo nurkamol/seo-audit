@@ -5,6 +5,24 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.10.1] — 2026-08-17
+
+### Fixed
+- **The `www.` host variant is only tried for a host that can have one.** It was
+  built by string concatenation from whatever host was being audited, so
+  auditing `http://127.0.0.1:8080` asked a resolver for `www.127.0.0.1` — a
+  question with no sensible answer, which a resolver may decline instantly or
+  sit on for as long as it likes.
+
+  That made the test suite stall unpredictably, since every fixture test runs
+  against `127.0.0.1`. It also affected anyone auditing a local build on
+  `localhost`, where the same two requests were pure waste.
+
+  IP addresses and single-label hostnames are now skipped; a registrable domain
+  is checked exactly as before. Verified by intercepting `dns.lookup` during a
+  fixture run — zero hostname resolutions, everything a literal IP — and by
+  confirming a real domain still reports its `www.` redirect chain.
+
 ## [1.10.0] — 2026-08-17
 
 ### Added

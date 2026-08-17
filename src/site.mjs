@@ -172,8 +172,19 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
 
   // --- Canonical host and scheme -----------------------------------------
   // One hop is right. Two means every visitor pays for a wasted round trip.
-  const host = base.host.replace(/^www\./, '');
-  const variants = [`http://${host}/`, `https://www.${host}/`, `http://www.${host}/`];
+  //
+  // `www.` is only meaningful for a registrable domain. An IP address has no
+  // www, and neither does a bare hostname like localhost — asking a resolver
+  // for `www.127.0.0.1` is a question with no sensible answer, which it may
+  // decline quickly or sit on for as long as it likes. That is what made the
+  // fixture tests, which run against 127.0.0.1, stall unpredictably.
+  const authority = base.host.replace(/^www\./, ''); // keeps any port
+  const isAddress = /^\[?[\d.:]+\]?$/.test(base.hostname);
+  const hasRegistrableDomain = !isAddress && base.hostname.replace(/^www\./, '').includes('.');
+  const variants = [
+    `http://${authority}/`,
+    ...(hasRegistrableDomain ? [`https://www.${authority}/`, `http://www.${authority}/`] : []),
+  ];
   for (const variant of variants) {
     const { hops, final } = await fetcher.chain(variant);
     if (!final.ok) {
