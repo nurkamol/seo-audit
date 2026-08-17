@@ -38,18 +38,38 @@ async function discover(origin, fetcher, explicit) {
     if (!res.ok || !/<(urlset|sitemapindex)/i.test(res.body)) continue;
 
     const { urls, sitemaps, entries } = parseSitemap(res.body);
-    if (urls.length) return { urls, entries, source: candidate, tried };
+    // Per-file, because the 50,000-URL and 50MB limits are per sitemap file
+    // rather than per site — a flattened total would report the wrong thing.
+    const stat = (url, body, count) => ({ url, urls: count, bytes: Buffer.byteLength(body) });
+
+    if (urls.length) {
+      return {
+        urls,
+        entries,
+        files: [stat(candidate, res.body, urls.length)],
+        source: candidate,
+        tried,
+      };
+    }
 
     const nested = await mapLimit(sitemaps, 4, async (child) => {
       const sub = (await fetcher.chain(child)).final;
-      return sub.ok ? parseSitemap(sub.body) : { urls: [], entries: [] };
+      if (!sub.ok) return { urls: [], entries: [], files: [] };
+      const parsed = parseSitemap(sub.body);
+      return { ...parsed, files: [stat(child, sub.body, parsed.urls.length)] };
     });
     const all = nested.flatMap((n) => n.urls);
     if (all.length) {
-      return { urls: all, entries: nested.flatMap((n) => n.entries), source: candidate, tried };
+      return {
+        urls: all,
+        entries: nested.flatMap((n) => n.entries),
+        files: nested.flatMap((n) => n.files),
+        source: candidate,
+        tried,
+      };
     }
   }
-  return { urls: [], entries: [], source: null, tried };
+  return { urls: [], entries: [], files: [], source: null, tried };
 }
 
 // Files that are linked from pages but are not pages. Fetching a 40MB video to
@@ -140,7 +160,7 @@ export async function audit(target, opts = {}) {
       opts.onNote(`still serving inconsistent HTML after ${opts.settle}s — crawling anyway`);
     }
   }
-  const { urls, entries, source, tried } = await discover(
+  const { urls, entries, files, source, tried } = await discover(
     origin,
     fetcher,
     opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null),
@@ -244,7 +264,7 @@ export async function audit(target, opts = {}) {
 
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   findings.push(...crossPageChecks(pages));
-  findings.push(...sitemapChecks(entries, source));
+  findings.push(...sitemapChecks(entries, source, Date.now(), files));
   findings.push(...expectationChecks(pages, opts.expect));
   onProgress?.({ phase: 'checks', detail: `${findings.length} findings from the pages themselves` });
   findings.push(
@@ -317,6 +337,36 @@ export async function audit(target, opts = {}) {
   }
   for (const finding of findings) {
     if (finding.url && notIndexable.has(finding.url)) finding.indexable = false;
+  }
+
+  // The sitemap says "index this"; the page says otherwise. Same shape as
+  // robots.txt disallowing a sitemap URL, and just as invisible: each file is
+  // defensible alone and they only contradict each other when read together.
+  //
+  // Pages that failed to load are excluded — page-status and sitemap-redirect
+  // already report those, and this would say it a second time in worse words.
+  if (bySitemap) {
+    const listed = new Set(urls.map((u) => u.replace(/\/$/, '')));
+    const contradictions = pages.filter(
+      (p) => p.res.ok && p.doc && notIndexable.has(p.url) && listed.has(p.url.replace(/\/$/, '')),
+    );
+    if (contradictions.length) {
+      const why = (p) =>
+        /noindex/i.test(p.doc.robots ?? '') || /noindex/i.test(p.res.headers?.get?.('x-robots-tag') ?? '')
+          ? 'noindex'
+          : `canonical → ${p.doc.canonical[0]}`;
+      findings.push({
+        level: 'warn',
+        id: 'sitemap-not-indexable',
+        title: `${contradictions.length} sitemap URL(s) will not be indexed`,
+        detail:
+          `${contradictions.slice(0, 3).map((p) => `${p.url} (${why(p)})`).join(', ')}` +
+          `${contradictions.length > 3 ? `, and ${contradictions.length - 3} more` : ''}. A sitemap is a ` +
+          'list of the pages you want indexed; these ask not to be. Either drop them from the sitemap or ' +
+          'drop the directive.',
+        url: source,
+      });
+    }
   }
 
   // What the site has decided to live with is dropped last, so an ignore rule

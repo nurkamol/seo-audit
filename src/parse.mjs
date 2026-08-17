@@ -180,6 +180,9 @@ export function parseHtml(rawHtml, pageUrl) {
     title: (markup.match(/<title[^>]*>([\s\S]*?)<\/title>/i) ?? [null, null])[1]?.trim(),
     description: metaBy('name', 'description'),
     robots: metaBy('name', 'robots'),
+    // <meta http-equiv="refresh" content="0;url=…"> — a redirect that is not
+    // one, and the only kind this tool can see in the markup.
+    refresh: metaBy('http-equiv', 'refresh'),
     viewport: metaBy('name', 'viewport'),
     lang: attr((markup.match(/<html\b[^>]*>/i) ?? [''])[0], 'lang'),
     canonical: linkRel('canonical').map((t) => abs(attr(t, 'href'))).filter(Boolean),

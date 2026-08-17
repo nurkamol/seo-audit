@@ -3,6 +3,7 @@
 import { connect } from 'node:tls';
 import { mapLimit } from './http.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
+import { parseHtml } from './parse.mjs';
 
 // Two weeks is enough to renew by hand if the automation has quietly stopped,
 // which is the failure this is for — nobody is short of warning about a
@@ -446,16 +447,33 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     if (target.replace(/\/$/, '') === page.url.replace(/\/$/, '')) continue;
     canonicals.set(target, page.url);
   }
-  await mapLimit([...canonicals.keys()], 4, async (target) => {
+  const canonicalResults = await mapLimit([...canonicals.keys()], 4, async (target) => {
     const res = await fetcher.get(target);
+    return { target, res };
+  });
+  for (const { target, res } of canonicalResults) {
+    const from = canonicals.get(target);
     if (res.status >= 300 && res.status < 400) {
       out.push(f('error', 'canonical-redirects', 'Canonical points at a redirect',
-        `${target} answers ${res.status}. Point it at the final URL.`, canonicals.get(target)));
-    } else if (!res.ok) {
-      out.push(f('error', 'canonical-dead', 'Canonical points at a page that does not load',
-        `${target} answers ${res.status}.`, canonicals.get(target)));
+        `${target} answers ${res.status}. Point it at the final URL.`, from));
+      continue;
     }
-  });
+    if (!res.ok) {
+      out.push(f('error', 'canonical-dead', 'Canonical points at a page that does not load',
+        `${target} answers ${res.status}.`, from));
+      continue;
+    }
+    // The target loads — but does it claim to be canonical itself? A → B where
+    // B hands off to C makes Google follow a chain it is under no obligation to
+    // follow, and the page that started it can end up consolidated nowhere.
+    if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) continue;
+    const theirs = parseHtml(res.body, target).canonical?.[0];
+    if (theirs && theirs.replace(/\/$/, '') !== target.replace(/\/$/, '')) {
+      out.push(f('warn', 'canonical-chain', 'Canonical points at a page that canonicals somewhere else',
+        `${from} → ${target} → ${theirs}. Google is not obliged to follow a chain; point the first ` +
+          'canonical at the page that actually claims itself.', from));
+    }
+  }
 
   // --- Trailing slashes ---------------------------------------------------
   // Both forms serving 200 is two URLs for one page, and Google will pick one

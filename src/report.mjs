@@ -168,6 +168,7 @@ const CATEGORY_OF = {
   'canonical-missing': 'Indexability', 'canonical-multiple': 'Indexability',
   'canonical-other': 'Indexability', 'canonical-dead': 'Indexability',
   'canonical-redirects': 'Indexability', 'soft-404': 'Indexability',
+  'canonical-chain': 'Indexability', 'robots-conflict': 'Indexability',
 
   // Content
   'title-missing': 'Content', 'title-long': 'Content', 'title-short': 'Content',
@@ -184,7 +185,8 @@ const CATEGORY_OF = {
 
   // Redirects
   'sitemap-redirect': 'Redirects', 'redirect-chain': 'Redirects', 'host-variant-dead': 'Redirects',
-  'trailing-slash': 'Redirects', 'redirect-dead': 'Redirects', 'redirect-broken': 'Redirects',
+  'trailing-slash': 'Redirects', 'meta-refresh': 'Redirects',
+  'redirect-dead': 'Redirects', 'redirect-broken': 'Redirects',
   'redirect-not-applied': 'Redirects', 'redirect-hops': 'Redirects',
   'redirect-elsewhere': 'Redirects', 'redirect-temporary': 'Redirects',
   'redirect-pattern-skipped': 'Redirects', 'redirect-map-capped': 'Redirects',
@@ -214,6 +216,8 @@ const CATEGORY_OF = {
   'robots-no-sitemap': 'Sitemap & robots', 'robots-blocks-sitemap-url': 'Sitemap & robots',
   'sitemap-lastmod-missing': 'Sitemap & robots', 'sitemap-lastmod-identical': 'Sitemap & robots',
   'sitemap-lastmod-future': 'Sitemap & robots', 'llms-missing': 'Sitemap & robots',
+  'sitemap-not-indexable': 'Sitemap & robots', 'sitemap-too-many-urls': 'Sitemap & robots',
+  'sitemap-too-large': 'Sitemap & robots',
 
   // Site & security
   'mixed-content': 'Site & security', 'tls-expiring': 'Site & security',

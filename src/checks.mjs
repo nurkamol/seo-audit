@@ -113,6 +113,39 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
           'included, so everything it links to loses that path in.', url));
   }
 
+  // Two sources for the same instruction, disagreeing. Google resolves it by
+  // taking the most restrictive, so the page ends up doing what neither author
+  // intended — and whichever file you are reading tells you the wrong story.
+  const metaSays = (doc.robots ?? '').toLowerCase();
+  const headerSays = xRobots.toLowerCase();
+  if (metaSays && headerSays) {
+    const conflicts = [
+      ['index', /\bnoindex\b/, /(^|[\s,])index([\s,]|$)/],
+      ['follow', /\bnofollow\b/, /(^|[\s,])follow([\s,]|$)/],
+    ]
+      .filter(([, negative, positive]) =>
+        (negative.test(metaSays) && positive.test(headerSays)) ||
+        (negative.test(headerSays) && positive.test(metaSays)))
+      .map(([name]) => name);
+    if (conflicts.length) {
+      out.push(f('warn', 'robots-conflict', 'The robots meta tag and the header disagree',
+        `meta: "${doc.robots}" · X-Robots-Tag: "${xRobots}" — they contradict each other on ` +
+          `${conflicts.join(' and ')}. Google takes the most restrictive of the two, so the page does ` +
+          'what neither file says on its own.', url));
+    }
+  }
+
+  // A meta refresh is a redirect nothing treats as one: it costs a render, it
+  // passes signals poorly, and a visitor sees the wrong page first.
+  if (doc.refresh && /url=/i.test(doc.refresh)) {
+    const [seconds] = doc.refresh.split(';');
+    const to = doc.refresh.match(/url=\s*['"]?([^'";\s]+)/i)?.[1] ?? '';
+    out.push(f('warn', 'meta-refresh', 'Page redirects with a meta refresh',
+      `"${doc.refresh}" → ${to}. A 301 says the same thing to a crawler in one hop and passes the ` +
+        `signals properly.${Number(seconds) > 0 ? ' A delay also shows the visitor a page you did not mean them to read.' : ''}`,
+      url));
+  }
+
   // --- Title & description ------------------------------------------------
   if (!doc.title) {
     out.push(f('error', 'title-missing', 'No <title>', 'Every page needs one.', url));
@@ -412,8 +445,28 @@ const LASTMOD_SAMPLE = 5;
 /** Checks on the sitemap itself, rather than the pages it lists.
  *
  *  `now` is injectable so the tests are not hostage to the clock. */
-export function sitemapChecks(entries, source, now = Date.now()) {
+// The protocol's hard limits, per file. Past either, a crawler is entitled to
+// reject the whole sitemap rather than read part of it.
+const SITEMAP_MAX_URLS = 50_000;
+const SITEMAP_MAX_BYTES = 50 * 1024 * 1024;
+
+export function sitemapChecks(entries, source, now = Date.now(), files = []) {
   const out = [];
+
+  for (const file of files) {
+    if (file.urls > SITEMAP_MAX_URLS) {
+      out.push(f('error', 'sitemap-too-many-urls', `A sitemap file lists ${file.urls.toLocaleString()} URLs`,
+        `${file.url} — the protocol allows ${SITEMAP_MAX_URLS.toLocaleString()} per file, and past that a ` +
+          'crawler may reject the whole file rather than read part of it. Split it and list the parts in a ' +
+          'sitemap index.', file.url));
+    }
+    if (file.bytes > SITEMAP_MAX_BYTES) {
+      out.push(f('error', 'sitemap-too-large', `A sitemap file is ${(file.bytes / 1024 / 1024).toFixed(1)}MB`,
+        `${file.url} — the protocol allows 50MB uncompressed per file. Split it, or serve it gzipped.`,
+        file.url));
+    }
+  }
+
   if (!entries.length) return out;
 
   const dated = entries.filter((entry) => entry.lastmod);

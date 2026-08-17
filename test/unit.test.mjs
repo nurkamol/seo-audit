@@ -690,6 +690,63 @@ test('both portfolio file formats render every site', () => {
   assert.equal((page.match(/class="site"/g) ?? []).length, 2);
 });
 
+// --- conflicting directives and meta refresh --------------------------------
+
+test('the robots meta and header contradicting each other is reported', () => {
+  const conflicting = (meta, header) =>
+    page(`<head><meta name="robots" content="${meta}"></head><main><p>x</p></main>`, 'https://x.test/p/', {
+      res: { ok: true, status: 200, ms: 1, headers: new Headers({ 'x-robots-tag': header }) },
+    });
+
+  assert.ok(ids(pageChecks(conflicting('index', 'noindex'))).includes('robots-conflict'));
+  assert.ok(ids(pageChecks(conflicting('noindex', 'index'))).includes('robots-conflict'));
+  assert.ok(ids(pageChecks(conflicting('follow', 'nofollow'))).includes('robots-conflict'));
+
+  // Agreeing, or saying different things about different axes, is not a clash.
+  assert.ok(!ids(pageChecks(conflicting('noindex', 'noindex'))).includes('robots-conflict'));
+  assert.ok(!ids(pageChecks(conflicting('index, follow', 'index, follow'))).includes('robots-conflict'));
+  assert.ok(!ids(pageChecks(conflicting('noindex', 'nofollow'))).includes('robots-conflict'));
+});
+
+test('a meta refresh redirect is reported, and a plain refresh is not', () => {
+  const meta = (content) =>
+    page(`<head><meta http-equiv="refresh" content="${content}"></head><main><p>x</p></main>`);
+  const finding = pageChecks(meta('0;url=/somewhere/')).find((x) => x.id === 'meta-refresh');
+  assert.ok(finding);
+  assert.match(finding.detail, /\/somewhere\//);
+
+  // A delay is worth mentioning; a refresh with no destination is a reload, not
+  // a redirect, and this check has nothing to say about it.
+  assert.match(pageChecks(meta('5;url=/late/')).find((x) => x.id === 'meta-refresh').detail, /delay/);
+  assert.ok(!ids(pageChecks(meta('30'))).includes('meta-refresh'));
+});
+
+// --- sitemap limits ---------------------------------------------------------
+
+test('a sitemap file past the protocol limits is an error', () => {
+  const big = [{ url: 'https://a.test/sitemap.xml', urls: 60000, bytes: 1000 }];
+  assert.ok(sitemapChecks([], 'https://a.test/sitemap.xml', NOW, big)
+    .some((x) => x.id === 'sitemap-too-many-urls'));
+
+  const heavy = [{ url: 'https://a.test/sitemap.xml', urls: 10, bytes: 60 * 1024 * 1024 }];
+  assert.ok(sitemapChecks([], 'https://a.test/sitemap.xml', NOW, heavy)
+    .some((x) => x.id === 'sitemap-too-large'));
+});
+
+test('a sitemap comfortably inside the limits says nothing', () => {
+  const fine = [{ url: 'https://a.test/sitemap.xml', urls: 49_999, bytes: 5 * 1024 * 1024 }];
+  assert.deepEqual(sitemapChecks([], 'https://a.test/sitemap.xml', NOW, fine), []);
+});
+
+test('the limits are per file, so an index of many files is judged file by file', () => {
+  // Flattening first would report a site with four 20k sitemaps as over the
+  // limit when every file is legal.
+  const four = Array.from({ length: 4 }, (_, i) => ({
+    url: `https://a.test/s${i}.xml`, urls: 20_000, bytes: 1000,
+  }));
+  assert.deepEqual(sitemapChecks([], 'https://a.test/sitemap.xml', NOW, four), []);
+});
+
 // --- robots.txt -----------------------------------------------------------
 
 const allows = (body, path, agent) => robotsVerdict(parseRobots(body), path, agent).allowed;

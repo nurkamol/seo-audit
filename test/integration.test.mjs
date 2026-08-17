@@ -63,6 +63,15 @@ test('missing llms.txt is a note, not a failure', () => {
   assert.equal(llms.level, 'info');
 });
 
+test('a noindexed page listed in the sitemap is also reported as a sitemap contradiction', () => {
+  // /hidden/ is in the fixture's sitemap and carries noindex. The per-page
+  // noindex check fires, and so does the one that reads the two files together.
+  const finding = result.findings.find((f) => f.id === 'sitemap-not-indexable');
+  assert.ok(finding, 'expected the sitemap contradiction to be reported');
+  assert.match(finding.detail, /\/hidden\//);
+  assert.match(finding.detail, /noindex/);
+});
+
 test('a fixture that returns a real 404 is not reported as a soft 404', () => {
   assert.ok(!ids().includes('soft-404'));
 });

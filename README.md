@@ -407,12 +407,15 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `noindex` on a page the sitemap advertises | error |
 | `X-Robots-Tag: noindex` — the same instruction as a header, invisible in the HTML | error |
 | `nofollow` on the page — Google follows none of its links, navigation included | warning |
+| The robots meta tag and `X-Robots-Tag` don't contradict each other | warning |
+| No `<meta http-equiv="refresh">` — a redirect nothing treats as one | warning |
 | Internal links aren't `rel="nofollow"` — a page refusing to pass through its own site | note |
 | `<title>` present, 15–60 characters | error / warning |
 | Meta description present, 70–160 characters | warning |
 | Exactly one `<h1>` | error / warning |
 | `lang` attribute and viewport meta | warning / error |
 | Canonical present, single, self-referencing | warning / error / note |
+| The canonical target isn't itself canonicalised elsewhere — Google needn't follow a chain | warning |
 | `og:title`, `og:description`, `og:image` present | warning |
 | `og:image` is an absolute URL — a scraper has no page to resolve a relative one against | error |
 | `og:image` is not WebP — LinkedIn won't render it, WhatsApp is unreliable | warning |
@@ -452,6 +455,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 |---|---|
 | `robots.txt` exists, does not block everything, advertises the sitemap | error / warning / note |
 | No sitemap URL is disallowed by `robots.txt` — the site contradicting itself | error |
+| Every sitemap URL is actually indexable — not `noindex`, not canonicalised away | warning |
+| Each sitemap file is within the protocol's 50,000 URLs and 50MB | error |
 | The sitemap declares `lastmod` at all | note |
 | `lastmod` differs between pages — one date on every URL is a build stamp, and crawlers learn to ignore it | note |
 | No `lastmod` is in the future | warning |
@@ -522,7 +527,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.8.0` | Exactly that release, forever |
+| `@v1.9.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

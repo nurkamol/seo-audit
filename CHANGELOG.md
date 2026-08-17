@@ -5,6 +5,41 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-08-17
+
+### Added
+Five checks, all reading facts already on the page or in the response rather
+than making a judgement about any of them.
+
+- **`sitemap-not-indexable`** — a URL the sitemap advertises that then asks not
+  to be indexed, by `noindex` or by canonicalising elsewhere. The same shape as
+  robots.txt disallowing a sitemap URL: each file is defensible alone, and they
+  only contradict each other when read together. Nearly free, because 1.7.0
+  already worked out which pages are indexable.
+
+  It found a circular one on smashingmagazine.com on the first run: the sitemap
+  lists `/category/ai/`, which canonicals to `/categories/ai/`, which 301s back
+  to `/category/ai/`. The canonical sends Google somewhere that returns it to
+  where it started.
+
+- **`robots-conflict`** — the robots meta tag and `X-Robots-Tag` disagreeing on
+  index or follow. Both were already parsed and nothing compared them. Google
+  resolves it by taking the most restrictive, so the page does what neither file
+  says on its own, and whichever one you are reading tells you the wrong story.
+
+- **`canonical-chain`** — a canonical pointing at a page that canonicals
+  somewhere else again. The target loading was already checked; whether it
+  claims itself was not.
+
+- **`meta-refresh`** — `<meta http-equiv="refresh" content="0;url=…">`. A
+  redirect that nothing treats as one, passing signals poorly, and showing a
+  visitor a page you did not mean them to read when there is a delay.
+
+- **`sitemap-too-many-urls` and `sitemap-too-large`** — the protocol's 50,000
+  URLs and 50MB, counted **per file** rather than per site, since that is how
+  the limits are written. A site with four 20,000-URL sitemaps is entirely legal
+  and stays silent.
+
 ## [1.8.0] — 2026-08-15
 
 ### Added
