@@ -4,23 +4,81 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Nothing committed, and one lesson from 1.11.0 worth recording: the room left is
-not in fetching more, it is in reading what has already been fetched. Click
-depth cost no requests — the link graph had been in memory since 0.3.0, and
-only its extreme case, the orphan, was being reported. The viewport string has
-been parsed and kept since the first commit, and was only ever tested for
-existing.
+Four candidates, queued and not yet started. None of them needs anything this
+tool cannot already do, and three of the four need no requests at all.
 
-The candidate that followed from that was anchor text, and 1.13.0 shipped it.
-What it cost is worth recording too. It needed the parser change predicted
-here, and then three real sites in a row produced a false positive before the
-check found its final shape: a decorative icon, a thumbnail beside the headline
-that already names it, and one page linking to another both with and without a
-trailing slash. What survived is quiet across some 12,000 anchors on eight
-sites and fires on five certificate PDFs nobody can read. That ratio is the
-point, not a disappointment.
+### Pagination canonicals
 
-Nothing is queued behind it.
+Page 2 of an archive canonicalising to page 1. Google's documentation is
+explicit that this is wrong, and the consequence is quiet: every page of the
+archive after the first leaves the index, and every article reachable only from
+those pages loses its way in — the click-depth story one floor up.
+
+Nothing in the repository has heard of pagination. There is no mention of
+`page/2`, `?page=` or `rel=next` anywhere in `src/`. Detection costs no
+requests and involves no judgement: a crawled URL carrying a pagination segment
+whose canonical is that same URL with the segment removed either is or is not
+that shape. WordPress, Shopify and several static-site blog templates ship it
+turned on.
+
+### The same anchor text on two destinations
+
+The mirror of `anchor-generic`, over the `anchorTexts` that 1.13.0 added.
+"Pricing" pointing at `/pricing` on some pages and `/plans` on others tells
+Google the two URLs are the same thing, and they compete instead of one of them
+winning. The data is already in memory; this costs nothing to run.
+
+`info`, and generic anchors have to be excluded or every "read more" on the
+site collides with every other. Expect it to need the same narrowing against
+real sites that `link-no-text` took three tries to reach — navigation labels
+will produce noise before the shape is right.
+
+### Favicon
+
+Google draws one beside every result a site owns, and a missing or 404 icon
+means a generic globe on all of them. One request per domain, in `src/site.mjs`.
+
+The honest version reports only a declared icon that 404s, or no declaration
+*and* no `/favicon.ico`. A site serving one from a path it never declared is
+fine, and guessing otherwise is the false positive rule 2 forbids.
+
+### Four contradictions, none of them expensive
+
+Each is a fact read off something already parsed, in the voice the rest of the
+check table uses:
+
+- `loading="lazy"` and `fetchpriority="high"` on one image — markup telling the
+  browser both to defer it and to rush it. `images[].loading` is parsed today
+  and read by nothing; `fetchpriority` is two lines of parser away.
+- A `Content-Language` header disagreeing with `<html lang>`.
+- Schema `datePublished` after `dateModified`, or either one in the future.
+- The same URL listed in two files of one sitemap index.
+
+### Three things worth keeping in front of all four
+
+**The room left is not in fetching more, it is in reading what has already been
+fetched.** Click depth cost no requests — the link graph had been in memory
+since 0.3.0, and only its extreme case, the orphan, was ever reported. The
+viewport string has been parsed and kept since the first commit and was only
+ever tested for existing. Three of the four candidates above are the same
+shape.
+
+**A check is narrowed by real sites, not by argument.** The candidate that
+followed from that lesson was anchor text, and 1.13.0 shipped it. It needed the
+parser change this section predicted, and then three real sites in a row
+produced a false positive before the check found its final shape: a decorative
+icon, a thumbnail beside the headline that already names it, and one page
+linking to another both with and without a trailing slash. What survived is
+quiet across some 12,000 anchors on eight sites and fires on five certificate
+PDFs nobody can read. That ratio is the point, not a disappointment. Budget for
+it happening again.
+
+**There are two runtimes now**, a standing cost taken on in 1.12.0. A check
+that reaches for a Node built-in works in the CLI and disappears in the Worker,
+and a report quietly shorter than the CLI's is the same failure as a false
+positive wearing the opposite coat. So a check that cannot run in both says
+which one it did not run in — and `npx wrangler deploy --dry-run` proving the
+bundle still builds is the minimum before calling such a change done.
 
 What is left in **Later** needs either a headless browser or an index, and both
 are refused below for reasons that have not changed. Beyond that, the honest
@@ -28,14 +86,6 @@ move is still running this against more real sites and fixing what it gets
 wrong, which is how every check here earned its place — 1.11.0's guard against
 unreadable link graphs exists because eslint.org would otherwise have been
 handed 464 findings about navigation that works.
-
-One standing cost was taken on in 1.12.0 and is worth stating plainly: there
-are now two runtimes. A check that reaches for a Node built-in works in the CLI
-and disappears in the Worker, and a report that is quietly shorter than the
-CLI's is the same failure as a false positive wearing the opposite coat. So a
-check that cannot run in both says which one it did not run in —
-`npx wrangler deploy --dry-run` proves the bundle still builds, and that is the
-minimum before calling such a change done.
 
 ## Shipped
 
@@ -106,4 +156,11 @@ minimum before calling such a change done.
 - **Measuring performance.** PageSpeed Insights and WebPageTest do it properly, with real browsers, from chosen locations. A `fetch` loop cannot see rendering, and a plausible-looking wrong number is worse than no number.
 - **Keyword density and "SEO scores".** Search engines moved past density two decades ago. A score out of 100 invites optimising for the grader rather than the reader — the failure mode these commercial tools encourage.
 - **Bundling a headless browser.** It would enable a handful of checks and cost the thing that makes this usable: `npx`, no install, runs anywhere.
+- **Anything built on `<h2>`, and the absence of a Twitter card.** Both are
+  parsed and read by no check, which looked like an opportunity until it was
+  examined. Every check `h2` can support is a style opinion — "a long page with
+  no subheadings" — and `heading-skip` already reports the structural fact. A
+  missing `twitter:card` falls back to Open Graph correctly, so reporting its
+  absence would invent a defect. They stay parsed and unread deliberately; that
+  is now a decision rather than an oversight.
 - **Ranking or backlink data.** That needs an index and a crawler at a scale this cannot approach. Ahrefs and Search Console already do it, free.
