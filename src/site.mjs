@@ -509,11 +509,27 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
         `${target} answers ${res.status}.`, from));
       continue;
     }
+    if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) continue;
+    const targetDoc = parseHtml(res.body, target);
+
+    // The target loads, and it says not to index it. A canonical is a request
+    // to index B in place of A, so A follows B out of the index and takes the
+    // page that was actually meant to rank with it. Nothing on A shows this:
+    // its own markup is correct, and the instruction that removes it lives on
+    // a different page — or, worse, in a header that no view-source reveals.
+    const targetRobots = `${targetDoc.robots ?? ''} ${res.headers?.get?.('x-robots-tag') ?? ''}`;
+    if (/noindex/i.test(targetRobots)) {
+      out.push(f('error', 'canonical-noindex', 'Canonical points at a noindexed page',
+        `${target} is noindex ("${targetRobots.trim()}"), and ${from} hands its indexing over to it. ` +
+          'Both pages leave the index: the target because it asked to, and this one because it named ' +
+          'the target as the version to keep.', from));
+      continue;
+    }
+
     // The target loads — but does it claim to be canonical itself? A → B where
     // B hands off to C makes Google follow a chain it is under no obligation to
     // follow, and the page that started it can end up consolidated nowhere.
-    if (!/text\/html/i.test(res.headers.get('content-type') ?? '')) continue;
-    const theirs = parseHtml(res.body, target).canonical?.[0];
+    const theirs = targetDoc.canonical?.[0];
     if (theirs && theirs.replace(/\/$/, '') !== target.replace(/\/$/, '')) {
       out.push(f('warn', 'canonical-chain', 'Canonical points at a page that canonicals somewhere else',
         `${from} → ${target} → ${theirs}. Google is not obliged to follow a chain; point the first ` +

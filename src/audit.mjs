@@ -263,7 +263,17 @@ export async function audit(target, opts = {}) {
   onProgress?.({ phase: 'crawl', detail: `${pages.length} pages in ${((Date.now() - started) / 1000).toFixed(1)}s` });
 
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
-  findings.push(...crossPageChecks(pages));
+  // Click depth is measured from the homepage, and a sitemap need not list it.
+  // Fetched here only when the crawl did not already have it, and the fetcher
+  // caches, so the site checks below pay nothing for it.
+  let home = null;
+  if (!pages.some((p) => p.doc && p.res.ok && new URL(p.url).pathname.replace(/\/$/, '') === '')) {
+    const { final } = await fetcher.chain(origin);
+    if (final.ok && /text\/html/i.test(final.headers.get('content-type') ?? '')) {
+      home = { url: final.url, doc: parseHtml(final.body, final.url) };
+    }
+  }
+  findings.push(...crossPageChecks(pages, { limits: opts.limits, truncated, home }));
   findings.push(...sitemapChecks(entries, source, Date.now(), files));
   findings.push(...expectationChecks(pages, opts.expect));
   onProgress?.({ phase: 'checks', detail: `${findings.length} findings from the pages themselves` });

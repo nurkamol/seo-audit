@@ -22,6 +22,7 @@ export const DEFAULT_LIMITS = {
   descMax: 160,
   thinWords: 300,
   slowMs: 800,
+  maxClickDepth: 4,
 };
 
 // --- Alt text ---------------------------------------------------------------
@@ -229,6 +230,40 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   }
   if (!doc.lang) out.push(f('warn', 'lang-missing', 'No lang attribute on <html>', 'Screen readers and Google both use it.', url));
   if (!doc.viewport) out.push(f('error', 'viewport-missing', 'No viewport meta', 'The page will not render correctly on phones.', url));
+  else {
+    // The tag is there, so nothing reports it — but what it *says* is read by
+    // nobody until a phone renders the page. Two of its settings are checked
+    // here, both facts rather than preferences.
+    const viewport = Object.fromEntries(
+      doc.viewport.split(/[;,]/).map((part) => {
+        const [k, v] = part.split('=');
+        return [k?.trim().toLowerCase() ?? '', v?.trim().toLowerCase() ?? ''];
+      }),
+    );
+
+    // Pinch-to-zoom, switched off. WCAG 1.4.4 asks for text to reach 200%, and
+    // a maximum-scale under 2 forbids exactly that. iOS has ignored the tag
+    // since Safari 10, which is why the mistake survives: it is invisible to
+    // whoever tested it on their own phone, and Android honours it.
+    const maxScale = Number.parseFloat(viewport['maximum-scale']);
+    const locked = ['no', '0'].includes(viewport['user-scalable']);
+    if (locked || (Number.isFinite(maxScale) && maxScale < 2)) {
+      out.push(f('warn', 'viewport-locked', 'Viewport blocks zooming',
+        `"${doc.viewport}" — ${locked ? 'user-scalable is off' : `maximum-scale is ${maxScale}`}, so text ` +
+          'cannot be enlarged to the 200% WCAG 1.4.4 asks for. Safari has ignored this since iOS 10, so it ' +
+          'looks fine on an iPhone and blocks zoom everywhere else.', url));
+    }
+
+    // A pixel width is a desktop layout announced to a phone: the browser lays
+    // the page out that wide and scales the result down. Google indexes what
+    // the mobile crawler renders, and that is the shrunken version.
+    const width = viewport.width;
+    if (width && width !== 'device-width' && /^\d+$/.test(width)) {
+      out.push(f('warn', 'viewport-fixed-width', 'Viewport declares a fixed width',
+        `"${doc.viewport}" — width=${width} lays the page out ${width}px wide on every phone and scales ` +
+          'it down to fit. width=device-width is what makes a responsive layout responsive.', url));
+    }
+  }
 
   // --- Canonical ----------------------------------------------------------
   if (doc.canonical.length === 0) {
@@ -596,7 +631,8 @@ export function sitemapChecks(entries, source, now = Date.now(), files = []) {
 }
 
 /** Checks that need every page at once. */
-export function crossPageChecks(pages) {
+export function crossPageChecks(pages, opts = {}) {
+  const LIMITS = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) };
   const out = [];
   const live = pages.filter((p) => p.doc && p.res.ok);
 
@@ -631,6 +667,98 @@ export function crossPageChecks(pages) {
     if (!isHome && !linkedTo.has(p.url.replace(/\/$/, ''))) {
       out.push(f('warn', 'orphan-page', 'Nothing links to this page',
         'It is in the sitemap, but no other page links to it — so it collects no internal authority.', p.url));
+    }
+  }
+
+  // --- Click depth --------------------------------------------------------
+  // How many links from the homepage a page actually is. An orphan is the
+  // extreme of this — nothing links to it at all — and it was the only part of
+  // the shape being reported. A page five clicks down has the same illness
+  // milder: Google finds it late, crawls it rarely, and passes it almost
+  // nothing, while every single-page grader calls it perfect.
+  //
+  // The graph is the one already built above, so this costs no requests.
+  //
+  // The root is the homepage, and a sitemap is under no obligation to list it:
+  // eslint.org's names 499 URLs and not the one every visitor starts from. The
+  // caller may hand one over for exactly that case; it is a root to measure
+  // from, never a page to report on.
+  const key = (u) => withoutSlash((u ?? '').split('#')[0]);
+  const home =
+    live.find((p) => new URL(p.url).pathname.replace(/\/$/, '') === '') ??
+    (opts.home?.doc ? opts.home : null);
+  if (home) {
+    const crawled = new Map(live.map((p) => [key(p.url), p]));
+    if (!crawled.has(key(home.url))) crawled.set(key(home.url), home);
+    const depth = new Map([[key(home.url), 0]]);
+    const cameFrom = new Map();
+    // Breadth first, so the first time a page is reached is by its shortest
+    // path — which is the number being reported, and the route worth printing.
+    for (let frontier = [key(home.url)]; frontier.length; ) {
+      const next = [];
+      for (const at of frontier) {
+        for (const href of crawled.get(at)?.doc.links.internal ?? []) {
+          const to = key(href);
+          if (!crawled.has(to) || depth.has(to)) continue;
+          depth.set(to, depth.get(at) + 1);
+          cameFrom.set(to, at);
+          next.push(to);
+        }
+      }
+      frontier = next;
+    }
+
+    // Pages with no path from home at all. A few are a finding. A lot means the
+    // navigation is built by JavaScript and this tool cannot see it — and then
+    // every depth here is wrong, so none of them is worth printing. Google
+    // renders, so it can follow those links; the honest report is that the
+    // question was not answered, not a page of invented findings.
+    const stranded = live.filter((p) => !depth.has(key(p.url)));
+    const unreadable = live.length >= 5 && stranded.length > live.length * 0.3;
+
+    if (opts.truncated > 0 || unreadable) {
+      out.push(f('info', 'click-depth-skipped', 'Click depth was not measured',
+        opts.truncated > 0
+          ? `The crawl stopped ${opts.truncated} page(s) short of the whole site, so the links between ` +
+            'the pages that were fetched are a fragment of the real graph. A distance measured across ' +
+            'a fragment is not the distance, so it is not reported. Raise --limit to measure it.'
+          : `${stranded.length} of ${live.length} crawled pages have no chain of links from the homepage ` +
+            'reaching them, which is what a JavaScript-built navigation looks like to something that ' +
+            'reads HTML. Google renders and can follow those links, so the depths here would be wrong ' +
+            'rather than alarming, and are not reported.',
+        home.url));
+    } else {
+      // Linked from somewhere, yet no route from the homepage — the page is
+      // reachable only from another page that is itself unreachable. Orphans
+      // are excluded: nothing links to those, which is already reported, and
+      // saying it twice about one page helps nobody.
+      for (const p of stranded) {
+        if (!linkedTo.has(key(p.url))) continue;
+        out.push(f('warn', 'no-path-from-home', 'No path from the homepage to this page',
+          'Something links to it, but no chain of links starting at the homepage arrives — it hangs off ' +
+            'a page that is itself unreachable. A crawler that has not been handed the sitemap never ' +
+            'finds it, and it inherits nothing from the pages that rank.', p.url));
+      }
+
+      const routeTo = (k) => {
+        const hops = [];
+        for (let at = k; at !== undefined; at = cameFrom.get(at)) hops.unshift(new URL(at).pathname || '/');
+        return hops.join(' → ');
+      };
+      const deep = live
+        .filter((p) => depth.get(key(p.url)) > LIMITS.maxClickDepth)
+        .sort((a, b) => depth.get(key(b.url)) - depth.get(key(a.url)));
+      for (const p of deep.slice(0, 20)) {
+        const clicks = depth.get(key(p.url));
+        out.push(f('info', 'deep-page', `${clicks} clicks from the homepage`,
+          `${routeTo(key(p.url))} — the shortest route in. Anything worth ranking is usually worth ` +
+            `reaching in ${LIMITS.maxClickDepth}.`, p.url));
+      }
+      if (deep.length > 20) {
+        out.push(f('info', 'deep-page-more', `${deep.length - 20} more pages are over ${LIMITS.maxClickDepth} clicks deep`,
+          `${deep.length} of ${live.length} crawled pages sit deeper than ${LIMITS.maxClickDepth} clicks. ` +
+            'The first 20 are listed above, deepest first.', home.url));
+      }
     }
   }
 

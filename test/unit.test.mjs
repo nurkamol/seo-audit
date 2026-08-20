@@ -302,6 +302,60 @@ test('an og:image behind hotlink protection is not called broken', async () => {
   assert.ok(!out.some((f) => f.id === 'og-image-broken'));
 });
 
+// --- canonical targets ----------------------------------------------------
+
+const canonicalTo = (origin, target) => [{
+  url: `${origin}/p/`,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: { links: { internal: [], inMain: [], external: [] }, canonical: [target], og: {}, hreflang: [], images: [] },
+}];
+
+const canonicalTargetIds = async (target) => {
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (url === `${origin}/real/` ? target : notFound(url))),
+    canonicalTo(origin, `${origin}/real/`),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  return ids(out);
+};
+
+test('a canonical pointing at a noindexed page is an error', async () => {
+  // The page that started it has correct markup, so nothing on it reads as
+  // wrong — and it leaves the index anyway, because it named a page that asked
+  // not to be indexed as the version to keep.
+  const found = await canonicalTargetIds({
+    body: '<html><head><meta name="robots" content="noindex,follow"></head><body></body></html>',
+  });
+  assert.ok(found.includes('canonical-noindex'));
+});
+
+test('a canonical target noindexed by header only is caught too', async () => {
+  // The half no view-source shows: nothing in the target's HTML says noindex.
+  const found = await canonicalTargetIds({
+    headers: { 'content-type': 'text/html', 'x-robots-tag': 'noindex' },
+    body: '<html><head></head><body></body></html>',
+  });
+  assert.ok(found.includes('canonical-noindex'));
+});
+
+test('a canonical pointing at an indexable page is not reported', async () => {
+  const found = await canonicalTargetIds({
+    body: '<html><head><link rel="canonical" href="https://x.test/real/"><meta name="robots" content="index,follow"></head></html>',
+  });
+  assert.ok(!found.includes('canonical-noindex'));
+  assert.ok(!found.includes('canonical-chain'), 'a target that claims itself is not a chain');
+});
+
+test('"noindex" inside another word does not make a target noindexed', async () => {
+  // A robots value the tool has no opinion about must stay silent.
+  const found = await canonicalTargetIds({
+    body: '<html><head><meta name="robots" content="max-image-preview:large"></head></html>',
+  });
+  assert.ok(!found.includes('canonical-noindex'));
+});
+
 // --- TLS certificates -----------------------------------------------------
 
 const NOW_TLS = Date.parse('2026-06-01T00:00:00Z');
@@ -445,6 +499,126 @@ test('findings are aggregated, so a big map does not produce a wall', async () =
   assert.equal(dead.length, 1, 'one finding, not twelve');
   assert.match(dead[0].title, /12 old URL/);
   assert.match(dead[0].detail, /and 9 more/);
+});
+
+// --- click depth ----------------------------------------------------------
+
+const origin = 'https://depth.test';
+const node = (path, links = []) => ({
+  url: `${origin}${path}`,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: {
+    links: { internal: links.map((l) => `${origin}${l}`), inMain: [], external: [] },
+    canonical: [`${origin}${path}`],
+    og: {},
+    hreflang: [],
+    images: [],
+  },
+});
+
+// A corridor: every page links only to the next one.
+const corridor = ['/', '/a/', '/b/', '/c/', '/d/', '/e/'].map((path, i, all) =>
+  node(path, all[i + 1] ? [all[i + 1]] : []),
+);
+
+test('a page deeper than the threshold is reported, with the route that reaches it', () => {
+  const deep = crossPageChecks(corridor).filter((finding) => finding.id === 'deep-page');
+  assert.equal(deep.length, 1, 'only /e/ is past four clicks');
+  assert.equal(deep[0].url, `${origin}/e/`);
+  assert.equal(deep[0].level, 'info', 'depth is sometimes deliberate — never an error');
+  assert.match(deep[0].title, /^5 clicks/);
+  assert.match(deep[0].detail, /\/ → \/a → \/b → \/c → \/d → \/e/);
+});
+
+test('the threshold moves with the config', () => {
+  const ids2 = (limits) => ids(crossPageChecks(corridor, { limits })).filter((id) => id === 'deep-page');
+  assert.deepEqual(ids2({ maxClickDepth: 5 }), [], 'five clicks allowed means five clicks is fine');
+  assert.equal(ids2({ maxClickDepth: 2 }).length, 3, '/c/, /d/ and /e/ are past two');
+});
+
+test('depth is the shortest route in, not the first one found', () => {
+  // The footer link every site has: the deep page is also one click from home.
+  const withFooterLink = corridor.map((p) =>
+    p.url === `${origin}/`
+      ? node('/', ['/a/', '/e/'])
+      : p,
+  );
+  assert.ok(!ids(crossPageChecks(withFooterLink)).includes('deep-page'));
+});
+
+test('a page reachable only from an unreachable page is reported', () => {
+  const pages = [
+    node('/', ['/a/', '/b/', '/c/', '/d/', '/e/', '/f/']),
+    ...['/a/', '/b/', '/c/', '/d/', '/e/', '/f/'].map((path) => node(path)),
+    node('/stranded/', ['/child/']),
+    node('/child/'),
+  ];
+  const found = crossPageChecks(pages);
+  const stranded = found.filter((finding) => finding.id === 'no-path-from-home');
+  assert.equal(stranded.length, 1);
+  assert.equal(stranded[0].url, `${origin}/child/`);
+  // The page nothing links to is already an orphan; saying both about one page
+  // twice helps nobody.
+  assert.ok(!found.some((f) => f.id === 'no-path-from-home' && f.url === `${origin}/stranded/`));
+  assert.ok(found.some((f) => f.id === 'orphan-page' && f.url === `${origin}/stranded/`));
+});
+
+test('a link graph with no paths in it is declined rather than reported', () => {
+  // What a JavaScript-built navigation looks like to something reading HTML:
+  // the homepage appears to link nowhere. Every depth would then be wrong, and
+  // a page of invented findings is the one failure this tool cannot afford.
+  const pages = [node('/'), ...['/a/', '/b/', '/c/', '/d/', '/e/'].map((path) => node(path))];
+  const found = ids(crossPageChecks(pages));
+  assert.ok(found.includes('click-depth-skipped'));
+  assert.ok(!found.includes('deep-page'));
+  assert.ok(!found.includes('no-path-from-home'));
+});
+
+test('a truncated crawl measures no depth at all', () => {
+  // Two hundred URLs of thirty thousand is a fragment of the graph, and a
+  // distance measured across a fragment is not the distance.
+  const found = crossPageChecks(corridor, { truncated: 12 });
+  const skipped = found.find((finding) => finding.id === 'click-depth-skipped');
+  assert.ok(skipped);
+  assert.match(skipped.detail, /12 page\(s\) short/);
+  assert.ok(!found.some((finding) => finding.id === 'deep-page'));
+});
+
+test('a crawl that never fetched the homepage says nothing about depth', () => {
+  const found = ids(crossPageChecks(corridor.slice(1)));
+  assert.ok(!found.includes('deep-page'));
+  assert.ok(!found.includes('click-depth-skipped'), 'no homepage is not a measurement worth explaining');
+});
+
+test('a homepage handed in separately is a root, not a page to report on', () => {
+  // eslint.org's sitemap lists 499 URLs and not the homepage. Without a root
+  // there is no depth to measure, so the audit fetches one — and it must not
+  // then be judged as a crawled page.
+  const [homeNode, ...rest] = corridor;
+  const found = crossPageChecks(rest, { home: homeNode });
+  const deep = found.filter((finding) => finding.id === 'deep-page');
+  assert.equal(deep.length, 1);
+  assert.equal(deep[0].url, `${origin}/e/`);
+  assert.ok(!found.some((finding) => finding.url === `${origin}/`), 'the root is not audited');
+  // /a/ is linked only by the homepage, which is not in the crawl — the root
+  // still counts as a link in, so it is not an orphan.
+  assert.ok(!found.some((finding) => finding.id === 'no-path-from-home'));
+});
+
+test('a long tail of deep pages is capped and counted', () => {
+  const tail = Array.from({ length: 25 }, (_, i) => `/deep-${i}/`);
+  const pages = [
+    node('/', ['/a/']),
+    node('/a/', ['/b/']),
+    node('/b/', ['/c/']),
+    node('/c/', ['/d/']),
+    node('/d/', tail),
+    ...tail.map((path) => node(path)),
+  ];
+  const found = crossPageChecks(pages);
+  assert.equal(found.filter((finding) => finding.id === 'deep-page').length, 20);
+  const more = found.find((finding) => finding.id === 'deep-page-more');
+  assert.match(more.title, /^5 more pages/);
 });
 
 // --- categories -----------------------------------------------------------
@@ -1457,6 +1631,35 @@ test('a page missing the basics reports each one', () => {
   assert.ok(found.includes('viewport-missing'));
   assert.ok(found.includes('lang-missing'));
   assert.ok(found.includes('canonical-missing'));
+});
+
+test('a viewport that blocks zooming is reported; one that allows it is not', () => {
+  const withViewport = (content) =>
+    ids(pageChecks(page(`<html lang="en"><head><meta name="viewport" content="${content}"></head><body><main><h1>x</h1></main></body></html>`)));
+
+  assert.ok(withViewport('width=device-width, initial-scale=1, user-scalable=no').includes('viewport-locked'));
+  assert.ok(withViewport('width=device-width, user-scalable=0').includes('viewport-locked'));
+  assert.ok(withViewport('width=device-width, initial-scale=1, maximum-scale=1').includes('viewport-locked'));
+  assert.ok(withViewport('width=device-width, initial-scale=1, maximum-scale=1.0').includes('viewport-locked'));
+
+  // The half that matters: the ordinary responsive tag, and a maximum-scale
+  // high enough to reach the 200% WCAG asks for, say nothing.
+  assert.ok(!withViewport('width=device-width, initial-scale=1').includes('viewport-locked'));
+  assert.ok(!withViewport('width=device-width, initial-scale=1, maximum-scale=5').includes('viewport-locked'));
+  assert.ok(!withViewport('width=device-width, initial-scale=1, user-scalable=yes').includes('viewport-locked'));
+});
+
+test('a fixed-width viewport is reported; width=device-width is not', () => {
+  const withViewport = (content) =>
+    ids(pageChecks(page(`<html lang="en"><head><meta name="viewport" content="${content}"></head><body><main><h1>x</h1></main></body></html>`)));
+
+  assert.ok(withViewport('width=1024').includes('viewport-fixed-width'));
+  assert.ok(withViewport('width=980, initial-scale=1').includes('viewport-fixed-width'));
+
+  assert.ok(!withViewport('width=device-width, initial-scale=1').includes('viewport-fixed-width'));
+  // No width at all is a different finding than the wrong width, and this one
+  // must not invent it.
+  assert.ok(!withViewport('initial-scale=1').includes('viewport-fixed-width'));
 });
 
 test('an image with no alt attribute is an error; alt="" is not', () => {

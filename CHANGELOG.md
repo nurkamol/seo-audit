@@ -5,6 +5,84 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-08-21
+
+### Added
+- **`deep-page`, `no-path-from-home`, `click-depth-skipped`** — how many links
+  from the homepage each page actually is, measured over the link graph the
+  crawl already built. No extra requests, except one for the homepage when the
+  sitemap does not list it.
+
+  `orphan-page` was reporting the extreme of this shape — nothing links here at
+  all — and nothing was reporting the milder version, which is far more common:
+  a page five clicks down is found late, crawled rarely, and passed almost
+  nothing, while reading as perfect to every grader that opens one URL. The
+  shortest route in is printed with the finding, because "five clicks" is a
+  complaint and `/ → /docs → /docs/deployment → /docs/deployment/automated →
+  /docs/continuous-integration/travis-ci` is a thing to go and fix. Default
+  threshold is four clicks, configurable as `limits.maxClickDepth`.
+
+  `no-path-from-home` is the page that is linked, but only from a page that is
+  itself unreachable — it hangs off an orphan. Nothing reached it by following
+  links from the homepage, so a crawler that has not been handed the sitemap
+  never arrives. Orphans themselves are excluded: that is already a finding,
+  and one page is not two problems.
+
+  Level is `info` for depth, because depth is sometimes deliberate — an archive
+  page four levels down is doing its job.
+
+  **The measurement is declined rather than guessed at in two cases**, both
+  reported as `click-depth-skipped` with the reason:
+
+  - The crawl was truncated by `--limit`. Two hundred URLs of thirty thousand
+    is a fragment of the graph, and a distance measured across a fragment is
+    not the distance.
+  - More than 30% of crawled pages have no path from the homepage. That is
+    what a JavaScript-built navigation looks like to something that reads
+    HTML — and Google renders, so it follows those links fine. eslint.org is
+    the case that produced this guard: 464 of its 499 pages look unreachable
+    from static HTML, and without it this would have invented 464 findings
+    about a site whose navigation works.
+
+  Verified against jekyllrb.com, where every hop of a reported route was
+  confirmed by hand in the live HTML and no shorter route existed.
+
+- **`canonical-noindex`** — a canonical pointing at a page that asks not to be
+  indexed. The canonical sweep already fetched and parsed the target to check
+  it was not a redirect, a 404, or the start of a chain; it never read what the
+  target says about indexing.
+
+  A canonical is a request to index B in place of A. If B is `noindex`, both
+  pages leave: B because it asked to, and A because it named B as the version
+  to keep. Nothing on A shows this. Its own markup is correct, its own robots
+  meta says `index`, and the instruction that removes it lives on a different
+  page — or in an `X-Robots-Tag` header on that page, which no view-source
+  reveals. Both sources are read, exactly as they are for the page's own
+  `noindex` and `x-robots-noindex`.
+
+  Reported once per target, matching `canonical-dead` and `canonical-redirects`
+  — a paginated archive canonicalling forty pages at one dead parent is one
+  problem, not forty. A target that is both `noindex` and canonicalled onward
+  reports the `noindex`, since the chain is the smaller half of that.
+
+  Silent across smashingmagazine.com's four real cross-page canonicals, all of
+  which point at indexable targets.
+
+- **`viewport-locked`** — `user-scalable=no`, or a `maximum-scale` under 2, in
+  a viewport that was previously only checked for existing. Text cannot then
+  reach the 200% WCAG 1.4.4 asks for. Safari has ignored the setting since iOS
+  10, which is why it survives: it looks fine on the iPhone of whoever tested
+  it, and blocks zoom everywhere else. lufthansa.com ships it today, with
+  `content` written before `name` — the reversed attribute order the parser
+  had to handle to see it at all.
+
+- **`viewport-fixed-width`** — `width=1024` where `width=device-width` belongs.
+  A pixel width is a desktop layout announced to a phone: the browser lays the
+  page out that wide and scales the result down, and Google indexes what its
+  mobile crawler rendered. Only an explicit number fires it; a viewport with no
+  `width` key at all — `initial-scale=1,user-scalable=yes`, which is what
+  wikipedia.org serves — is a different question and stays silent.
+
 ## [1.10.1] — 2026-08-17
 
 ### Fixed

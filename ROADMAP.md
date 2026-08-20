@@ -4,16 +4,43 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Empty, and deliberately so. The check table covers what a `fetch` loop can
-honestly verify, and the structural work — a portfolio, a crawl that does not
-need a sitemap, a redirect map — is done.
+Nothing committed, and one lesson from 1.11.0 worth recording: the room left is
+not in fetching more, it is in reading what has already been fetched. Click
+depth cost no requests — the link graph had been in memory since 0.3.0, and
+only its extreme case, the orphan, was being reported. The viewport string has
+been parsed and kept since the first commit, and was only ever tested for
+existing.
+
+The one candidate that follows from that is **anchor text**, which `parse.mjs`
+throws away today: a link with no text at all — an icon with no `alt` — tells
+Google nothing about where it goes and reads a URL aloud to a screen reader.
+That is a fact rather than a preference, which is the bar. It is the only item
+here that needs a change to the parser, so it is not free the way the others
+were.
 
 What is left in **Later** needs either a headless browser or an index, and both
-are refused below for reasons that have not changed. The honest next move is
-running this against more real sites and fixing what it gets wrong, which is
-how every check here earned its place.
+are refused below for reasons that have not changed. Beyond that, the honest
+move is still running this against more real sites and fixing what it gets
+wrong, which is how every check here earned its place — 1.11.0's guard against
+unreadable link graphs exists because eslint.org would otherwise have been
+handed 464 findings about navigation that works.
 
 ## Shipped
+
+- **Click depth** (1.11.0) — how many links from the homepage every page
+  actually is, over the graph the crawl already built, with the shortest route
+  printed alongside the number. `orphan-page` had been reporting the extreme of
+  this shape since 0.3.0 and nothing reported the common one. Declines to
+  measure rather than guess when the crawl was truncated, or when a JavaScript
+  navigation leaves most pages with no path through the HTML.
+- **A canonical pointing at a noindexed page** (1.11.0) — the sweep already
+  fetched and parsed the target to check it was not a redirect or a 404, and
+  never read what it says about indexing. Both pages leave the index, and the
+  page that started it has faultless markup.
+- **A viewport that blocks zooming, or fixes a pixel width** (1.11.0) — the tag
+  was checked for existing and never read. Safari has ignored `user-scalable=no`
+  since iOS 10, which is why it survives on sites whose owners tested on an
+  iPhone.
 
 - **A prompt when run with no arguments** (1.5.0) — asks for a URL, then prints the one-liner it assembled and runs that. Never fires unless both streams are a terminal.
 - **TLS certificate expiry** (1.5.0) — a warning inside 14 days, an error after. Reads the certificate without validating it, because an expired one fails the handshake and would otherwise go unreported.

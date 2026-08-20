@@ -169,6 +169,7 @@ const CATEGORY_OF = {
   'canonical-other': 'Indexability', 'canonical-dead': 'Indexability',
   'canonical-redirects': 'Indexability', 'soft-404': 'Indexability',
   'canonical-chain': 'Indexability', 'robots-conflict': 'Indexability',
+  'canonical-noindex': 'Indexability',
 
   // Content
   'title-missing': 'Content', 'title-long': 'Content', 'title-short': 'Content',
@@ -176,9 +177,12 @@ const CATEGORY_OF = {
   'h1-missing': 'Content', 'h1-multiple': 'Content', 'heading-skip': 'Content',
   'thin-content': 'Content', 'duplicate-title': 'Content', 'duplicate-description': 'Content',
   'lang-missing': 'Content', 'charset-missing': 'Content', 'viewport-missing': 'Content',
+  'viewport-locked': 'Content', 'viewport-fixed-width': 'Content',
 
   // Links
   'broken-link': 'Links', 'orphan-page': 'Links', 'no-editorial-links': 'Links',
+  'deep-page': 'Links', 'deep-page-more': 'Links', 'no-path-from-home': 'Links',
+  'click-depth-skipped': 'Links',
   'link-redirects': 'Links', 'link-sweep-capped': 'Links', 'internal-nofollow': 'Links',
   'missing-from-sitemap': 'Links', 'missing-from-sitemap-more': 'Links',
   'external-broken': 'Links', 'external-redirects': 'Links', 'external-sweep-capped': 'Links',

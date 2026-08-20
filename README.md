@@ -321,7 +321,7 @@ Drop a `seo-audit.config.json` next to where you run it:
   given on the command line replace this list entirely, which is how you audit
   a subset.
 - **`limits`** — thresholds this site disagrees with: `titleMin`, `titleMax`,
-  `descMin`, `descMax`, `thinWords`, `slowMs`.
+  `descMin`, `descMax`, `thinWords`, `slowMs`, `maxClickDepth`.
 - **`maxLinkChecks`** — how many distinct link targets the site-wide sweep
   fetches, default 200. The sweep checks every internal link on every crawled
   page, so a large site can present thousands of targets; this bounds the run.
@@ -414,7 +414,10 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Meta description present, 70–160 characters | warning |
 | Exactly one `<h1>` | error / warning |
 | `lang` attribute and viewport meta | warning / error |
+| The viewport doesn't block zooming — `user-scalable=no` or a `maximum-scale` under 2 forbids the 200% WCAG 1.4.4 asks for, and Safari has ignored it since iOS 10 | warning |
+| The viewport isn't a fixed pixel width — `width=1024` lays the page out that wide on a phone and scales it down, and that is what Google indexes | warning |
 | Canonical present, single, self-referencing | warning / error / note |
+| The canonical target isn't `noindex` — a page that hands its indexing to one leaves the index with it | error |
 | The canonical target isn't itself canonicalised elsewhere — Google needn't follow a chain | warning |
 | `og:title`, `og:description`, `og:image` present | warning |
 | `og:image` is an absolute URL — a scraper has no page to resolve a relative one against | error |
@@ -451,6 +454,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Something in the `hreflang` set is an `x-default` | note |
 | Pages carry the schema types `expect` says they should | error |
 | No page is an orphan — in the sitemap but linked from nowhere | warning |
+| Every page is within four clicks of the homepage, counted over the links actually in the HTML | note |
+| Every page has *some* path from the homepage — one that hangs off an unreachable page is only found by handing Google the sitemap | warning |
 
 ### Whole site
 
@@ -530,7 +535,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.10.1` | Exactly that release, forever |
+| `@v1.11.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.
