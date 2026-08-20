@@ -182,7 +182,8 @@ const CATEGORY_OF = {
   // Links
   'broken-link': 'Links', 'orphan-page': 'Links', 'no-editorial-links': 'Links',
   'deep-page': 'Links', 'deep-page-more': 'Links', 'no-path-from-home': 'Links',
-  'click-depth-skipped': 'Links',
+  'click-depth-skipped': 'Links', 'link-no-text': 'Links', 'link-no-text-more': 'Links',
+  'anchor-generic': 'Links', 'anchor-generic-more': 'Links',
   'link-redirects': 'Links', 'link-sweep-capped': 'Links', 'internal-nofollow': 'Links',
   'missing-from-sitemap': 'Links', 'missing-from-sitemap-more': 'Links',
   'external-broken': 'Links', 'external-redirects': 'Links', 'external-sweep-capped': 'Links',
@@ -466,7 +467,7 @@ export function diffReport({ added, fixed, unchanged, previousDate }) {
  *  A report that needs the network to render is a report that renders blank in
  *  an email client, on a plane, or in three years' time when the CDN is gone.
  */
-export function html(findings, meta) {
+export function html(findings, meta, { backHref, backLabel = 'New audit' } = {}) {
   const n = counts(findings);
   const esc = (s) =>
     String(s ?? '')
@@ -583,6 +584,14 @@ export function html(findings, meta) {
     font: 500 12px/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     color: var(--faint); font-variant-numeric: tabular-nums;
   }
+  /* Only rendered when a caller has somewhere to go back to — a report saved
+     to disk does not. */
+  .back {
+    font: 500 12px/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--faint); text-decoration: none; margin-left: auto; margin-right: 1rem;
+  }
+  .back:hover { color: var(--fg); }
+  @media print { .back { display: none; } }
 
   h1 {
     font-size: 1.75rem; line-height: 1.2; font-weight: 600;
@@ -727,6 +736,7 @@ export function html(findings, meta) {
 <main>
   <div class="bar">
     <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+    ${backHref ? `<a class="back" href="${esc(backHref)}">← ${esc(backLabel)}</a>` : ''}
     <span class="stamp">${esc(meta.date)}</span>
   </div>
 

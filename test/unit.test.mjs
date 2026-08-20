@@ -621,6 +621,149 @@ test('a long tail of deep pages is capped and counted', () => {
   assert.match(more.title, /^5 more pages/);
 });
 
+// --- anchor text ----------------------------------------------------------
+
+test('a link is named by its text, its image alt, aria-label, title or svg title', () => {
+  const doc = parseHtml(
+    `<main>
+       <a href="/a/">Read more</a>
+       <a href="/b/"><img src="/i.png" alt="The reformer class"></a>
+       <a href="/c/" aria-label="Book a class"><svg></svg></a>
+       <a href="/d/" title="Timetable"><span></span></a>
+       <a href="/e/"><svg><title>Instagram</title></svg></a>
+       <a href="/f/">Tea &amp; Cake</a>
+     </main>`,
+    'https://x.test/p/',
+  );
+  assert.deepEqual(
+    doc.links.anchorTexts.map((a) => a.name),
+    ['Read more', 'The reformer class', 'Book a class', 'Timetable', 'Instagram', 'Tea & Cake'],
+  );
+});
+
+test('a link with no name by any of those routes has none', () => {
+  const doc = parseHtml(
+    `<main>
+       <a href="/icon/"><i class="icon-twitter"></i></a>
+       <a href="/thumb/"><img src="/i.png" alt=""></a>
+     </main>`,
+    'https://x.test/p/',
+  );
+  assert.deepEqual(doc.links.anchorTexts.map((a) => a.name), ['', '']);
+});
+
+test('a label bound by a framework is a label the author supplied', () => {
+  // The trap that made img-alt report twenty-four of allbirds.com's images as
+  // missing alt. The value cannot be read from here; calling it unlabelled is
+  // guessing wrong.
+  for (const bound of [
+    '<a href="/a/"><img src="/i.png" :alt="item.title"></a>',
+    '<a href="/a/" :aria-label="label"><svg></svg></a>',
+    '<a href="/a/" [ariaLabel]="label"><svg></svg></a>',
+    '<a href="/a/" [attr.aria-label]="label"><svg></svg></a>',
+  ]) {
+    const doc = parseHtml(`<main>${bound}</main>`, 'https://x.test/p/');
+    assert.ok(doc.links.anchorTexts[0].name, `${bound} should count as labelled`);
+  }
+});
+
+test('anchors off the site, to a fragment, or to the page itself are not collected', () => {
+  const doc = parseHtml(
+    `<main>
+       <a href="https://elsewhere.test/">off site</a>
+       <a href="#top">skip to top</a>
+       <a href="/p/">this very page</a>
+       <a href="mailto:hi@x.test">mail</a>
+       <a href="/real/">a real one</a>
+     </main>`,
+    'https://x.test/p/',
+  );
+  assert.deepEqual(doc.links.anchorTexts, [{ href: 'https://x.test/real/', name: 'a real one' }]);
+});
+
+const linksWith = (url, html) => ({
+  url,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: { ...parseHtml(html, url), hreflang: [], og: {}, images: [] },
+});
+
+test('a destination linked with no words at all is reported once, not once per page', () => {
+  // The ones that exist are nearly always in a footer, and the same social icon
+  // on two hundred pages is one thing to fix.
+  const pages = ['/a/', '/b/', '/c/'].map((path) =>
+    linksWith(`https://x.test${path}`, '<main><a href="/contact/"><i class="icon-mail"></i></a></main>'),
+  );
+  const found = crossPageChecks(pages).filter((finding) => finding.id === 'link-no-text');
+  assert.equal(found.length, 1, 'one destination, one finding');
+  assert.match(found[0].detail, /3 page\(s\)/);
+  assert.match(found[0].detail, /https:\/\/x\.test\/contact/);
+});
+
+test('a thumbnail beside a headline is not a link with nothing to read', () => {
+  // The card: an image with an emptied alt and the headline next to it are two
+  // links to one article. elementor.com's blog index has twenty-three, and
+  // reporting them would be a true observation with a false conclusion — the
+  // headline says exactly what the article is.
+  const index = linksWith(
+    'https://x.test/blog/',
+    `<main>
+       <a href="/post/"><img src="/thumb.png" alt=""></a>
+       <a href="/post/">Phoenix here we come</a>
+     </main>`,
+  );
+  assert.ok(!ids(crossPageChecks([index])).includes('link-no-text'));
+});
+
+test('a trailing slash does not make one destination look like two', () => {
+  // wordpress.org/education names Campus Connect three times at
+  // `/campus-connect/` and once, wordlessly, at `/campus-connect`. Matching the
+  // href strings called a page with three good links unreadable.
+  const page = linksWith(
+    'https://x.test/education/',
+    `<main>
+       <a href="/campus-connect/">Campus Connect</a>
+       <a href="/campus-connect"><img src="/i.png" alt=""></a>
+     </main>`,
+  );
+  assert.ok(!ids(crossPageChecks([page])).includes('link-no-text'));
+});
+
+test('a link with words is not reported as having none', () => {
+  const pages = [
+    linksWith('https://x.test/a/', '<main><a href="/contact/">Talk to us</a></main>'),
+    linksWith('https://x.test/b/', '<main><a href="/contact/"><img src="/i.png" alt="Talk to us"></a></main>'),
+  ];
+  assert.ok(!ids(crossPageChecks(pages)).includes('link-no-text'));
+});
+
+test('a page linked only by "read more" is reported; one with a real link is not', () => {
+  const index = (extra = '') =>
+    linksWith('https://x.test/', `<main><a href="/post/">Read more</a><a href="/post/">more →</a>${extra}</main>`);
+
+  const post = linksWith('https://x.test/post/', '<main><p>words</p></main>');
+  const found = crossPageChecks([index(), post]).filter((finding) => finding.id === 'anchor-generic');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].url, 'https://x.test/post/');
+  assert.equal(found[0].level, 'info', 'a card under a headline has to say something');
+  assert.match(found[0].detail, /"Read more"/);
+
+  // One link that describes the page is enough — the finding is about a page
+  // with nothing, not about the existence of a "read more".
+  const described = index('<a href="/post/">Pilates for beginners</a>');
+  assert.ok(!ids(crossPageChecks([described, post])).includes('anchor-generic'));
+});
+
+test('a page nothing links to is not reported for the words nobody used', () => {
+  // orphan-page already says this, and one page is not two problems.
+  const pages = [
+    linksWith('https://x.test/', '<main><p>no links here</p></main>'),
+    linksWith('https://x.test/lonely/', '<main><p>words</p></main>'),
+  ];
+  const found = ids(crossPageChecks(pages));
+  assert.ok(!found.includes('anchor-generic'));
+  assert.ok(found.includes('orphan-page'));
+});
+
 // --- categories -----------------------------------------------------------
 
 test('every check the tool can emit has a category', async () => {
@@ -2074,6 +2217,17 @@ test('markdown lists every affected URL', () => {
   const md = markdown(sample, meta);
   for (const f of sample) assert.ok(md.includes(f.url), `${f.url} missing from markdown`);
   assert.ok(md.includes('**1 errors, 2 warnings, 1 notes**'));
+});
+
+test('the report carries a way back only when the caller has one', () => {
+  const findings = [{ level: 'warn', id: 'x', title: 'T', detail: 'D', url: 'https://x.test/p/' }];
+  const meta = { origin: 'https://x.test', pages: 1, date: '2026-08-21' };
+
+  // A report written to a file has nowhere to go back to.
+  assert.ok(!html(findings, meta).includes('class="back"'));
+
+  const hosted = html(findings, meta, { backHref: '/', backLabel: 'Audit another site' });
+  assert.match(hosted, /<a class="back" href="\/">← Audit another site<\/a>/);
 });
 
 test('html escapes untrusted strings rather than injecting them', () => {

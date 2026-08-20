@@ -11,12 +11,15 @@ only its extreme case, the orphan, was being reported. The viewport string has
 been parsed and kept since the first commit, and was only ever tested for
 existing.
 
-The one candidate that follows from that is **anchor text**, which `parse.mjs`
-throws away today: a link with no text at all — an icon with no `alt` — tells
-Google nothing about where it goes and reads a URL aloud to a screen reader.
-That is a fact rather than a preference, which is the bar. It is the only item
-here that needs a change to the parser, so it is not free the way the others
-were.
+The candidate that followed from that was anchor text, and it has now
+shipped. What it cost is worth recording too: it needed the parser change predicted here, and then three real sites in a
+row produced a false positive before the check found its final shape — a
+decorative icon, a thumbnail beside the headline that names it, and one page
+linking to another both with and without a trailing slash. The check that
+survived is quiet on some 12,000 anchors across eight sites and fires on five
+certificate PDFs nobody can read. That ratio is the point, not a disappointment.
+
+Nothing is queued behind it.
 
 What is left in **Later** needs either a headless browser or an index, and both
 are refused below for reasons that have not changed. Beyond that, the honest
@@ -35,6 +38,11 @@ minimum before calling such a change done.
 
 ## Shipped
 
+- **Anchor text** (unreleased) — the words attached to a link, which the parser
+  had been discarding since the first commit, and the only description of a
+  page that does not come from the page itself. `link-no-text` for a
+  destination nothing names; `anchor-generic` for a page every link to which
+  says "read more". Both were narrowed by real sites rather than by argument.
 - **An optional hosted front end** (1.12.0) — a password-protected form on the
   reader's own Cloudflare Workers account, for the person who needs an audit
   and will not open a terminal. It imports `audit` and `html` and re-implements

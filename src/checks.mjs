@@ -43,6 +43,27 @@ const ALT_PLACEHOLDER = new Set([
 // A screen reader reads alt in one breath, with no way to skim or pause.
 const ALT_MAX = 125;
 
+// --- Anchor text ------------------------------------------------------------
+// Words that describe the act of clicking rather than what is on the other
+// side. Deliberately short and unarguable: every entry here is a phrase that
+// would be identical on any link on any site, which is the whole complaint.
+// "Get started", "Book now" and "Download the guide" are not on it — they say
+// something about the destination, and a list that grows opinions instead of
+// facts becomes a list that argues with people.
+const GENERIC_ANCHORS = new Set([
+  'read more', 'read the rest', 'continue reading', 'more', 'more info',
+  'more information', 'learn more', 'find out more', 'click here', 'click',
+  'here', 'this', 'this page', 'this link', 'link', 'view', 'view more',
+  'see more', 'details', 'go', 'open',
+]);
+
+const anchorPhrase = (name) =>
+  (name ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 // --- hreflang ---------------------------------------------------------------
 // A language, optionally a script, optionally a region, joined by hyphens:
 // en, en-GB, zh-Hant, zh-Hant-TW, en-419. Case is not significant to Google.
@@ -760,6 +781,84 @@ export function crossPageChecks(pages, opts = {}) {
             'The first 20 are listed above, deepest first.', home.url));
       }
     }
+  }
+
+  // --- Anchor text --------------------------------------------------------
+  // The words attached to a link are the one description of a page that comes
+  // from outside it, and the only signal on this list that a page cannot write
+  // about itself. Two things can go wrong with them, and only one is a matter
+  // of taste.
+  const inbound = new Map();
+  const named = new Set();
+  const blank = new Map();
+  for (const p of live) {
+    for (const { href, name } of p.doc.links.anchorTexts ?? []) {
+      // Keyed without the trailing slash, because a page can link to itself
+      // both ways and mean the same page. wordpress.org/education names Campus
+      // Connect three times at `/campus-connect/` and once, wordlessly, at
+      // `/campus-connect` — matching the strings would have called a page with
+      // three good links unreadable.
+      const target = withoutSlash(href);
+      if (!name) {
+        blank.set(target, [...(blank.get(target) ?? []), p.url]);
+        continue; // no words at all is the finding below, not a vocabulary problem
+      }
+      named.add(target);
+      inbound.set(target, [...(inbound.get(target) ?? []), name]);
+    }
+  }
+  // A destination is only unreadable if *nothing* names it. The card is the
+  // reason: a thumbnail with an emptied alt and the headline beside it are two
+  // links to one article, and elementor.com's blog index has twenty-three of
+  // them. The headline says what the article is, so Google is not in the dark
+  // and neither is anybody else — reporting that would be the noisiest kind of
+  // wrong, a true observation with a false conclusion attached.
+  const nameless = new Map([...blank].filter(([href]) => !named.has(href)));
+
+  // A link with no text, no image alt, no aria-label and no title. Google is
+  // told a page exists and nothing whatever about it; a screen reader reads the
+  // URL aloud, one slash at a time. Usually an icon — a bare <i class="…">, or
+  // a thumbnail whose alt was emptied because the headline beside it is a
+  // second link to the same place.
+  //
+  // Grouped by destination rather than reported per page, because the ones that
+  // exist are nearly always in a header or a footer, and the same social icon
+  // on two hundred pages is one thing to fix.
+  const namelessTargets = [...nameless].sort((a, b) => b[1].length - a[1].length);
+  for (const [href, pages] of namelessTargets.slice(0, 10)) {
+    out.push(f('warn', 'link-no-text', 'Link with nothing to read',
+      `${href} is linked with no text, no image alt, no aria-label and no title, from ` +
+        `${pages.length} page(s): ${pages.slice(0, 3).join(', ')}. Google is told the page exists and ` +
+        'nothing about it, and a screen reader announces the URL instead of a description.',
+      pages[0]));
+  }
+  if (namelessTargets.length > 10) {
+    out.push(f('info', 'link-no-text-more', `${namelessTargets.length - 10} more destinations are linked with no text`,
+      `${namelessTargets.length} in all. The ten linked from the most pages are listed above.`,
+      namelessTargets[0][1][0]));
+  }
+
+  // A page every one of whose inbound links says "read more". Each of those
+  // links on its own is ordinary — a card under a headline has to say
+  // something — and reporting them one at a time would fire on every blog
+  // index ever built. What is worth knowing is the page that has nothing else:
+  // no link anywhere on the site tells Google what it is about.
+  const generic = live.filter((p) => {
+    const names = inbound.get(withoutSlash(p.url));
+    return names?.length && names.every((n) => GENERIC_ANCHORS.has(anchorPhrase(n)));
+  });
+  for (const p of generic.slice(0, 10)) {
+    const names = inbound.get(withoutSlash(p.url));
+    const shown = [...new Set(names.map((n) => `"${n}"`))].slice(0, 3).join(', ');
+    out.push(f('info', 'anchor-generic', 'Every link to this page says the same empty thing',
+      `${names.length} link(s) point here and all of them read ${shown}. Anchor text is the one ` +
+        'description of a page that comes from somewhere other than the page itself, and this one has ' +
+        'none — the words say what to do, not what is there.', p.url));
+  }
+  if (generic.length > 10) {
+    out.push(f('info', 'anchor-generic-more', `${generic.length - 10} more pages are linked only by generic anchors`,
+      `${generic.length} of ${live.length} crawled pages have no inbound link that describes them.`,
+      generic[0].url));
   }
 
   // x-default names the version to serve someone whose language matches none of

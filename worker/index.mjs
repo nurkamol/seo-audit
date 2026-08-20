@@ -280,7 +280,13 @@ export async function handle(request, env, ctx, deps = {}) {
           onProgress: (event) => send('progress', progressText(event, origin)),
           onNote: (note) => send('progress', `note       ${note}`),
         });
-        await send('done', render([...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }], meta));
+        // The report replaces this page entirely, so it has to carry its own way
+        // back to the form — otherwise the only route is the browser's back
+        // button, onto a page that has finished streaming and shows a stale log.
+        await send('done', render([...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }], meta, {
+          backHref: '/',
+          backLabel: 'Audit another site',
+        }));
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);
       } finally {

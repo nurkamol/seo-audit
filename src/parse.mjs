@@ -122,6 +122,56 @@ export function parseHtml(rawHtml, pageUrl) {
   const origin = new URL(pageUrl).origin;
   const internal = (list) => hrefs(list).filter((h) => h.startsWith(origin));
 
+  // Anchors paired with the words attached to them. Google reads those words as
+  // a description of the destination — they are the one signal a page gets from
+  // outside itself — and until now they were parsed and thrown away.
+  //
+  // The name is resolved the way a browser resolves an accessible name, in
+  // order, because each of these is a real way to label a link and reporting
+  // any of them as unlabelled would be wrong:
+  //
+  //   the text inside → an image's alt → aria-label → the anchor's own title
+  //
+  // aria-labelledby points at another element by id. It is not followed here —
+  // that means reading the rest of the document — and its mere presence counts
+  // as named, since the alternative is calling a labelled link unlabelled.
+  //
+  // A missing </a> makes the match run to the next one, which produces text
+  // where there was none. That direction is safe: it can only silence this,
+  // never invent it.
+  const namedAnchors = [...markup.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map((m) => {
+    const tag = `<a${m[1]}>`;
+    const inner = m[2];
+    const img = inner.match(/<img\b[^>]*>/i)?.[0];
+    const svgTitle = inner.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+    const name =
+      decode(stripTags(inner)) ||
+      (img && attr(img, 'alt')) ||
+      attr(tag, 'aria-label') ||
+      attr(tag, 'title') ||
+      (svgTitle && decode(stripTags(svgTitle))) ||
+      (img && attr(img, 'title')) ||
+      // A framework binding is a label the author supplied and this cannot
+      // read — `:alt="item.title"`, `[ariaLabel]="…"`. The same trap that made
+      // img-alt report twenty-four of allbirds.com's images as missing alt.
+      (img && /[:[]alt\b/i.test(img) ? '…' : '') ||
+      (/[:[](attr\.)?aria-?label\b/i.test(tag) ? '…' : '') ||
+      // Labelled by something elsewhere in the document, or by a child that
+      // labels itself. Not resolved, only believed.
+      (attr(tag, 'aria-labelledby') !== null || /aria-label(ledby)?=/i.test(inner) ? '…' : '') ||
+      '';
+    return { tag, href: attr(tag, 'href'), name: name.slice(0, 300) };
+  });
+
+  // Internal only, self-links dropped: a page linking to itself says nothing
+  // about anywhere, and a logo in the header does it on every page of the site.
+  const anchorTexts = namedAnchors
+    .filter((a) => a.href && !/^(#|mailto:|tel:|javascript:|data:)/i.test(a.href))
+    .map((a) => ({ ...a, href: abs(a.href) }))
+    .filter((a) => a.href?.startsWith(origin))
+    .map((a) => ({ href: a.href.split('#')[0], name: a.name }))
+    .filter((a) => a.href.replace(/\/$/, '') !== pageUrl.split('#')[0].replace(/\/$/, ''));
+
   const jsonld = [...html.matchAll(/<script\b[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)]
     .map((m) => {
       try {
@@ -222,6 +272,8 @@ export function parseHtml(rawHtml, pageUrl) {
       // comment-reply links rel="nofollow" pointing at #respond on the page
       // they are already on, and every article on a WordPress site would report
       // a withheld path that leads nowhere new.
+      // Every internal link with the words attached to it — see above.
+      anchorTexts,
       nofollowInternal: [
         ...new Set(
           internal(anchors.filter((t) => /(^|\s)nofollow(\s|$)/i.test(attr(t, 'rel') ?? '')))

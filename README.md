@@ -499,6 +499,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No page is an orphan — in the sitemap but linked from nowhere | warning |
 | Every page is within four clicks of the homepage, counted over the links actually in the HTML | note |
 | Every page has *some* path from the homepage — one that hangs off an unreachable page is only found by handing Google the sitemap | warning |
+| Every destination has at least one link that names it — an icon or an `alt=""` thumbnail with no text, no `aria-label` and no `title` tells Google nothing and reads a URL aloud to a screen reader | warning |
+| No page is described only by "read more" — the words on a link are the one description of a page that does not come from the page itself | note |
 
 ### Whole site
 
