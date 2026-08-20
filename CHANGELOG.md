@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.13.0] — 2026-08-21
+
 ### Added
 - **`link-no-text` and `anchor-generic`** — the words attached to a link, which
   `parse.mjs` has been discarding since the first commit. They are the one
