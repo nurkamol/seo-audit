@@ -1,0 +1,37 @@
+{
+  // The optional hosted front end. The CLI does not read this file and does not
+  // need it — `npx github:nurkamol/seo-audit@v1 https://example.com` is free,
+  // local, and unaffected by anything here.
+  //
+  // What it costs and what it cannot do: docs/hosting.md
+  "name": "seo-audit",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-08-01",
+
+  // src/site.mjs imports node:tls for the certificate check. The check itself
+  // is switched off in the Worker — the runtime supports node:tls only in
+  // part, and reading a peer certificate is one of the missing parts — but the
+  // import still has to resolve for the bundle to build.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": {
+    // The ceiling on pages per run, whatever the form asks for. Roughly 25ms of
+    // CPU per page against a 30-second budget per invocation, so 150 pages is
+    // about four seconds of it. Going much past a thousand means raising
+    // "limits": { "cpu_ms": … } as well, up to a maximum of 300000.
+    "MAX_PAGES": "150",
+
+    // Comma-separated hostnames this deployment is allowed to crawl. Empty
+    // means any, which is only sensible behind a password you trust. Setting it
+    // to your own domain is the difference between a tool and an open crawler.
+    "ALLOWED_HOSTS": ""
+  },
+
+  // AUDIT_TOKEN is a secret rather than a var, so it is not in this file and not
+  // in the repository. Until it is set, the Worker refuses to audit anything and
+  // says so:
+  //
+  //   npx wrangler secret put AUDIT_TOKEN
+  //
+  "observability": { "enabled": true }
+}

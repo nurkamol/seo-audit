@@ -5,6 +5,76 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.12.0] — 2026-08-21
+
+### Added
+- **An optional hosted front end for Cloudflare Workers** — `worker/index.mjs`,
+  `wrangler.jsonc`, and a deploy button, for the case where the person who
+  needs an audit will not open a terminal. It imports `audit` and `html` the
+  same way `bin/seo-audit.mjs` does and re-implements no check: the same crawl,
+  the same findings, the same self-contained report.
+
+  **The CLI is unchanged and is still the way to run this.** It is free, it has
+  no ceiling, and it runs two checks the hosted version cannot. Nothing was
+  added to `package.json`: Cloudflare's build runs `npx wrangler deploy` on
+  their side, so the repository still installs nothing and `npm test` still
+  needs nothing. The Worker holds to `fetch`, `Request`, `Response` and
+  `TransformStream`, which Node 22 has too — so its 14 tests run under
+  `node --test` like everything else.
+
+  What the honesty rules cost here, and what they bought:
+
+  - **It refuses to audit anything until `AUDIT_TOKEN` is set**, and says so on
+    every page. Deploying is one click and setting a secret is a separate step;
+    between the two, an open crawler on someone's account is not an acceptable
+    default. `ALLOWED_HOSTS` narrows it further, to the hosts you name.
+  - **Certificate expiry cannot be checked there** — `node:tls` is only
+    partially supported by the runtime and reading a peer certificate is one of
+    the missing parts. Rather than let it fail quietly, every hosted report
+    carries a note saying so. A missing finding reads exactly like a passing
+    one, and a report two checks shorter than the CLI's, with nothing to say
+    it, is worse than no report.
+  - **It cannot run on Cloudflare's free plan**, and `docs/hosting.md` says
+    that first rather than in a footnote. 10ms of CPU and 50 outbound fetches
+    per invocation is about sixteen pages — which is precisely the failure this
+    tool exists to point at. The Paid plan is $5/month, and past that the
+    marginal cost is about a hundredth of a cent per audit, because Cloudflare
+    does not bill for the fetches a Worker makes.
+
+  Progress is streamed as server-sent events while the crawl runs, because an
+  audit takes a minute or two and a blank tab for that long reads as a hang.
+
+  Verified in the real runtime, not only in theory: `wrangler dev` running
+  `workerd` locally audited a real 12-page site end to end and returned a 44KB
+  report, with the gate refusing an unauthenticated request, a host outside
+  `ALLOWED_HOSTS`, and an unconfigured deployment. The bundle builds at 34KB
+  gzipped.
+
+- **`docs/hosting.md`** — what it costs, why the free plan cannot run it, what
+  it is not allowed to reach, the two checks it cannot do, and how to turn it
+  off. Including the part that is easy to leave out: deleting the Worker does
+  not cancel the $5/month plan, and the charge is on your account under your
+  agreement with Cloudflare, at your own risk.
+
+### Changed
+- **The logo is centred in its own box and survives a dark README.** It sat in
+  a 640-wide canvas with its artwork ending at 393, so 37% of the image was
+  empty space on the right and the mark drifted left of centre no matter what
+  the surrounding markup said. The viewBox is now cropped to the artwork with
+  even margins, measured from a render rather than guessed — an attempt to pin
+  the width with `textLength` was abandoned when it turned out to break on a
+  `<text>` containing a `<tspan>`, spraying the wordmark across the canvas.
+
+  The wordmark was also `#111827` on a transparent background, which is close
+  to invisible on GitHub's dark theme. There is now a `docs/logo-dark.svg` and
+  the README picks between them with `<picture>`, the pattern GitHub documents.
+
+- **The README carries the official Deploy to Cloudflare button**, centred,
+  directly under the sentence saying what the plan costs — with the price and a
+  link to `docs/hosting.md` immediately beneath it, because the first thing
+  anyone meets should be the bill rather than the button. The badge in the
+  header row points at that page too, not at the deploy flow.
+
 ## [1.11.0] — 2026-08-21
 
 ### Added

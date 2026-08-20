@@ -55,6 +55,7 @@ read as its `src`.
 | `src/psi.mjs` | PageSpeed Insights |
 | `src/baseline.mjs` | Serialise and diff runs |
 | `src/report.mjs` | Terminal, Markdown, HTML, the baseline diff view, and the portfolio table |
+| `worker/index.mjs` | The optional hosted front end. Imports `audit` and `html`; re-implements nothing. Web-standard APIs only, so `node --test` can run it |
 
 ## Adding a check
 
@@ -71,6 +72,36 @@ this is skipped.
 A new flag has one more place to go: `action.yml`, as an input *and* in the
 `args+=` block that assembles the command. An input that never reaches the CLI
 is worse than no input, because it fails silently.
+
+If the check reaches for a Node built-in, it will vanish in the Worker — read
+the next section before you write it.
+
+## The hosted Worker
+
+Optional, and not on the main path — the CLI is. Two rules keep it honest:
+
+1. **It never re-implements a check.** It imports `audit` and `html`. If a
+   report from the Worker can differ from a report from the CLI, that is a bug.
+2. **When it cannot run a check, it says so in the report.** `tls-expiring` and
+   `tls-expired` need a socket the runtime does not have, so a `tls-not-checked`
+   note goes into every hosted report. A missing finding reads exactly like a
+   passing one. Anything else that turns out not to work there gets the same
+   treatment, never a silent omission.
+
+`worker/` is deliberately absent from `files` in `package.json`: the npx
+payload stays the CLI, and the deploy flow clones the repository anyway.
+Wrangler is never a dependency — Cloudflare runs `npx wrangler deploy` on their
+side. To try it locally you need Node 22 (wrangler refuses below that, even
+though the CLI itself is happy on 18):
+
+```bash
+npx wrangler dev --var AUDIT_TOKEN:whatever ALLOWED_HOSTS:example.com
+npx wrangler deploy --dry-run     # proves the bundle still builds
+```
+
+Costs, limits and the risk statement live in `docs/hosting.md`. Numbers there
+are dated and sourced; if you change one, re-check it against Cloudflare's
+pricing page rather than trusting the sentence you are editing.
 
 ## Releasing
 

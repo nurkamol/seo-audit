@@ -25,8 +25,25 @@ wrong, which is how every check here earned its place — 1.11.0's guard against
 unreadable link graphs exists because eslint.org would otherwise have been
 handed 464 findings about navigation that works.
 
+One standing cost was taken on in 1.12.0 and is worth stating plainly: there
+are now two runtimes. A check that reaches for a Node built-in works in the CLI
+and disappears in the Worker, and a report that is quietly shorter than the
+CLI's is the same failure as a false positive wearing the opposite coat. So a
+check that cannot run in both says which one it did not run in —
+`npx wrangler deploy --dry-run` proves the bundle still builds, and that is the
+minimum before calling such a change done.
+
 ## Shipped
 
+- **An optional hosted front end** (1.12.0) — a password-protected form on the
+  reader's own Cloudflare Workers account, for the person who needs an audit
+  and will not open a terminal. It imports `audit` and `html` and re-implements
+  no check. Deliberately off the main path: the CLI is free, has no ceiling,
+  and runs the two certificate checks the Worker cannot. It refuses to audit
+  anything until a secret is set, because deploying is one click and an open
+  crawler on someone's account is not an acceptable default for the gap. Costs
+  and risk are stated first rather than in a footnote, in `docs/hosting.md` —
+  including that Cloudflare's free plan cannot run it at all.
 - **Click depth** (1.11.0) — how many links from the homepage every page
   actually is, over the graph the crawl already built, with the shortest route
   printed alongside the number. `orphan-page` had been reporting the extreme of

@@ -14,8 +14,8 @@
   </g>
   <circle cx="86" cy="96" r="15" fill="none" stroke="url(#g)" stroke-width="3.5"/>
   <path d="M97 107 L108 118" stroke="url(#g)" stroke-width="4" stroke-linecap="round"/>
-  <text x="140" y="76" fill="#111827"
+  <text x="140" y="76" fill="#e5e7eb"
         font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="46" font-weight="700">seo<tspan fill="#f97316">-</tspan>audit</text>
   <text x="142" y="106"
-        font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="17" fill="#6b7280">every page, not just the homepage</text>
+        font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="17" fill="#9ca3af">every page, not just the homepage</text>
 </svg>

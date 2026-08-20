@@ -3,3 +3,5 @@ node_modules/
 audit.md
 reports/
 .DS_Store
+.wrangler/
+.dev.vars

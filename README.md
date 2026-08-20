@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="seo-audit" width="440">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+    <img src="docs/logo.svg" alt="seo-audit — every page, not just the homepage" width="440">
+  </picture>
 </p>
 
 <p align="center">
@@ -14,8 +17,8 @@
   <a href="https://github.com/nurkamol/seo-audit/releases"><img src="https://img.shields.io/github/v/release/nurkamol/seo-audit?color=f97316" alt="release"></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A518-3c873a" alt="node >= 18">
   <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="zero dependencies">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
-  </a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
+  <a href="docs/hosting.md"><img src="https://img.shields.io/badge/Cloudflare%20Workers-optional%2C%20paid-f38020?logo=cloudflare&logoColor=white" alt="Optional hosted version on Cloudflare Workers"></a>
 </p>
 
 ```yaml
@@ -395,6 +398,46 @@ survivable in CI instead of being switched off in week two.
 
 ---
 
+## Hosting it, for people who will not open a terminal
+
+Optional, and off the main path. Everything above is free and runs on your own
+machine; this is a small password-protected web page you deploy to **your own
+Cloudflare account**, so a colleague can audit a site by filling in a form. It
+runs the same code and produces the same report.
+
+<p align="center">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/nurkamol/seo-audit"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare" width="184" height="39"></a>
+</p>
+
+<p align="center">
+  <sub><b>Needs the $5/month Workers Paid plan.</b> Your account, your bill.<br>
+  Read <a href="docs/hosting.md">docs/hosting.md</a> before you click it.</sub>
+</p>
+
+The short version:
+
+- **It cannot run on Cloudflare's free plan.** 10ms of CPU and 50 outbound
+  fetches per invocation works out at about sixteen pages — which is the exact
+  failure this tool exists to point at. It needs the **$5/month Workers Paid**
+  plan.
+- **After that it is effectively free to run.** Cloudflare does not bill for the
+  fetches a Worker makes, so the crawl costs nothing and an audit is about a
+  hundredth of a cent of CPU. The $5 is the whole bill for normal use.
+- **The charge is recurring and it is yours.** Your account, your card, your
+  agreement with Cloudflare. Deleting the Worker does not cancel the plan.
+  MIT licence, no warranty, at your own risk.
+- **It will not audit anything until you set `AUDIT_TOKEN`.** What you are
+  deploying is a crawler with a public address, and an open one gets pointed at
+  other people's sites from your account. Set `ALLOWED_HOSTS` too.
+- **Two checks do not work there.** `tls-expiring` and `tls-expired` need a TLS
+  socket the Workers runtime does not offer. Every hosted report says so, rather
+  than quietly coming up two checks short.
+
+If you have a GitHub repository, the Action above is free, unlimited and
+better. This is for the case where it genuinely has to be a web page.
+
+---
+
 ## What it checks
 
 Findings come at three levels: **error** (wrong, and costing traffic), **warning** (worth fixing, judgement involved), **note** (worth knowing, may be deliberate).
@@ -535,7 +578,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.11.0` | Exactly that release, forever |
+| `@v1.12.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

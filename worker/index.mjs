@@ -1,0 +1,321 @@
+// A hosted front end for the audit the CLI runs, deployed to the reader's own
+// Cloudflare account. Nothing here re-implements a check: it imports `audit`
+// and `html` exactly as `bin/seo-audit.mjs` does, and its whole job is to take
+// a URL from a form, stream the progress somewhere a browser can see it, and
+// hand back the same self-contained report.
+//
+// Web-standard APIs only — `fetch`, `Request`, `Response`, `TransformStream`,
+// all of which Node 22 has too. That is deliberate: it means this file is
+// testable under `node --test` with nothing installed, which is the rule the
+// rest of the project keeps.
+//
+// See docs/hosting.md for what it costs and what it is allowed to reach.
+import { audit } from '../src/audit.mjs';
+import { html as htmlReport } from '../src/report.mjs';
+
+// The CPU ceiling is what really bounds a run — roughly 25ms per page, against
+// 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
+// of that, which leaves room for a slow site to be slow without the run being
+// cut off mid-crawl. Raise it with the MAX_PAGES var if your site needs it.
+const MAX_PAGES = 150;
+
+const COOKIE = 'seo_audit_token';
+
+const esc = (s) =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+/** Compare without leaking the answer in how long it took. */
+export function sameSecret(a, b) {
+  const left = String(a ?? '');
+  const right = String(b ?? '');
+  // Nothing matches nothing. Two empty strings comparing equal is how an unset
+  // secret turns into a bypass one refactor from now, and the emptiness of a
+  // secret is not a fact worth hiding.
+  if (!left || !right) return false;
+  // Length is compared separately and early only because the loop below needs
+  // a fixed number of iterations; the length of a secret is not the secret.
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  return diff === 0;
+}
+
+const cookies = (request) =>
+  Object.fromEntries(
+    (request.headers.get('cookie') ?? '')
+      .split(';')
+      .map((part) => part.trim().split('='))
+      .filter(([name]) => name),
+  );
+
+/** Is this request allowed to run an audit?
+ *
+ *  A bearer token for anything scripted, a cookie for a browser that has
+ *  already been through the unlock form. Never a query parameter: it would
+ *  travel in the referer of every link in the report and sit in logs. */
+export function authorized(request, env) {
+  const secret = env.AUDIT_TOKEN;
+  if (!secret) return false;
+  const bearer = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+  return sameSecret(bearer, secret) || sameSecret(cookies(request)[COOKIE], secret);
+}
+
+/** The URL to audit, or why it was refused.
+ *
+ *  A deployed instance of this is a crawler with an address. ALLOWED_HOSTS is
+ *  what keeps it from being a crawler anyone can point anywhere: set it, and
+ *  the form will only ever fetch the sites named in it. */
+export function targetFor(input, env) {
+  let url;
+  try {
+    url = new URL(String(input ?? '').trim());
+  } catch {
+    return { error: 'That is not a URL. It needs the scheme too: https://example.com' };
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return { error: `Only http and https can be audited, not ${url.protocol}` };
+  }
+  const allowed = (env.ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  if (allowed.length && !allowed.includes(url.hostname.toLowerCase())) {
+    return {
+      error:
+        `This deployment is limited to ${allowed.join(', ')}. Change ALLOWED_HOSTS to audit ` +
+        'anything else, and read docs/hosting.md before you remove it entirely.',
+    };
+  }
+  return { url: url.toString() };
+}
+
+/** How many pages this deployment will crawl, whatever the form asked for. */
+export function pageLimit(requested, env) {
+  const ceiling = Number.parseInt(env.MAX_PAGES ?? '', 10) || MAX_PAGES;
+  const asked = Number.parseInt(requested ?? '', 10);
+  return Number.isFinite(asked) && asked > 0 ? Math.min(asked, ceiling) : ceiling;
+}
+
+/** One progress event as a line of plain text. The terminal's version of this
+ *  is in report.mjs and is full of ANSI colour, which a browser renders as
+ *  mojibake rather than as colour. */
+export function progressText({ phase, status, ms, url, detail }, origin) {
+  const parts = [String(phase).padEnd(9)];
+  if (status !== undefined) parts.push(String(status).padStart(3));
+  if (ms !== undefined) parts.push(`${String(ms).padStart(5)}ms`);
+  if (url) parts.push(origin && url.startsWith(origin) ? url.slice(origin.length) || '/' : url);
+  if (detail) parts.push(detail);
+  return parts.join('  ');
+}
+
+// A certificate's expiry cannot be read here. It needs a TLS socket whose
+// peer certificate is inspectable, and the Workers runtime does not offer
+// one — `node:tls` is only partially supported and this is one of the parts
+// that is missing.
+//
+// The check is switched off rather than left to fail, and then *said*, because
+// a report that quietly contains two checks fewer than the CLI's is a report
+// that lies by omission. A missing finding reads exactly like a passing one.
+const NO_CERTIFICATE_CHECK = {
+  level: 'info',
+  id: 'tls-not-checked',
+  title: 'Certificate expiry was not checked',
+  detail:
+    'This report was produced by the hosted version, which cannot open the kind of connection that ' +
+    'reads a certificate. Run the CLI against this site to include tls-expiring and tls-expired: ' +
+    'npx github:nurkamol/seo-audit@v1',
+};
+
+const page = (title, body) => `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>${esc(title)}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.6 ui-sans-serif, system-ui, sans-serif; max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  p.sub { color: #6b7280; margin: 0 0 2rem; }
+  label { display: block; font-weight: 600; margin: 1.25rem 0 .35rem; }
+  input { width: 100%; padding: .6rem .7rem; font: inherit; border: 1px solid #9ca3af; border-radius: .4rem; background: transparent; color: inherit; }
+  button { margin-top: 1.25rem; padding: .6rem 1.1rem; font: inherit; font-weight: 600; border: 0; border-radius: .4rem; background: #2563eb; color: #fff; cursor: pointer; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #11182710; padding: 1rem; border-radius: .4rem; font: 13px/1.5 ui-monospace, monospace; }
+  .warn { border-left: 3px solid #d97706; padding-left: 1rem; }
+  code { font: 13px ui-monospace, monospace; background: #11182714; padding: .1rem .3rem; border-radius: .25rem; }
+</style>
+</head><body>${body}</body></html>`;
+
+const htmlResponse = (body, status = 200, headers = {}) =>
+  new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', ...headers } });
+
+/** The whole Worker, with its two collaborators injectable so the routing and
+ *  the gate can be tested without crawling anything. */
+export async function handle(request, env, ctx, deps = {}) {
+  const run = deps.audit ?? audit;
+  const render = deps.report ?? htmlReport;
+  const url = new URL(request.url);
+
+  // Nothing about this instance should end up in an index — not the form, and
+  // certainly not a report about someone's site.
+  if (url.pathname === '/robots.txt') {
+    return new Response('User-agent: *\nDisallow: /\n', { headers: { 'content-type': 'text/plain' } });
+  }
+
+  // Deployed but never configured. Refusing to run is the only safe reading of
+  // an unset secret: the alternative is an open crawler on someone's account,
+  // and they would find out from the bill or from an abuse report.
+  if (!env.AUDIT_TOKEN) {
+    return htmlResponse(
+      page('Not configured', `
+        <h1>Not configured yet</h1>
+        <p class="sub">This deployment will not audit anything until it has a password.</p>
+        <div class="warn">
+          <p>What you are running is a crawler with a public address. Without a secret, anyone who finds
+          the URL can point it at any site, from your account and on your bill.</p>
+          <p>Set one and it starts working:</p>
+          <pre>npx wrangler secret put AUDIT_TOKEN</pre>
+          <p>Or in the dashboard: <strong>Workers &amp; Pages → your Worker → Settings → Variables and
+          Secrets → Add → Secret</strong>, named <code>AUDIT_TOKEN</code>.</p>
+        </div>`),
+      503,
+    );
+  }
+
+  // The unlock form posts the secret rather than putting it in a link, so it
+  // stays out of browser history, out of the referer header on every link in
+  // the report, and out of the logs of whatever sits in front of this.
+  if (url.pathname === '/unlock' && request.method === 'POST') {
+    const form = await request.formData();
+    if (!sameSecret(form.get('token'), env.AUDIT_TOKEN)) return unlockPage('That is not the password.', 401);
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: '/',
+        'set-cookie': `${COOKIE}=${env.AUDIT_TOKEN}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400`,
+      },
+    });
+  }
+
+  if (!authorized(request, env)) return unlockPage();
+
+  if (url.pathname === '/') {
+    return htmlResponse(
+      page('SEO audit', `
+        <h1>SEO audit</h1>
+        <p class="sub">Crawls every page a sitemap lists, not just the homepage.</p>
+        <form action="/run">
+          <label for="url">Site</label>
+          <input id="url" name="url" type="url" placeholder="https://example.com" required autofocus>
+          <label for="limit">Pages at most</label>
+          <input id="limit" name="limit" type="number" min="1" max="${pageLimit(null, env)}"
+                 value="${pageLimit(null, env)}">
+          <button type="submit">Audit</button>
+        </form>`),
+    );
+  }
+
+  if (url.pathname === '/run') {
+    const target = targetFor(url.searchParams.get('url'), env);
+    if (target.error) {
+      return htmlResponse(
+        page('Not audited', `<h1>Not audited</h1><p class="sub">${esc(target.error)}</p><p><a href="/">Back</a></p>`),
+        400,
+      );
+    }
+    const stream = `/stream?url=${encodeURIComponent(target.url)}&limit=${pageLimit(url.searchParams.get('limit'), env)}`;
+    // The log is streamed rather than the page being held back, because an
+    // audit takes a minute or two and a blank tab for that long reads as a
+    // hang. The report replaces this page when it arrives.
+    return htmlResponse(
+      page(`Auditing ${esc(target.url)}`, `
+        <h1>Auditing ${esc(target.url)}</h1>
+        <p class="sub" id="status">Crawling. The report will replace this page when it is done.</p>
+        <pre id="log"></pre>
+        <script>
+          const log = document.getElementById('log');
+          const status = document.getElementById('status');
+          const events = new EventSource(${JSON.stringify(stream)});
+          events.addEventListener('progress', (e) => {
+            log.textContent += JSON.parse(e.data) + '\\n';
+            window.scrollTo(0, document.body.scrollHeight);
+          });
+          events.addEventListener('failed', (e) => {
+            events.close();
+            status.textContent = JSON.parse(e.data);
+          });
+          events.addEventListener('done', (e) => {
+            events.close();
+            document.open();
+            document.write(JSON.parse(e.data));
+            document.close();
+          });
+        </script>`),
+    );
+  }
+
+  if (url.pathname === '/stream') {
+    const target = targetFor(url.searchParams.get('url'), env);
+    if (target.error) return new Response(target.error, { status: 400 });
+
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+    // JSON, so a URL containing a newline cannot end an event early and inject
+    // one of its own.
+    const send = (event, data) =>
+      writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+
+    const origin = new URL(target.url).origin;
+    const work = (async () => {
+      try {
+        const { findings, meta } = await run(target.url, {
+          limit: pageLimit(url.searchParams.get('limit'), env),
+          userAgent: env.USER_AGENT,
+          // Switched off rather than left to fail — see NO_CERTIFICATE_CHECK.
+          readCertificateExpiry: async () => null,
+          onProgress: (event) => send('progress', progressText(event, origin)),
+          onNote: (note) => send('progress', `note       ${note}`),
+        });
+        await send('done', render([...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }], meta));
+      } catch (err) {
+        await send('failed', `The audit stopped: ${err.message}`);
+      } finally {
+        await writer.close();
+      }
+    })();
+    // Keep the isolate alive for the crawl even if the browser goes away mid-run,
+    // so the request that started it is what pays for it rather than a retry.
+    ctx?.waitUntil?.(work);
+
+    return new Response(readable, {
+      headers: {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        // Nothing between here and the browser should hold the log back
+        // waiting for a buffer to fill.
+        'x-accel-buffering': 'no',
+      },
+    });
+  }
+
+  return htmlResponse(page('Not found', '<h1>Not found</h1><p class="sub"><a href="/">Back to the form</a></p>'), 404);
+}
+
+const unlockPage = (message = '', status = 401) =>
+  htmlResponse(
+    page('Password', `
+      <h1>Password</h1>
+      <p class="sub">${message ? esc(message) : 'This deployment is not open to the internet.'}</p>
+      <form action="/unlock" method="post">
+        <label for="token">AUDIT_TOKEN</label>
+        <input id="token" name="token" type="password" required autofocus>
+        <button type="submit">Unlock</button>
+      </form>`),
+    status,
+  );
+
+export default { fetch: (request, env, ctx) => handle(request, env, ctx) };
