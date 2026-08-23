@@ -517,10 +517,15 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     const at = Date.parse(Array.isArray(value) ? value[0] : value);
     return Number.isFinite(at) ? at : null;
   };
+  // A minute of slack. Shopify's theme writes datePublished and dateModified
+  // from timestamps that can round apart by a second: eleven of one store's
+  // twelve inversions were exactly 1s, and the twelfth was nine hours. The
+  // one-second class is a generator artifact nobody can act on, and reporting
+  // it would bury the one that means something.
   const backwards = dated.filter((n) => {
     const published = when(n.datePublished);
     const modified = when(n.dateModified);
-    return published !== null && modified !== null && published > modified;
+    return published !== null && modified !== null && published - modified > MINUTE;
   });
   if (backwards.length) {
     const node = backwards[0];
@@ -768,6 +773,7 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
 // are what "mixed content" means; a hyperlink is not one of them.
 const SUBRESOURCE = /^(img|script|iframe|video|audio|source|embed|track|input|object)$/;
 
+const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
 
 // Below this, "every page shares a date" is a coincidence rather than a

@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **A minute of slack on `schema-date-order`.** A real store produced twelve
+  inversions and **eleven were exactly one second** — Shopify's theme writing
+  `datePublished` and `dateModified` from timestamps that round apart. The
+  twelfth was nine hours, and it was the only one anybody could act on. An
+  inversion under a minute is a generator artifact and is no longer reported,
+  the same way a date less than a day in the future is not.
+
 - **A rate limit is not a missing file either.** 1.15.0 taught the page checks
   that HTTP 429 describes the crawl rather than the page; `src/site.mjs` never
   learned it. Re-running a real store on 1.19.0 reported **No llms.txt** for a

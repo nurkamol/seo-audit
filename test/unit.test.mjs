@@ -669,6 +669,13 @@ test('structured data that contradicts itself about dates is reported', () => {
     .some((id) => id.startsWith('schema-date')));
   assert.ok(!withHead(ld(article({ datePublished: '2026-05-01', dateModified: '2026-05-01' })))
     .some((id) => id.startsWith('schema-date')));
+  // Eleven of one store's twelve inversions were exactly one second — Shopify
+  // writing two timestamps that round apart — and the twelfth was nine hours.
+  assert.ok(!withHead(ld(article({ datePublished: '2026-01-26T13:37:58+04:00', dateModified: '2026-01-26T13:37:57+04:00' })))
+    .some((id) => id.startsWith('schema-date')), 'a second apart is a rounding artifact');
+  assert.ok(withHead(ld(article({ datePublished: '2026-01-16T13:56:05+04:00', dateModified: '2026-01-16T05:00:00+04:00' })))
+    .includes('schema-date-order'), 'nine hours apart is a contradiction');
+
   // A date this tool cannot parse is not a date this tool has an opinion about.
   assert.ok(!withHead(ld(article({ datePublished: 'last Tuesday' })))
     .some((id) => id.startsWith('schema-date')));
