@@ -5,7 +5,50 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.25.0] — 2026-08-24
+
 ### Added
+
+- **Pages that are the same page again.** Titles and descriptions have been
+  compared since early on; the bodies never were, and that is the axis a hundred
+  product pages differ on by one word — they compete with each other for one
+  result and spend the crawl budget that would have gone to the pages that are
+  actually different. It costs **no extra requests**: the text was already read
+  and measured for `words` and then thrown away, and what is kept instead is a
+  64-number MinHash sketch, a few hundred bytes a page. Banding the sketches
+  means most pairs are never compared, so it stays linear rather than quadratic
+  on a five-thousand-page site.
+
+  Three narrowings, because this is exactly the shape of check that cries wolf.
+  A page that says `noindex` is not in the index to be duplicated in. A page
+  whose `rel=canonical` points at another page has already declared itself a
+  copy — that is the fix, correctly applied, and reporting it would be reporting
+  a solved problem. And a page with no `<main>` or `<article>` has no comparable
+  text: without one, the text of a page is the whole document, navigation and
+  footer included, and every page of a small site would look like a copy of
+  every other. That last case is **counted and reported**, never passed over.
+
+  Two real sites before shipping: on jekyllrb.com it found `/docs/conduct/` and
+  `/docs/code_of_conduct/`, both 200, both with self-referencing canonicals, and
+  their content regions identical — a true one, and the same pair `duplicate-title`
+  had been pointing at without being able to prove why. On a 120-page store it
+  found **nothing**, which is the half that matters.
+
+- **Compare two runs of a site, in the window.** The app has kept every finished
+  run since 1.23.0 and compared none of them, so it could not answer the
+  question that makes somebody open a tool a second time: did the fix work. A
+  **Compare** menu beside Export lists the other runs of the same site, newest
+  first, and the sheet shows what **appeared**, what is **gone**, and how much
+  did not move — grouped, so a regression across forty pages reads as one thing
+  rather than forty rows.
+
+  The comparing is not done in Swift. `diff()` has been in `src/baseline.mjs`
+  since `--baseline` shipped, and the app posts both sets to a new `/diff`
+  endpoint, so a comparison from this window and one from
+  `seo-audit --baseline` are the same comparison. On the first audit of a site
+  the menu is present and says there is nothing kept to compare against, rather
+  than being missing.
+
 - **`--write-sitemap`.** Every other output here describes a problem; this one
   is the fix. The crawl already knows every URL it read, what each answered,
   whether it says `noindex`, and where its canonical points — which is exactly
@@ -52,45 +95,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and stripped of control characters — it ends up in a request header, and a
   newline in it would end that header and start another.
 
-- **Compare two runs of a site, in the window.** The app has kept every finished
-  run since 1.23.0 and compared none of them, so it could not answer the
-  question that makes somebody open a tool a second time: did the fix work. A
-  **Compare** menu beside Export lists the other runs of the same site, newest
-  first, and the sheet shows what **appeared**, what is **gone**, and how much
-  did not move — grouped, so a regression across forty pages reads as one thing
-  rather than forty rows.
+### Fixed
 
-  The comparing is not done in Swift. `diff()` has been in `src/baseline.mjs`
-  since `--baseline` shipped, and the app posts both sets to a new `/diff`
-  endpoint, so a comparison from this window and one from
-  `seo-audit --baseline` are the same comparison. On the first audit of a site
-  the menu is present and says there is nothing kept to compare against, rather
-  than being missing.
-
-- **Pages that are the same page again.** Titles and descriptions have been
-  compared since early on; the bodies never were, and that is the axis a hundred
-  product pages differ on by one word — they compete with each other for one
-  result and spend the crawl budget that would have gone to the pages that are
-  actually different. It costs **no extra requests**: the text was already read
-  and measured for `words` and then thrown away, and what is kept instead is a
-  64-number MinHash sketch, a few hundred bytes a page. Banding the sketches
-  means most pairs are never compared, so it stays linear rather than quadratic
-  on a five-thousand-page site.
-
-  Three narrowings, because this is exactly the shape of check that cries wolf.
-  A page that says `noindex` is not in the index to be duplicated in. A page
-  whose `rel=canonical` points at another page has already declared itself a
-  copy — that is the fix, correctly applied, and reporting it would be reporting
-  a solved problem. And a page with no `<main>` or `<article>` has no comparable
-  text: without one, the text of a page is the whole document, navigation and
-  footer included, and every page of a small site would look like a copy of
-  every other. That last case is **counted and reported**, never passed over.
-
-  Two real sites before shipping: on jekyllrb.com it found `/docs/conduct/` and
-  `/docs/code_of_conduct/`, both 200, both with self-referencing canonicals, and
-  their content regions identical — a true one, and the same pair `duplicate-title`
-  had been pointing at without being able to prove why. On a 120-page store it
-  found **nothing**, which is the half that matters.
+- **`.build/` was in the repository.** 2,849 files and 177 MB of SwiftPM
+  output, swept in by a `git add -A` when the Swift package was first built, and
+  in every tag since 1.23.0. Repository size is the smaller half of it:
+  `npx github:nurkamol/seo-audit` clones the default branch, so the headline way
+  to run this has been pulling 177 MB of object files to run a command that is
+  about a megabyte. The history is left alone deliberately — rewriting it would
+  change the commit every published tag points at, to save a cost only a full
+  clone pays.
 
 ## [1.24.1] — 2026-08-24
 
