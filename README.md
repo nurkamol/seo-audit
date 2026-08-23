@@ -330,8 +330,14 @@ Drop a `seo-audit.config.json` next to where you run it:
   page, so a large site can present thousands of targets; this bounds the run.
   When it bites, the report says how many were left unchecked rather than
   quietly describing a fraction of the site.
-- **`maxImageChecks`** — the same bound for the image sweep, default 200. An
-  image-heavy site can reference thousands of distinct files.
+- **`maxImageChecks`** — the same bound for the image sweep, default 200,
+  counted in distinct **files** rather than URLs. An image CDN serves one file
+  at every size asked for, so `photo.avif?width=150` and `?width=750` are one
+  image and one request; `width`, `height`, `w`, `h` and `dpr` are dropped
+  before counting, and `v` is not, because a different version is a different
+  asset. On a real store this was 488 files behind 767 URLs. The report names
+  the number to set if the cap was reached.
+
 - **`maxExternalChecks`** — how many outbound links `--check-external` fetches,
   default 100. Third-party hosts are somebody else's to hammer.
 - **`redirects`** — path to a redirect map, the same as `--redirects`.

@@ -342,6 +342,28 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   // Deliberately conservative about what counts as broken. A 403 is the
   // signature of hotlink protection working as designed, not of a missing file,
   // and reporting those would be the /cdn-cgi/ mistake a second time.
+  // Counted by file rather than by URL. An image CDN serves one file at every
+  // size asked for — /cdn/shop/files/DSC_0075-2.avif?v=…&width=150, &width=300,
+  // &width=750 — and each of those used to be a separate entry against the cap.
+  // Measured across 45 pages of a real store: 767 distinct URLs, 488 distinct
+  // files, so a third of the sweep was asking the same question again.
+  //
+  // Only the size knobs are dropped. `v` stays: a different version is a
+  // different asset and a stale one really can 404, which is a finding worth
+  // keeping. The trade is that one size is checked on behalf of the others —
+  // if a CDN refuses an unusual width the sweep will miss it, which errs
+  // towards saying nothing rather than towards saying something wrong.
+  const SIZE_PARAMS = ['width', 'height', 'w', 'h', 'dpr'];
+  const imageFile = (url) => {
+    try {
+      const u = new URL(url);
+      for (const param of SIZE_PARAMS) u.searchParams.delete(param);
+      return u.toString();
+    } catch {
+      return url;
+    }
+  };
+
   const imageSources = new Map();
   for (const page of pages) {
     for (const img of page.doc?.images ?? []) {
@@ -352,11 +374,12 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       } catch {
         continue;
       }
-      if (!imageSources.has(absolute)) imageSources.set(absolute, page.url);
+      const file = imageFile(absolute);
+      if (!imageSources.has(file)) imageSources.set(file, { src: absolute, page: page.url });
     }
   }
   const imageLimit = opts.maxImageChecks ?? 200;
-  const imageTargets = [...imageSources.keys()].slice(0, imageLimit);
+  const imageTargets = [...imageSources.values()].slice(0, imageLimit).map((entry) => entry.src);
   opts.onProgress?.({ phase: 'images', detail: `${imageTargets.length} distinct images to check` });
   const imageResults = await mapLimit(imageTargets, 6, async (src) => {
     let res = await fetcher.get(src, { method: 'HEAD' });
@@ -369,13 +392,16 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   // produce the same report.
   for (const { src, status, error } of imageResults) {
     if (status === 404 || status === 410 || status === 0) {
+      const on = imageSources.get(imageFile(src))?.page;
       out.push(f('error', 'broken-image', 'Image does not load',
-        `HTTP ${status || error} for ${src} — used on ${imageSources.get(src)}.`, imageSources.get(src)));
+        `HTTP ${status || error} for ${src} — used on ${on}.`, on));
     }
   }
   if (imageSources.size > imageTargets.length) {
     out.push(f('info', 'image-sweep-capped', `${imageSources.size - imageTargets.length} images were not checked`,
-      `The sweep stops at ${imageLimit} distinct images. Raise it with maxImageChecks in the config.`, origin));
+      `The sweep stops at ${imageLimit} distinct files and this site has ${imageSources.size}. Set ` +
+        `"maxImageChecks": ${imageSources.size} in the config to check them all — each one is a request, ` +
+        'so a large catalogue is a long run.', origin));
   }
 
   // --- Outbound links -------------------------------------------------------

@@ -369,7 +369,8 @@ export async function audit(target, opts = {}) {
         ? `${truncated} pages were not checked`
         : `At least ${truncated} more pages are linked but were not checked`,
       detail: bySitemap
-        ? `The sitemap lists ${urls.length} URLs and the limit is ${pages.length}. Raise it with --limit.`
+        ? `The sitemap lists ${urls.length} URLs and the limit is ${pages.length}. Run it again with ` +
+          `--limit ${urls.length} to check them all.`
         : `The crawl stopped at ${pages.length} pages with more still queued. Following links cannot know ` +
           'the total in advance the way a sitemap can, so this is a floor, not a count. Raise it with --limit.',
       url: source ?? origin,

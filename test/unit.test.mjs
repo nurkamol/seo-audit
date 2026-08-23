@@ -622,6 +622,68 @@ test('a long tail of deep pages is capped and counted', () => {
   assert.match(more.title, /^5 more pages/);
 });
 
+// --- the image sweep -------------------------------------------------------
+
+const withImages = (origin, srcs) => [{
+  url: `${origin}/p/`,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: {
+    links: { internal: [], inMain: [], external: [] },
+    canonical: [`${origin}/p/`],
+    og: {},
+    hreflang: [],
+    images: srcs.map((src) => ({ src, alt: 'x' })),
+  },
+}];
+
+test('one file at six sizes is one image to check, not six', async () => {
+  // An image CDN serves any width asked for. Measured across 45 pages of a
+  // real store: 767 distinct URLs, 488 distinct files.
+  const origin = 'https://x.test';
+  const fetcher = countingFetcher();
+  const out = await siteChecks(
+    origin,
+    fetcher,
+    withImages(origin, [150, 300, 450, 600, 750, 1200].map((w) => `/cdn/photo.avif?v=17&width=${w}`)),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  const asked = fetcher.calls.filter((u) => u.includes('/cdn/photo.avif'));
+  assert.equal(asked.length, 1, `one file, one request — asked ${asked.length} times`);
+  assert.ok(!out.some((f) => f.id === 'image-sweep-capped'));
+});
+
+test('a different version, or a different file, is still its own image', async () => {
+  // `v` is not a size knob. A stale version really can 404, and that is a
+  // finding worth keeping.
+  const origin = 'https://x.test';
+  const fetcher = countingFetcher();
+  await siteChecks(
+    origin,
+    fetcher,
+    withImages(origin, [
+      '/cdn/photo.avif?v=17&width=150',
+      '/cdn/photo.avif?v=99&width=150',
+      '/cdn/other.avif?v=17&width=150',
+    ]),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.equal(fetcher.calls.filter((u) => u.includes('/cdn/')).length, 3);
+});
+
+test('a broken image is still reported against the page that uses it', async () => {
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (url.includes('/cdn/gone.avif') ? { status: 404 } : notFound(url))),
+    withImages(origin, ['/cdn/gone.avif?v=17&width=300']),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  const finding = out.find((f) => f.id === 'broken-image');
+  assert.ok(finding, 'expected the 404 to be reported');
+  assert.equal(finding.url, `${origin}/p/`, 'attributed to the page, not to the CDN');
+  assert.match(finding.detail, /width=300/, 'and naming the URL that was actually asked for');
+});
+
 // --- a graph worth reading -------------------------------------------------
 
 const linked = (path, targets = []) => linksWith(

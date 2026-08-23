@@ -4,22 +4,9 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Four candidates, queued and not yet started. None of them needs anything this
-tool cannot already do. The first came out of a report on one real store, which
-is the usual way things arrive here.
-
-### The image sweep counts files, not URLs
-
-`src/site.mjs` dedupes images by absolute URL, and a Shopify store serves one
-file at a dozen widths: `DSC_0075-2.avif?v=1782204062&width=150`, `&width=300`,
-`&width=750`. Each is a separate entry against the 200-image cap, which is how
-a 325-page store reported **2,009 distinct images** and 1,809 of them
-unchecked.
-
-Stripping `width` and `height` before deduping would cut the sweep sharply at
-no loss of coverage — the same file 404s or does not whatever size is asked
-for. The ratio has not been measured yet, so measure it before believing the
-saving.
+Three candidates, queued and not yet started. None of them needs anything this
+tool cannot already do, and two of the three need no requests at all. The last
+report that produced work here has been worked through.
 
 ### The same anchor text on two destinations
 
@@ -98,6 +85,11 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **The image sweep counts files, not URLs** (unreleased) — an image CDN
+  serves one file at every size asked for, and each size was a separate entry
+  against the cap. Measured before believing it, as this section asked: 767
+  distinct URLs became 488 distinct files across 45 pages of a real store. A
+  third, not the tenfold the mechanism suggested.
 - **Site-level checks read the host that answers** (1.16.0) — auditing a
   bare domain whose site lives at `www.` read robots.txt, llms.txt and the
   security headers off the 301, which was three false findings on any such

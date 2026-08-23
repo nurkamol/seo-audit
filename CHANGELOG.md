@@ -5,6 +5,31 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The image sweep counts files, not URLs.** An image CDN serves one file at
+  every size asked for — `photo.avif?v=17&width=150`, `&width=300`, `&width=750`
+  — and each of those was a separate entry against the 200-image cap, and a
+  separate request. `width`, `height`, `w`, `h` and `dpr` are now dropped before
+  deduping.
+
+  Measured rather than assumed, because the roadmap entry asking for this said
+  to: across 45 pages of a real store, **767 distinct URLs became 488 distinct
+  files**, a third of the sweep asking the same question again. A live run of
+  the same 45 pages now reports 488 where it used to report 767. It is not the
+  tenfold saving the mechanism suggested, and the honest number is the one
+  worth writing down.
+
+  `v` is deliberately kept. A different version is a different asset and a
+  stale one really can 404, which is a finding worth keeping. The trade taken
+  is that one size is checked on behalf of the others: a CDN that refuses an
+  unusual width will not be caught, which errs towards saying nothing rather
+  than towards saying something wrong.
+
+- **Both capped messages name the number to set.** `image-sweep-capped` now
+  says how many files the site has and what to set `maxImageChecks` to;
+  `truncated` says `--limit 325` rather than "raise it with --limit". The
+  report already knew both numbers.
+
 ## [1.16.0] — 2026-08-23
 
 ### Fixed
