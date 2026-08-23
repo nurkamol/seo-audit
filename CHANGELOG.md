@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.19.0] — 2026-08-23
+
 ### Added
 - **Four contradictions, each read off something already parsed.** None of them
   needs a request, and each reports a page disagreeing with itself rather than

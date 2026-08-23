@@ -597,7 +597,7 @@ how much you value stability over freshness:
 | Reference | Gets you |
 |---|---|
 | `@v1` | The latest release that is backwards compatible. Moves forward with each one. Recommended |
-| `@v1.18.0` | Exactly that release, forever |
+| `@v1.19.0` | Exactly that release, forever |
 | `@main` | Whatever was last pushed, including work in progress |
 
 The same applies to `npx github:nurkamol/seo-audit#v1`.

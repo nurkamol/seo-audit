@@ -65,14 +65,14 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **Four contradictions** (unreleased) — an image both deferred and
+- **Four contradictions** (1.19.0) — an image both deferred and
   prioritised, a `Content-Language` header disagreeing with `<html lang>`,
   structured data modified before it was published or dated in the future, and
   a URL listed twice in one sitemap. The last needed narrowing by shape:
   wordpress.org's image sitemap repeats `/` forty times because that is the
   format, while css-tricks.com's post sitemaps carry image elements and are
   ordinary lists, so the namespace could not be the discriminator.
-- **Favicon** (unreleased) — a declared icon that is not there, or no
+- **Favicon** (1.19.0) — a declared icon that is not there, or no
   declaration and nothing at `/favicon.ico`. Kept to those two because a site
   serving one from a path it never declared is working as intended. The real
   web added three details: a page at `/favicon.ico` counts as absent, `data:,`
