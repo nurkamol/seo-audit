@@ -15,7 +15,17 @@ final class Session: ObservableObject {
 
     private var task: Task<Void, Never>?
 
-    func begin(_ run: Run, using engine: some AuditEngine) {
+    /// Open a report that was already on disk, without crawling anything.
+    func show(_ report: Report, raw: Data, for run: Run) {
+        cancel()
+        lines = []
+        failure = nil
+        running = run
+        self.raw = raw
+        self.report = report
+    }
+
+    func begin(_ run: Run, using engine: some AuditEngine, keeping library: Library? = nil) {
         cancel()
         lines = []
         report = nil
@@ -33,6 +43,9 @@ final class Session: ObservableObject {
                     if self.lines.count > 400 { self.lines.removeFirst(self.lines.count - 400) }
                 case .finished(let report, let raw):
                     self.raw = raw
+                    // Kept before it is shown: a crash while rendering should
+                    // still leave the seven minutes on disk.
+                    library?.keep(report, site: run.url, raw: raw)
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { self.report = report }
                 case .failed(let why):
                     withAnimation(.snappy) { self.failure = why }
@@ -60,7 +73,7 @@ final class Session: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject private var engine: Engine
-    @StateObject private var history = History()
+    @StateObject private var library = Library()
     @StateObject private var session = Session()
     @StateObject private var updates = Updates()
 
@@ -71,7 +84,12 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(history: history, updates: updates, showingVersions: $showingVersions) { url in
+            Sidebar(library: library, updates: updates, showingVersions: $showingVersions) { stored in
+                guard let (report, raw) = library.reopen(stored) else { return }
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    session.show(report, raw: raw, for: Run(url: stored.site, limit: stored.pages))
+                }
+            } again: { url in
                 site = url
                 start()
             }
@@ -96,7 +114,7 @@ struct ContentView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
         case .failed(let why):
             Card(alignment: .leading) {
-                Label("seo-audit could not start", systemImage: "exclamationmark.triangle").font(.headline)
+                Label("SEO Audit could not start", systemImage: "exclamationmark.triangle").font(.headline)
                 Text(why).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
             .frame(maxWidth: 520)
@@ -125,9 +143,8 @@ struct ContentView: View {
     private func start() {
         guard let url = Run.normalise(site) else { return }
         let run = Run(url: url, limit: limit)
-        history.remember(url)
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            session.begin(run, using: engine)
+            session.begin(run, using: engine, keeping: library)
         }
     }
 }

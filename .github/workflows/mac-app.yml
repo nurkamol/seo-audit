@@ -1,0 +1,96 @@
+# Build the macOS app and run its tests on every change.
+#
+# Until this existed, Swift was only compiled when a tag was pushed — so a break
+# in the app landed on main and waited there until release day, which is the
+# worst possible time to find it.
+name: macOS app
+
+on:
+  push:
+    branches: [main]
+    # Only when something the app is made of changes. A CSV writer in src/ is
+    # covered by `npm test`; rebuilding an app for it is a runner minute spent
+    # on nothing.
+    paths:
+      - 'mac/**'
+      - 'Package.swift'
+      - 'bin/**'
+      - 'src/**'
+      - 'worker/**'
+      - '.github/workflows/mac-app.yml'
+  pull_request:
+    paths:
+      - 'mac/**'
+      - 'Package.swift'
+      - 'bin/**'
+      - 'src/**'
+      - 'worker/**'
+      - '.github/workflows/mac-app.yml'
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the runner can build Liquid Glass
+        run: |
+          sdk="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "macOS SDK $sdk, $(swiftc --version | head -1)"
+          case "$sdk" in
+            2[6-9].*|[3-9][0-9].*) ;;
+            *) echo "::error::Liquid Glass needs the macOS 26 SDK; this runner has $sdk"; exit 1 ;;
+          esac
+
+      - name: Test the app
+        run: swift test
+
+      - name: Build the bundle
+        # --no-node: a 108 MB copy of Node proves nothing about the Swift, and
+        # the release workflow is what tests the bundled build.
+        run: ./mac/build.sh --no-node
+
+      - name: Check the bundle is a bundle
+        run: |
+          app="build/SEO Audit.app"
+          test -x "$app/Contents/MacOS/SEO Audit"
+          test -f "$app/Contents/Resources/engine/bin/seo-audit.mjs"
+          test -f "$app/Contents/Resources/SEO Audit.icns"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --deep --strict "$app"
+
+      - name: Check the app and the engine still agree
+        run: |
+          # The fixture the model tests decode is a real engine payload, and it
+          # goes stale the moment the engine's output changes. Capture a fresh
+          # one and decode it the same way, so drift fails here rather than in
+          # somebody's window.
+          node bin/seo-audit.mjs --serve 4321 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:4321/robots.txt && break
+            sleep 1
+          done
+          curl -sN --max-time 120 \
+            "http://127.0.0.1:4321/stream?url=https://jekyllrb.com&limit=3&format=json" \
+            | grep '^data:' | tail -1 | cut -c7- > /tmp/fresh.json
+          node -e '
+            const fresh = require("/tmp/fresh.json");
+            const fixture = require("./mac/Tests/SeoAuditTests/payload.json");
+            const shape = (o) => Object.keys(o).sort().join(",");
+            for (const [name, a, b] of [
+              ["meta", fresh.meta, fixture.meta],
+              ["finding", fresh.findings[0], fixture.findings[0]],
+              ["cause", fresh.causes[0], fixture.causes[0]],
+            ]) {
+              const gone = Object.keys(b).filter((k) => !(k in a));
+              if (gone.length) {
+                console.error(`::error::the engine no longer sends ${gone.join(", ")} on a ${name}; the app decodes it`);
+                process.exit(1);
+              }
+              console.log(`${name}: ${shape(a)}`);
+            }
+          '

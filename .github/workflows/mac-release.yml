@@ -52,8 +52,8 @@ jobs:
 
       - name: Check it is what it claims to be
         run: |
-          app=build/seo-audit.app
-          test -x "$app/Contents/MacOS/seo-audit"
+          app="build/SEO Audit.app"
+          test -x "$app/Contents/MacOS/SEO Audit"
           test -x "$app/Contents/Resources/node"
           test -f "$app/Contents/Resources/engine/bin/seo-audit.mjs"
           plutil -lint "$app/Contents/Info.plist"
@@ -69,7 +69,7 @@ jobs:
           name="seo-audit-$version-macos.zip"
           # ditto rather than zip: it keeps the bundle's symlinks and the
           # signature intact, which plain zip does not.
-          ditto -c -k --sequesterRsrc --keepParent build/seo-audit.app "$name"
+          ditto -c -k --sequesterRsrc --keepParent "build/SEO Audit.app" "$name"
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$(shasum -a 256 "$name" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"

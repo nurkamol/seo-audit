@@ -39,7 +39,7 @@ struct SeoAuditApp: App {
             // The standard About panel lists a bundle's metadata; this one can
             // say what the app is and link to the thing it is a window over.
             CommandGroup(replacing: .appInfo) {
-                Button("About seo-audit") { NotificationCenter.default.post(name: .showAbout, object: nil) }
+                Button("About SEO Audit") { NotificationCenter.default.post(name: .showAbout, object: nil) }
             }
 
             CommandGroup(after: .saveItem) {
@@ -48,7 +48,7 @@ struct SeoAuditApp: App {
             }
 
             CommandGroup(replacing: .help) {
-                Button("seo-audit Help") { Links.open(Links.site) }
+                Button("SEO Audit Help") { Links.open(Links.site) }
                     .keyboardShortcut("?", modifiers: .command)
                 Button("What it checks") { Links.open(Links.checks) }
                 Divider()
@@ -87,7 +87,7 @@ struct AboutSheet: View {
             }
 
             VStack(spacing: 5) {
-                Text("seo-audit").font(.system(size: 22, weight: .semibold, design: .rounded))
+                Text("SEO Audit").font(.system(size: 22, weight: .semibold, design: .rounded))
                 Text("Version \(version) · \(engineNote)")
                     .font(.caption)
                     .foregroundStyle(.secondary)

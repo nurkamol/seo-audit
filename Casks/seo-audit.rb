@@ -15,7 +15,7 @@ cask "seo-audit" do
   # homepage are different hosts.
   url "https://github.com/nurkamol/seo-audit/releases/download/v#{version}/seo-audit-#{version}-macos.zip",
       verified: "github.com/nurkamol/seo-audit/"
-  name "seo-audit"
+  name "SEO Audit"
   desc "Crawl a site's sitemap and check every page, from a window"
   homepage "https://github.com/nurkamol/seo-audit"
 
@@ -24,7 +24,8 @@ cask "seo-audit" do
   depends_on macos: :tahoe
   depends_on arch: :arm64
 
-  app "seo-audit.app"
+  # The token stays seo-audit; the app on disk is what people read.
+  app "SEO Audit.app"
 
   # The build is ad-hoc signed rather than notarised, so macOS quarantines
   # anything downloaded and Gatekeeper refuses to open it. Clearing the flag is
@@ -36,7 +37,7 @@ cask "seo-audit" do
   # reason this is reasonable rather than reckless.
   postflight do
     system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/seo-audit.app"],
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/SEO Audit.app"],
                    sudo: false
   end
 

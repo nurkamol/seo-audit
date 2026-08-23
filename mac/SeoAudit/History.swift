@@ -4,53 +4,44 @@
 
 import SwiftUI
 
-@MainActor
-final class History: ObservableObject {
-    @Published private(set) var sites: [String] = []
-    private let key = "seo-audit.history"
-
-    init() {
-        sites = UserDefaults.standard.stringArray(forKey: key) ?? []
-    }
-
-    func remember(_ url: String) {
-        // Most recent first, no duplicates, and a bound: this is a list to
-        // click, not an archive.
-        sites.removeAll { $0 == url }
-        sites.insert(url, at: 0)
-        sites = Array(sites.prefix(12))
-        UserDefaults.standard.set(sites, forKey: key)
-    }
-
-    func forget(_ url: String) {
-        sites.removeAll { $0 == url }
-        UserDefaults.standard.set(sites, forKey: key)
-    }
-}
-
 struct Sidebar: View {
-    @ObservedObject var history: History
+    @ObservedObject var library: Library
     @ObservedObject var updates: Updates
     @Binding var showingVersions: Bool
-    var audit: (String) -> Void
+    var reopen: (StoredReport) -> Void
+    var again: (String) -> Void
 
     var body: some View {
         List {
-            Section("Recent") {
-                if history.sites.isEmpty {
-                    Text("Sites you audit will appear here.")
+            Section("Reports") {
+                if library.reports.isEmpty {
+                    Text("Audits you run are kept here, so a seven-minute crawl only happens once.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 } else {
-                    ForEach(history.sites, id: \.self) { url in
-                        Button { audit(url) } label: {
-                            Label(URL(string: url)?.host ?? url, systemImage: "globe").lineLimit(1)
+                    ForEach(library.reports) { stored in
+                        Button { reopen(stored) } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(stored.host).lineLimit(1)
+                                    if stored.errors > 0 {
+                                        Text("\(stored.errors)")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(.red)
+                                    }
+                                }
+                                Text("\(stored.finishedAt.formatted(date: .abbreviated, time: .shortened)) · \(stored.summary)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                            }
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button("Remove", role: .destructive) {
-                                withAnimation(.snappy) { history.forget(url) }
+                            Button("Audit again") { again(stored.site) }
+                            Button("Delete", role: .destructive) {
+                                withAnimation(.snappy) { library.forget(stored) }
                             }
                         }
                     }
@@ -79,11 +70,9 @@ struct Sidebar: View {
                 .buttonStyle(.glass)
 
                 HStack(spacing: 10) {
-                    Button("Help") { Links.open(Links.site) }
-                        .buttonStyle(.link)
+                    Button("Help") { Links.open(Links.site) }.buttonStyle(.link)
                     Text("·").foregroundStyle(.quaternary)
-                    Button("GitHub") { Links.open(Links.repo) }
-                        .buttonStyle(.link)
+                    Button("GitHub") { Links.open(Links.repo) }.buttonStyle(.link)
                     Text("·").foregroundStyle(.quaternary)
                     Button("About") { NotificationCenter.default.post(name: .showAbout, object: nil) }
                         .buttonStyle(.link)

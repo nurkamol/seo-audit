@@ -168,6 +168,7 @@ There is a macOS app in [`mac/`](mac/README.md):
 
 ```bash
 brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+brew trust nurkamol/seo-audit          # Homebrew asks before running a third party's code
 brew install --cask seo-audit
 # or build it yourself — swiftc and the command line tools, nothing else
 ./mac/build.sh --run

@@ -6,6 +6,48 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Reports are kept.** A 325-page site takes seven minutes to crawl, and
+  losing that because a window was closed is the difference between a tool
+  somebody opens twice and one they open once. Every finished run is written to
+  Application Support as the exact JSON the engine produced — not the app's idea
+  of it — so a report saved by one version still opens in the next, and `jq`
+  works on it. The sidebar lists them with the date and what they found; a
+  click reopens one instantly.
+
+- **The Mac app has tests.** Thirteen, over the models, the URL normalising,
+  version ordering and the library, run by `swift test`. The important one
+  decodes a **real engine payload** captured from a live run, because the way
+  this app breaks is the engine changing its output and nothing noticing until
+  somebody opens a window. The views are deliberately untested: a snapshot of a
+  glass card asserts what the design happens to be today and fails every time
+  it improves.
+
+- **CI builds the app on every change.** Until now Swift was only compiled when
+  a tag was pushed, so a break landed on `main` and waited for release day.
+  `mac-app.yml` runs the tests, builds the bundle and then captures a fresh
+  engine payload and checks the app still decodes every field it needs — drift
+  fails in CI rather than in a window.
+
+### Changed
+- **The app is called SEO Audit.** The command line stays `seo-audit`, the
+  bundle id stays `com.nurkamol.seo-audit` and the cask token stays
+  `seo-audit`: a display name is for people, those three are for machines.
+
+- **The icons weigh a tenth of what they did.** `docs/icon.png` was 697 KB of
+  unoptimised PNG for a flat glyph, used at 96px on a web page; it is 24 KB at
+  512px now, the website uses the 1.5 KB SVG instead, and the app's `.icns` went
+  from 1.1 MB to 189 KB. `build.sh` shrinks the iconset when `pngquant` is
+  installed and skips it when not, because a build that needs a package manager
+  to produce an icon is not a build anyone can run.
+
+### Fixed
+- **`brew trust` is in the install instructions.** Homebrew 6 refuses to load a
+  cask from a tap nobody has vouched for, and the warning it prints when you
+  skip it is easy to scroll past. Found by tapping the repository and
+  installing from it, which also turned up `depends_on macos: ">= :tahoe"`
+  being the deprecated spelling of `depends_on macos: :tahoe`.
+
+### Added
 - **`--csv`, and every format in the Mac app.** The findings as a spreadsheet:
   one row each, with the page, the section, whether it is indexable, how many
   links point at it, how far from the homepage, and impressions where Search

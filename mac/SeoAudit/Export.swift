@@ -73,7 +73,7 @@ enum Export {
     /// than a document the engine has.
     static func save(_ format: ExportFormat, report: Report, host: String, engine: URL?, raw: Data?) {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "seo-audit — \(host).\(format.fileExtension)"
+        panel.nameFieldStringValue = "SEO Audit — \(host).\(format.fileExtension)"
         panel.allowedContentTypes = [format.type]
         panel.begin { response in
             guard response == .OK, let destination = panel.url else { return }

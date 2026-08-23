@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>seo-audit — every page, not just the homepage</title>
 <meta name="description" content="A zero-dependency CLI, GitHub Action and macOS app that crawls a site's sitemap and checks every page for the SEO, metadata and structured-data problems single-page graders miss.">
-<link rel="icon" href="icon.png">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="seo-audit">
 <meta property="og:description" content="Every page, not just the homepage. Zero dependencies, one command, works in CI.">
 <meta property="og:image" content="https://nurkamol.github.io/seo-audit/icon.png">
@@ -25,15 +26,20 @@
     font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 52rem; margin: 0 auto; padding: 0 1.25rem; }
-  a { color: var(--brand); }
+  .wrap { max-width: 54rem; margin: 0 auto; padding: 0 max(1.5rem, env(safe-area-inset-left)); }
+  a { color: var(--brand); text-underline-offset: 2px; }
 
-  header { padding: 5rem 0 3.5rem; text-align: center; }
-  header img { width: 96px; height: 96px; border-radius: 22px; }
-  h1 { font-size: 2.6rem; line-height: 1.1; letter-spacing: -.02em; margin: 1.25rem 0 .5rem; }
-  .tagline { font-size: 1.15rem; color: var(--muted); margin: 0 auto 2rem; max-width: 34rem; }
-  .badges { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+  header { padding: 6rem 0 4rem; text-align: center; }
+  header img { border-radius: 22px; display: block; margin: 0 auto; }
+  h1 {
+    font-size: clamp(2rem, 5.5vw, 2.9rem); line-height: 1.08;
+    letter-spacing: -.025em; margin: 1.5rem 0 .75rem;
+  }
+  .tagline { font-size: clamp(1rem, 2.2vw, 1.16rem); color: var(--muted); margin: 0 auto 2.25rem; max-width: 33rem; }
+  .badges { display: flex; gap: .45rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.25rem; }
   .badges img { height: 20px; }
+  header pre { text-align: left; max-width: 40rem; margin: 0 auto; }
+  header .quiet { margin-top: .9rem; }
 
   pre {
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -43,27 +49,40 @@
   code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
   p code, li code, td code { background: var(--panel); padding: .1rem .35rem; border-radius: 4px; }
 
-  section { padding: 2.5rem 0; border-top: 1px solid var(--line); }
-  h2 { font-size: 1.45rem; letter-spacing: -.015em; margin: 0 0 .5rem; }
-  .lede { color: var(--muted); margin: 0 0 1.4rem; }
+  section { padding: 3.25rem 0; border-top: 1px solid var(--line); }
+  section > *:last-child { margin-bottom: 0; }
+  h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); letter-spacing: -.018em; margin: 0 0 .6rem; }
+  .lede { color: var(--muted); margin: 0 0 1.6rem; max-width: 44rem; }
 
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
-  .card { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem 1.2rem; background: var(--panel); }
+  .card {
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.2rem 1.3rem; background: var(--panel);
+  }
   .card h3 { margin: 0 0 .35rem; font-size: 1rem; }
   .card p { margin: 0; color: var(--muted); font-size: .92rem; }
 
-  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
-  th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; min-width: 30rem; }
+  th, td { text-align: left; padding: .7rem .75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { white-space: nowrap; }
   th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
 
   .quiet { color: var(--muted); font-size: .9rem; }
-  footer { padding: 3rem 0 4rem; color: var(--muted); font-size: .9rem; text-align: center; border-top: 1px solid var(--line); }
+  footer { padding: 3rem 0 4.5rem; color: var(--muted); font-size: .9rem; text-align: center; border-top: 1px solid var(--line); }
+
+  /* A phone is where a link like this is opened first. */
+  @media (max-width: 40rem) {
+    header { padding: 3.5rem 0 2.5rem; }
+    section { padding: 2.5rem 0; }
+    pre { font-size: 12px; padding: .85rem .9rem; }
+  }
 </style>
 </head>
 <body>
 
 <header class="wrap">
-  <img src="icon.png" alt="">
+  <img src="icon.svg" alt="" width="96" height="96">
   <h1>Every page, not just the homepage</h1>
   <p class="tagline">
     A crawler that reads a site's whole sitemap and checks each page for the SEO,
@@ -120,6 +139,7 @@
 
 <section class="wrap">
   <h2>Four ways to run it</h2>
+  <div class="scroll">
   <table>
     <tr><th>Where</th><th>How</th></tr>
     <tr>
@@ -135,7 +155,7 @@
     <tr>
       <td><b>A window</b></td>
       <td><code>brew install --cask seo-audit</code><br>
-        <span class="quiet">A macOS app. Native report, no limits, nothing leaves the machine.</span></td>
+        <span class="quiet">SEO Audit — a native report, no limits, nothing leaves the machine.</span></td>
     </tr>
     <tr>
       <td><b>Your own Cloudflare</b></td>
@@ -143,6 +163,7 @@
         will not open a terminal. <a href="https://github.com/nurkamol/seo-audit/blob/main/docs/hosting.md">What it costs</a>.</span></td>
     </tr>
   </table>
+  </div>
 </section>
 
 <section class="wrap">
@@ -153,6 +174,7 @@
     It is a window over the same engine, never a second one.
   </p>
   <pre><code>brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+brew trust nurkamol/seo-audit
 brew install --cask seo-audit</code></pre>
   <p class="quiet">
     macOS 26 or later, Apple Silicon. Or build it yourself — <code>./mac/build.sh</code>,

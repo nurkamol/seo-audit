@@ -18,8 +18,12 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$here/build"
-app="$out/seo-audit.app"
-name="seo-audit"
+# What Finder, the Dock and the menu bar call it. The command line stays
+# `seo-audit`, the bundle id stays com.nurkamol.seo-audit and the cask token
+# stays seo-audit — a display name is for people, and those three are for
+# machines.
+name="SEO Audit"
+app="$out/$name.app"
 version="$(node -p "require('$here/package.json').version" 2>/dev/null || echo 0.0.0)"
 
 bundle_node=1
@@ -64,12 +68,19 @@ cp -R "$here/bin" "$here/src" "$here/worker" "$here/package.json" "$app/Contents
 # Drawn from the same mark the reports carry, at every size macOS asks for.
 iconset="$out/icon.iconset"
 rm -rf "$iconset"; mkdir -p "$iconset"
-sips -s format png --resampleHeightWidth 1024 1024 "$here/docs/icon.png" \
+sips -s format png --resampleHeightWidth 1024 1024 "$here/docs/icon@1024.png" \
   --out "$iconset/icon_512x512@2x.png" >/dev/null 2>&1 || true
 for size in 16 32 128 256 512; do
-  sips -s format png -z $size $size "$here/docs/icon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
-  sips -s format png -z $((size*2)) $((size*2)) "$here/docs/icon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+  sips -s format png -z $size $size "$here/docs/icon@1024.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  sips -s format png -z $((size*2)) $((size*2)) "$here/docs/icon@1024.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
+# sips writes honest but heavy PNGs — a flat glyph came out at 700 KB. pngquant
+# takes the same image to a tenth of that with no visible difference, and is
+# skipped rather than required, because a build that needs a package manager to
+# produce an icon is not a build anyone can run.
+if command -v pngquant >/dev/null; then
+  pngquant --quality 70-95 --skip-if-larger --ext .png --force "$iconset"/*.png 2>/dev/null || true
+fi
 iconutil -c icns "$iconset" -o "$app/Contents/Resources/$name.icns"
 rm -rf "$iconset"
 
@@ -80,7 +91,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key><string>$name</string>
-  <key>CFBundleDisplayName</key><string>seo-audit</string>
+  <key>CFBundleDisplayName</key><string>$name</string>
   <key>CFBundleIdentifier</key><string>com.nurkamol.seo-audit</string>
   <key>CFBundleVersion</key><string>$version</string>
   <key>CFBundleShortVersionString</key><string>$version</string>

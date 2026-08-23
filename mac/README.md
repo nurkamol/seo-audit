@@ -61,8 +61,16 @@ released build carries an arm64 Node — a universal one would be two Nodes and
 
 ```bash
 brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+brew trust nurkamol/seo-audit
 brew install --cask seo-audit
 ```
+
+`brew trust` is not optional: Homebrew 6 refuses to load a cask from a tap
+nobody has vouched for, and the message it prints when you skip it is easy to
+scroll past. The cask then clears the quarantine flag after installing, which
+is what lets an ad-hoc signed app open without the dialog — Homebrew has
+already checked the download against a checksum written by the build that
+produced it.
 
 The cask's version and checksum are written by `.github/workflows/mac-release.yml`
 when a tag is pushed, so the formula cannot describe a build that does not
@@ -98,6 +106,23 @@ executable; `build.sh` is still what wraps that in a bundle with its icon, its
 project file is a thing to maintain, and it would make building this *harder*
 for anyone without Xcode.
 
+## Tests
+
+```bash
+swift test
+```
+
+Thirteen, over the models, the URL normalising, version ordering and the
+library. The one that matters decodes a **real engine payload** captured from a
+live run and kept as a fixture, because the way this app breaks is the engine
+changing its output and nothing noticing until a window is opened. CI captures
+a fresh payload on every change and checks the app still decodes every field it
+needs.
+
+The views are not tested. A snapshot test of a glass card asserts what the
+design happens to be today and fails every time it improves, which teaches a
+team to delete tests.
+
 ## Files
 
 | | |
@@ -108,7 +133,7 @@ for anyone without Xcode.
 | `ContentView.swift` | the window, the session, the stage that morphs |
 | `Stages.swift` | asking for a site, and watching it crawl |
 | `ReportView.swift` | the report: cause cards, filters, pages |
-| `History.swift` | recent sites, and the sidebar |
+| `Library.swift` | reports kept on disk, and the sidebar that lists them |
 | `Updates.swift` | releases, versions, and the command that moves between them |
 | `VersionsSheet.swift` | every release and what changed in it |
 | `PDF.swift` | the report as paper |
