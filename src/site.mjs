@@ -170,6 +170,66 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     }
   }
 
+  // --- Favicon ------------------------------------------------------------
+  // Google draws one beside every result a site owns, and shows a default globe
+  // where it finds none. It reads the declaration from the home page and
+  // accepts three rel values: icon, apple-touch-icon and
+  // apple-touch-icon-precomposed.
+  //
+  // Only two things are reported, and both are facts: a declared icon that is
+  // not there, and no declaration with nothing at /favicon.ico either. A site
+  // serving one from a path it never declared is working exactly as intended,
+  // and guessing otherwise would be inventing a finding.
+  const homePage = pages.find((p) => {
+    try {
+      return p.doc && new URL(p.url).pathname.replace(/\/$/, '') === '';
+    } catch {
+      return false;
+    }
+  });
+  // The home page is not always in the sitemap — eslint.org's lists 499 URLs
+  // and not that one — so it is fetched when it was not crawled. The fetcher
+  // caches, and the audit has already asked for it to settle the host, so this
+  // costs nothing.
+  let homeDoc = homePage?.doc;
+  if (!homeDoc) {
+    const res = await fetcher.get(`${origin}/`);
+    if (res.ok && /text\/html/i.test(res.headers.get('content-type') ?? '')) {
+      homeDoc = parseHtml(res.body, `${origin}/`);
+    }
+  }
+  const declared = homeDoc?.icons?.[0];
+  // `data:,` is the empty data URI people use to stop a browser asking for a
+  // favicon at all. example.com and motherfuckingwebsite.com both ship it. It
+  // is a deliberate choice and there is nothing to fetch, so it is left alone.
+  if (homeDoc && !/^data:/i.test(declared ?? '')) {
+    const target = declared ?? new URL('/favicon.ico', origin).toString();
+    const res = await fetcher.get(target);
+    const type = res.headers.get('content-type') ?? '';
+    // 403 is hotlink protection working as designed, the same judgement the
+    // og:image sweep makes. Only an answer that means "not here" counts — and
+    // a page counts, because the catch-all handler answering 200 with HTML
+    // reaches a search engine as no icon just as surely as a 404 does.
+    const absent = res.status === 404 || res.status === 410 || res.status === 0;
+    const isPage = res.ok && /text\/html/i.test(type);
+    const because = absent
+      ? `answers ${res.status || res.error}`
+      : `answers 200 with ${type.split(';')[0]} — the site's catch-all handler rather than an icon`;
+
+    if (absent || isPage) {
+      if (declared) {
+        out.push(f('warn', 'favicon-broken', 'The declared favicon does not load',
+          `${target} ${because}. The home page asks for it by name, so search results fall back to a ` +
+            'default icon on every page of the site.', origin));
+      } else {
+        out.push(f('info', 'favicon-missing', 'No favicon',
+          `The home page declares none and ${target} ${because}. Search results show a default icon ` +
+            'beside every page of the site. Google wants a square, at least 8×8 and better above 48×48.',
+          origin));
+      }
+    }
+  }
+
   // --- Canonical host and scheme -----------------------------------------
   // One hop is right. Two means every visitor pays for a wasted round trip.
   //

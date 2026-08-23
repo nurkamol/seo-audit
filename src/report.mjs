@@ -230,6 +230,7 @@ const CATEGORY_OF = {
   'sitemap-too-large': 'Sitemap & robots',
 
   // Site & security
+  'favicon-broken': 'Site & security', 'favicon-missing': 'Site & security',
   'mixed-content': 'Site & security', 'tls-expiring': 'Site & security',
   'tls-expired': 'Site & security', 'url-uppercase': 'Site & security',
   'url-underscore': 'Site & security', 'url-space': 'Site & security',

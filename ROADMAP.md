@@ -4,17 +4,7 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Two candidates, queued and not yet started. Neither needs anything this tool
-cannot already do, and one of the two needs no requests at all.
-
-### Favicon
-
-Google draws one beside every result a site owns, and a missing or 404 icon
-means a generic globe on all of them. One request per domain, in `src/site.mjs`.
-
-The honest version reports only a declared icon that 404s, or no declaration
-*and* no `/favicon.ico`. A site serving one from a path it never declared is
-fine, and guessing otherwise is the false positive rule 2 forbids.
+One candidate left, and it needs no requests at all.
 
 ### Four contradictions, none of them expensive
 
@@ -85,6 +75,13 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Favicon** (unreleased) — a declared icon that is not there, or no
+  declaration and nothing at `/favicon.ico`. Kept to those two because a site
+  serving one from a path it never declared is working as intended. The real
+  web added three details: a page at `/favicon.ico` counts as absent, `data:,`
+  is a deliberate choice to leave alone, and the plain `icon` is preferred over
+  the iOS ones so a stale `apple-touch-icon` does not shout over a working
+  favicon.
 - **The same anchor text on two destinations** (1.18.0) — `anchor-ambiguous`,
   one phrase pointing at two pages. This section predicted it would be noisy
   before it was right, and four sites each contributed a class of false

@@ -523,6 +523,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | The sitemap declares `lastmod` at all | note |
 | `lastmod` differs between pages — one date on every URL is a build stamp, and crawlers learn to ignore it | note |
 | No `lastmod` is in the future | warning |
+| A favicon Google can use — the home page declares one that loads, or `/favicon.ico` is there | warning / note |
 | `llms.txt` exists | note |
 | Everything once-per-domain is read on the host that answers — audit `example.com` when the site lives at `www.` and the audit moves there, saying so, rather than reading robots.txt off a 301 | note |
 | `http://`, `www.` and `https://www.` each reach the canonical host in one hop | warning |

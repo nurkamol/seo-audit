@@ -111,6 +111,11 @@ export function parseHtml(rawHtml, pageUrl) {
   const links = [...markup.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
   const linkRel = (rel) => links.filter((t) => (attr(t, 'rel') ?? '').toLowerCase() === rel);
 
+  // The three rel values Google reads a favicon from, and `rel` is a token
+  // list, so the legacy `shortcut icon` is matched by the `icon` in it without
+  // needing a rule of its own.
+  const ICON_RELS = new Set(['icon', 'apple-touch-icon', 'apple-touch-icon-precomposed']);
+
   const abs = (href) => {
     try {
       return new URL(href, pageUrl).toString();
@@ -269,6 +274,18 @@ export function parseHtml(rawHtml, pageUrl) {
           ? 'declared'
           : null),
     images,
+    // Declared favicons, in the order a search engine would prefer them: the
+    // plain `icon` first, then the iOS ones. Google looks for these on the
+    // home page and draws the result beside every listing the site owns.
+    icons: links
+      .map((tag) => ({
+        rel: (attr(tag, 'rel') ?? '').toLowerCase().split(/\s+/).filter(Boolean),
+        href: abs(attr(tag, 'href')),
+      }))
+      .filter((icon) => icon.href && icon.rel.some((r) => ICON_RELS.has(r)))
+      .sort((a, b) => Number(b.rel.includes('icon')) - Number(a.rel.includes('icon')))
+      .map((icon) => icon.href)
+      .filter((href, i, all) => all.indexOf(href) === i),
     jsonld,
     links: {
       internal: [...new Set(internal(anchors))],

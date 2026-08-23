@@ -622,6 +622,115 @@ test('a long tail of deep pages is capped and counted', () => {
   assert.match(more.title, /^5 more pages/);
 });
 
+// --- favicon ---------------------------------------------------------------
+
+const homeDeclaring = (origin, head) => [{
+  url: `${origin}/`,
+  res: { ok: true, status: 200, ms: 1, headers: new Headers() },
+  doc: { ...parseHtml(`<html><head>${head}</head><body></body></html>`, `${origin}/`), hreflang: [], og: {}, images: [] },
+}];
+
+const faviconIds = async (head, routes) => {
+  const origin = 'https://x.test';
+  const out = await siteChecks(origin, fakeFetcher(routes), homeDeclaring(origin, head), {
+    sitemapUrls: [`${origin}/`],
+  });
+  return ids(out).filter((id) => id.startsWith('favicon'));
+};
+
+test('a declared favicon that is not there is reported', async () => {
+  // The home page asks for it by name, so results fall back to a globe.
+  assert.deepEqual(
+    await faviconIds('<link rel="icon" href="/fav.png">', (url) =>
+      url.endsWith('/fav.png') ? { status: 404 } : notFound(url)),
+    ['favicon-broken'],
+  );
+});
+
+test('a declared favicon that loads is not mentioned', async () => {
+  assert.deepEqual(
+    await faviconIds('<link rel="shortcut icon" href="/fav.ico">', (url) =>
+      url.endsWith('/fav.ico') ? { headers: { 'content-type': 'image/x-icon' } } : notFound(url)),
+    [],
+  );
+});
+
+test('an icon that answers with a page is no icon at all', async () => {
+  // The catch-all handler, answering 200 to anything. It reaches a search
+  // engine as nothing.
+  assert.deepEqual(
+    await faviconIds('<link rel="icon" href="/fav.png">', (url) =>
+      url.endsWith('/fav.png') ? { headers: { 'content-type': 'text/html' } } : notFound(url)),
+    ['favicon-broken'],
+  );
+});
+
+test('with nothing declared, /favicon.ico is what decides it', async () => {
+  // Serving one from a path nobody declared is working as intended.
+  assert.deepEqual(
+    await faviconIds('<title>t</title>', (url) =>
+      url.endsWith('/favicon.ico') ? { headers: { 'content-type': 'image/x-icon' } } : notFound(url)),
+    [],
+  );
+  assert.deepEqual(
+    await faviconIds('<title>t</title>', (url) => (url.endsWith('/favicon.ico') ? { status: 404 } : notFound(url))),
+    ['favicon-missing'],
+  );
+});
+
+test('an empty data URI is a decision, not a missing favicon', async () => {
+  // example.com and motherfuckingwebsite.com both ship `data:,` to stop the
+  // browser asking. There is nothing to fetch and nothing to report.
+  const asked = [];
+  const out = await siteChecks(
+    'https://x.test',
+    fakeFetcher((url) => { asked.push(url); return notFound(url); }),
+    homeDeclaring('https://x.test', '<link rel="icon" href="data:,">'),
+    { sitemapUrls: ['https://x.test/'] },
+  );
+  assert.ok(!ids(out).some((id) => id.startsWith('favicon')));
+  assert.ok(!asked.some((u) => u.startsWith('data:')), 'and nothing tried to fetch it');
+});
+
+test('a page served at /favicon.ico is no icon either', async () => {
+  // The catch-all handler answering 200 with HTML reaches a search engine as
+  // no icon, just as surely as a 404 does.
+  assert.deepEqual(
+    await faviconIds('<title>t</title>', (url) =>
+      url.endsWith('/favicon.ico') ? { headers: { 'content-type': 'text/html' } } : notFound(url)),
+    ['favicon-missing'],
+  );
+});
+
+test('hotlink protection is not a missing favicon', async () => {
+  // 403 is somebody's bot rule working, the same judgement the og:image sweep
+  // makes. Only an answer that means "not here" counts.
+  for (const status of [403, 401, 429, 500]) {
+    assert.deepEqual(
+      await faviconIds('<link rel="icon" href="/fav.png">', (url) =>
+        url.endsWith('/fav.png') ? { status } : notFound(url)),
+      [],
+      `HTTP ${status} should not be read as a missing favicon`,
+    );
+  }
+});
+
+test('the plain icon is preferred over the iOS one', async () => {
+  // Reporting the apple-touch-icon's 404 while a working favicon sits beside it
+  // would be true about the wrong file.
+  const asked = [];
+  await siteChecks(
+    'https://x.test',
+    fakeFetcher((url) => {
+      if (url.includes('apple') || url.includes('fav.svg')) asked.push(url);
+      return url.includes('fav.svg') ? { headers: { 'content-type': 'image/svg+xml' } } : notFound(url);
+    }),
+    homeDeclaring('https://x.test', '<link rel="apple-touch-icon" href="/apple.png"><link rel="icon" href="/fav.svg">'),
+    { sitemapUrls: ['https://x.test/'] },
+  );
+  assert.deepEqual(asked, ['https://x.test/fav.svg'], 'only the plain icon should have been asked for');
+});
+
 // --- the image sweep -------------------------------------------------------
 
 const withImages = (origin, srcs) => [{

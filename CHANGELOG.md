@@ -5,6 +5,37 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`favicon-broken` and `favicon-missing`** — Google draws a favicon beside
+  every result a site owns and shows a default globe where it finds none. It
+  reads the declaration from the home page and accepts three `rel` values:
+  `icon`, `apple-touch-icon` and `apple-touch-icon-precomposed`. Because `rel`
+  is a token list, the legacy `shortcut icon` is matched by the `icon` in it
+  without needing a rule of its own.
+
+  Exactly two things are reported, both facts: a **declared** icon that is not
+  there, and **no declaration** with nothing at `/favicon.ico` either. A site
+  serving one from a path it never declared is working as intended, and
+  guessing otherwise would be inventing a finding. One request, and the home
+  page it reads was already fetched to settle the host in 1.16.0.
+
+  Three details the real web supplied:
+
+  - A page counts as absent. `/favicon.ico` answering 200 with HTML is the
+    site's catch-all handler, and it reaches a search engine as no icon just as
+    surely as a 404 does.
+  - `data:,` is left alone. example.com and motherfuckingwebsite.com both ship
+    the empty data URI that stops a browser asking for a favicon at all — a
+    deliberate choice, with nothing to fetch.
+  - The plain `icon` is preferred over the iOS ones, so an `apple-touch-icon`
+    404 is not reported while a working favicon sits beside it.
+
+  403 is not a missing favicon, the same judgement the `og:image` sweep makes.
+  Silent on maisonetherique.com, jekyllrb.com, css-tricks.com, wordpress.org
+  (whose icon is on another host entirely), smashingmagazine.com,
+  elementor.com, example.com, info.cern.ch and textfiles.com; fires on
+  danluu.com, which declares none and 404s `/favicon.ico`.
+
 ## [1.18.0] — 2026-08-23
 
 ### Added
