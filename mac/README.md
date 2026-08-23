@@ -83,6 +83,18 @@ notes, newest first. Moving between them — in either direction, because a
 release that makes a report worse should be undoable without reading a manual —
 runs one Homebrew command in Terminal.
 
+Three sources, in that order, because the first one is not reliable enough to be
+the only one:
+
+| | |
+|---|---|
+| `api.github.com` | The full answer, including which releases are prereleases. Sixty anonymous requests an hour **per address**, shared with every other tool on the machine that talks to GitHub — so a 403 here is ordinary |
+| `releases.atom` | The same releases from `github.com`, which does not spend that quota. It cannot say what is a prerelease, so a list read from it is **shown but never used to announce an update**, and the sheet says where it came from |
+| The last list that worked | Kept in Application Support. A sheet that has ever succeeded never opens empty again — GitHub refusing an hour later is not a reason to forget what it said |
+
+If all three come up empty the sheet says so and offers the releases page,
+rather than showing an error above an empty list.
+
 The app does **not** download and swap in a new build of itself. Doing that
 safely needs a Developer ID and notarisation; doing it without them is
 indistinguishable from something you would not want on your machine. Homebrew
@@ -112,8 +124,8 @@ for anyone without Xcode.
 swift test
 ```
 
-Thirteen, over the models, the URL normalising, version ordering and the
-library. The one that matters decodes a **real engine payload** captured from a
+Twenty, over the models, the URL normalising, version ordering, the library, the
+releases feed and the version cache. The one that matters decodes a **real engine payload** captured from a
 live run and kept as a fixture, because the way this app breaks is the engine
 changing its output and nothing noticing until a window is opened. CI captures
 a fresh payload on every change and checks the app still decodes every field it
@@ -135,5 +147,6 @@ team to delete tests.
 | `ReportView.swift` | the report: cause cards, filters, pages |
 | `Library.swift` | reports kept on disk, and the sidebar that lists them |
 | `Updates.swift` | releases, versions, and the command that moves between them |
+| `AtomReleases.swift` | the releases feed, for when the API has had enough |
 | `VersionsSheet.swift` | every release and what changed in it |
 | `PDF.swift` | the report as paper |

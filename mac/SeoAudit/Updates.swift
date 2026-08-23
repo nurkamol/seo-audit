@@ -20,6 +20,11 @@ struct Release: Decodable, Identifiable, Hashable {
     let publishedAt: Date?
     let htmlUrl: String
     let prerelease: Bool
+    /// The releases feed does not mark prereleases, so a list read from it
+    /// cannot be trusted to answer "is there an update" — only to be shown.
+    /// Defaulted rather than required so a cache written by an older build
+    /// still decodes.
+    var fromFeed: Bool = false
 
     var id: String { tagName }
     var version: Version { Version(tagName) }
@@ -27,9 +32,22 @@ struct Release: Decodable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
-        case name, body, prerelease
+        case name, body, prerelease, fromFeed
         case publishedAt = "published_at"
         case htmlUrl = "html_url"
+    }
+}
+
+extension Release: Encodable {
+    func encode(to encoder: Encoder) throws {
+        var box = encoder.container(keyedBy: CodingKeys.self)
+        try box.encode(tagName, forKey: .tagName)
+        try box.encodeIfPresent(name, forKey: .name)
+        try box.encodeIfPresent(body, forKey: .body)
+        try box.encodeIfPresent(publishedAt, forKey: .publishedAt)
+        try box.encode(htmlUrl, forKey: .htmlUrl)
+        try box.encode(prerelease, forKey: .prerelease)
+        try box.encode(fromFeed, forKey: .fromFeed)
     }
 }
 
@@ -67,7 +85,13 @@ final class Updates: ObservableObject {
     @Published var lastChecked: Date?
 
     private let endpoint = URL(string: "https://api.github.com/repos/nurkamol/seo-audit/releases?per_page=30")!
+    /// The same releases as an Atom feed, served by github.com rather than
+    /// api.github.com — so it does not spend the sixty-an-hour anonymous API
+    /// quota, which is per address and shared with every other tool on the
+    /// machine that talks to GitHub.
+    private let feed = URL(string: "https://github.com/nurkamol/seo-audit/releases.atom")!
     private let checkedKey = "seo-audit.updates.lastChecked"
+    private let cache: URL
 
     var current: Version {
         Version(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0")
@@ -78,12 +102,33 @@ final class Updates: ObservableObject {
     }
 
     var available: Release? {
-        guard let newest, current < newest.version else { return nil }
+        // A feed-sourced list cannot tell a prerelease from a release, so it is
+        // never allowed to announce an update. Showing the list is useful;
+        // pushing somebody onto a prerelease because the feed did not say so is
+        // the same false positive this project refuses in its reports.
+        guard let newest, !newest.fromFeed, current < newest.version else { return nil }
         return newest
     }
 
-    init() {
+    /// True when what is on screen came from the feed, and so is a list rather
+    /// than an answer. The sheet says so instead of quietly showing less.
+    var listIsPartial: Bool { !releases.isEmpty && releases.allSatisfy(\.fromFeed) }
+
+    init(root: URL? = nil) {
+        let base = root ?? FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SEO Audit")
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        cache = base.appendingPathComponent("releases.json")
+
         lastChecked = UserDefaults.standard.object(forKey: checkedKey) as? Date
+        // A sheet that has ever succeeded should never open empty again. GitHub
+        // answering 403 an hour later is not a reason to forget what it said.
+        if let data = try? Data(contentsOf: cache) {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            releases = (try? decoder.decode([Release].self, from: data)) ?? []
+        }
     }
 
     /// Once a day, not every launch: a version check is not worth a request
@@ -99,27 +144,67 @@ final class Updates: ObservableObject {
         problem = nil
         defer { checking = false }
 
+        // The API first, because it is the only source that marks a
+        // prerelease. Its anonymous quota is sixty an hour per address and is
+        // shared with every other tool on the machine, so a 403 here is
+        // ordinary rather than exceptional — and is not a reason to show
+        // nothing.
+        var refusal: String?
         do {
             var request = URLRequest(url: endpoint)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             request.timeoutInterval = 12
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                // Unauthenticated GitHub allows sixty requests an hour per
-                // address, and saying so is more use than "something failed".
-                problem = "GitHub answered \((response as? HTTPURLResponse)?.statusCode ?? 0). "
-                    + "Unauthenticated checks are limited to sixty an hour."
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 {
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                keep(try decoder.decode([Release].self, from: data))
                 return
             }
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            releases = try decoder.decode([Release].self, from: data)
-                .sorted { $1.version < $0.version }
-            lastChecked = Date()
-            UserDefaults.standard.set(lastChecked, forKey: checkedKey)
+            refusal = "GitHub answered \(status)."
         } catch {
-            problem = error.localizedDescription
+            refusal = error.localizedDescription
         }
+
+        // The releases feed says the same thing from a different host, without
+        // spending the API quota. It cannot mark a prerelease, which is why
+        // anything read from it is shown but never used to announce an update.
+        do {
+            var request = URLRequest(url: feed)
+            request.timeoutInterval = 12
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if (response as? HTTPURLResponse)?.statusCode == 200,
+               case let parsed = AtomReleases.parse(data), !parsed.isEmpty {
+                keep(parsed)
+                return
+            }
+        } catch {
+            // Fall through to the message below: the feed failing too is worth
+            // one sentence, not two.
+        }
+
+        // Both refused. Whatever was cached stays on screen — a stale list is
+        // more use than an empty one, as long as it is labelled.
+        problem = releases.isEmpty
+            ? "\(refusal ?? "The check failed.") Could not reach the releases feed either. "
+                + "Open the repository to see what is out."
+            : "\(refusal ?? "The check failed.") Showing the last list this app was able to read"
+                + (lastChecked.map { ", from \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
+                + "."
+    }
+
+    /// One place where a successful read lands, so the cache and the timestamp
+    /// can never disagree with what is on screen.
+    private func keep(_ found: [Release]) {
+        releases = found.sorted { $1.version < $0.version }
+        problem = nil
+        lastChecked = Date()
+        UserDefaults.standard.set(lastChecked, forKey: checkedKey)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(releases).write(to: cache, options: .atomic)
     }
 
     // MARK: - Moving between versions

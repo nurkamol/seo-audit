@@ -2649,6 +2649,47 @@ test('a baseline round-trips through serialize and parse', () => {
   assert.deepEqual(restored.findings, findings);
 });
 
+test('a report carries the grouping and a baseline does not', () => {
+  // The CLI wrote findings and the Worker wrote findings *and* causes, so a
+  // machine reading `--json` got a different document from one reading the
+  // hosted version — against the rule that says those two must never differ.
+  const findings = [
+    { level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/p/one' },
+    { level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/p/two' },
+  ];
+  const meta = { date: '2026-01-01', pages: 2 };
+
+  const report = JSON.parse(serialize(findings, meta, { full: true }));
+  assert.ok(Array.isArray(report.causes), 'a report has to be able to rebuild the HTML');
+  assert.equal(report.causes.length, 1, 'two findings of one check under one section are one cause');
+  assert.deepEqual(
+    Object.keys(report.causes[0]).sort(),
+    ['count', 'id', 'level', 'pages', 'scope', 'section', 'title'],
+    'the same shape the Worker sends, because it is the same function',
+  );
+  assert.equal(report.causes[0].scope, causeScope(byCause(findings)[0], meta.pages));
+
+  // A baseline is committed and diffed, and grouping moves whenever page counts
+  // do — which is the churn the baseline shape exists to avoid.
+  const baseline = JSON.parse(serialize(findings, meta));
+  assert.ok(!('causes' in baseline), 'a baseline stays the five identifying fields');
+});
+
+test('a report keeps the traffic a baseline drops', () => {
+  const findings = [
+    {
+      level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/p/',
+      traffic: { impressions: 900, clicks: 12 },
+    },
+  ];
+  const report = JSON.parse(serialize(findings, { date: '2026-01-01', pages: 1 }, { full: true }));
+  assert.deepEqual(report.findings[0].traffic, { impressions: 900, clicks: 12 });
+
+  // Impressions change every day; a baseline that churns is one nobody reads.
+  const baseline = JSON.parse(serialize(findings, { date: '2026-01-01', pages: 1 }));
+  assert.ok(!('traffic' in baseline.findings[0]));
+});
+
 test('parsing a non-report JSON file explains itself', () => {
   assert.throws(() => parseBaseline('{"hello":true}', 'x.json'), /no findings array/);
   assert.throws(() => parseBaseline('not json', 'x.json'), /not valid JSON/);

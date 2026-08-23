@@ -137,3 +137,25 @@ export function causeScope(cause, totalPages) {
     cause.depth === 0 ? ', starting at the homepage' : cause.depth === 1 ? ', one click from home' : '';
   return `${pages} pages ${where}${share}${reach}${near}`;
 }
+
+/** The grouping, in the shape a machine reading a report wants.
+ *
+ *  Every front end that emits JSON emits this — the CLI's `--json`, the
+ *  Worker's `?format=json`, and so the Mac app that reads it. It exists as one
+ *  function because two of them had assembled it inline and the third had not
+ *  emitted it at all, which meant a report from the command line and a report
+ *  from the hosted version were different documents. `scope` is rendered here
+ *  rather than left to the caller for the same reason: it is the sentence the
+ *  terminal, the HTML and the app all print, and a second phrasing of it in
+ *  another language is exactly the drift this project refuses everywhere else. */
+export function causePayload(findings, totalPages) {
+  return byCause(findings).map((cause) => ({
+    id: cause.id,
+    title: cause.title,
+    level: cause.level,
+    section: cause.section,
+    count: cause.count,
+    pages: cause.pages,
+    scope: causeScope(cause, totalPages),
+  }));
+}

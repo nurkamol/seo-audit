@@ -5,7 +5,31 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`--json` carries the grouping.** The Worker's `?format=json` sent `causes`
+  and the CLI's `--json` did not, so a machine reading a report from the command
+  line got a different document from one reading the hosted version — against
+  the rule that says those two must never differ. Both now call one
+  `causePayload()`, including the `scope` sentence, so there is no second
+  phrasing of it to drift. `--json` also keeps `traffic` where Search Console
+  was asked. A **baseline** deliberately carries neither: grouping and
+  impressions move on their own, and a baseline whose git diff churns is one
+  nobody reads.
+
 ### Fixed
+- **The Versions sheet no longer goes blank when GitHub says no.**
+  `api.github.com` allows sixty anonymous requests an hour per address, shared
+  with every other tool on the machine that talks to GitHub, so a 403 there is
+  ordinary — and it left an error message sitting above an empty list with
+  nothing to act on. The list is now kept in Application Support, so a sheet
+  that has ever succeeded never opens empty again; a refused API call falls back
+  to `releases.atom`, which is served by `github.com` and does not spend that
+  quota; and if everything fails the sheet offers the releases page instead of a
+  dead end. The feed cannot mark a prerelease, so anything read from it is shown
+  but never used to announce an update, and the sheet says so rather than
+  quietly knowing less. Parsed with `XMLParser` from Foundation — Atom is XML,
+  and this project does not take dependencies.
+
 - **An HTTP 429 is no longer read as "absent" or "dead".** Running the tool
   twice against one host is enough to trip a store's rate limit, and the second
   run reported *No sitemap found* about a site whose sitemap the first run had

@@ -12,9 +12,13 @@
 		<data>
 		FLnS+UlGof2xMYUCcr3L6t8GL6k=
 		</data>
+		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/Resources/releases.atom</key>
+		<data>
+		Ux+cTJ2BcHLE7Xl7Yjg/nvjk2qA=
+		</data>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeDirectory</key>
 		<data>
-		w6ZkNa78XCAwGBYSWCym+jdxRcY=
+		2qLeAkwwG2BNWxoLDFAzxi7m/80=
 		</data>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeRequirements</key>
 		<data>
@@ -22,7 +26,7 @@
 		</data>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeResources</key>
 		<data>
-		GmdULw8O6/xc5mcSV5caTlBVh8E=
+		zbSyOYYt13OBNuPM+Cx3bSuvhFY=
 		</data>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeSignature</key>
 		<data>
@@ -45,11 +49,18 @@
 			S6y+fDivgC4FzkiEbSUsal4XFk0kYcxZ0MRLbelFWac=
 			</data>
 		</dict>
+		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/Resources/releases.atom</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qhVya5FMCmgeFq2gzCpEGl+pAvw1+IkuLaJ032zxsjg=
+			</data>
+		</dict>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeDirectory</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			FDRMIsWLrXKD7mCI+i/nsfN+f238hKAgl4cdWkwegiw=
+			CuoD9x9rA3+IGgvxK9jqdzA4MkjeEPwuxb7UZia6QEY=
 			</data>
 		</dict>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeRequirements</key>
@@ -63,7 +74,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			1rK13xOpC0CJeiOCzEnWlD4BPMt+eBmvod8yIzyhXwU=
+			9i8preBVnvQn3LlZWvPx9dskoc5Oyt0+QAKPiB49qPM=
 			</data>
 		</dict>
 		<key>Resources/seo-audit_SeoAuditTests.bundle/Contents/_CodeSignature/CodeSignature</key>

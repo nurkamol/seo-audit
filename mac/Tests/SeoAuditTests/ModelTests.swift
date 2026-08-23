@@ -179,3 +179,101 @@ struct ExportTests {
         }
     }
 }
+
+@Suite("The releases feed, when the API refuses")
+struct AtomTests {
+    private func feed() throws -> Data {
+        let url = try #require(Bundle.module.url(forResource: "releases", withExtension: "atom"))
+        return try Data(contentsOf: url)
+    }
+
+    @Test("a real GitHub releases feed parses")
+    func parses() throws {
+        let releases = AtomReleases.parse(try feed())
+
+        #expect(!releases.isEmpty, "the feed the API falls back to has to actually yield releases")
+        for release in releases {
+            #expect(release.tagName.contains { $0.isNumber }, "\(release.tagName) cannot be ordered")
+            #expect(release.htmlUrl.hasPrefix("https://github.com/"))
+            #expect(release.publishedAt != nil, "a row with no date sorts wrong in the sidebar")
+            // Every one of these is shown but must never announce an update:
+            // the feed does not say what is a prerelease.
+            #expect(release.fromFeed)
+        }
+        #expect(releases.contains { $0.version == Version("1.23.0") })
+    }
+
+    @Test("the notes come through as text, not as markup")
+    func notes() throws {
+        let releases = AtomReleases.parse(try feed())
+        let withNotes = try #require(releases.first { !($0.body ?? "").isEmpty })
+        let body = try #require(withNotes.body)
+        #expect(!body.contains("<p>"), "the sheet draws this as plain text")
+        #expect(!body.contains("&lt;"), "entities are decoded once")
+    }
+
+    @Test("markup becomes readable text and entities decode once")
+    func plainText() {
+        #expect(AtomReleases.plainText("<p>one</p><p>two</p>") == "one\ntwo")
+        #expect(AtomReleases.plainText("<ul><li>a</li><li>b</li></ul>") == "• a\n• b")
+        // `&amp;lt;` is an escaped entity in the notes; decoding &amp; first
+        // would turn it into a tag on the second pass.
+        #expect(AtomReleases.plainText("a &amp;lt; b") == "a &lt; b")
+        #expect(AtomReleases.plainText("") == "")
+    }
+
+    @Test("rubbish parses to nothing rather than to a row that cannot be ordered")
+    func rubbish() {
+        #expect(AtomReleases.parse(Data("not xml".utf8)).isEmpty)
+        #expect(AtomReleases.parse(Data(#"<feed><entry><title>x</title></entry></feed>"#.utf8)).isEmpty)
+    }
+
+    @Test("a feed-sourced list never announces an update")
+    func neverAnnounces() throws {
+        let releases = AtomReleases.parse(try feed())
+        // Version 0 is older than everything, so if a feed list could announce
+        // an update it certainly would here.
+        #expect(releases.allSatisfy { $0.fromFeed })
+        #expect(releases.filter { !$0.prerelease && !$0.fromFeed }.isEmpty)
+    }
+}
+
+@Suite("The version list survives GitHub saying no")
+struct UpdatesCacheTests {
+    @MainActor
+    @Test("a cached list is there before any network call")
+    func loadsCache() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("seo-audit-updates-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // Written the way `keep()` writes it.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let stored = [
+            Release(tagName: "v1.23.0", name: "1.23.0", body: "notes", publishedAt: Date(),
+                    htmlUrl: "https://github.com/nurkamol/seo-audit/releases/tag/v1.23.0",
+                    prerelease: false),
+        ]
+        try encoder.encode(stored).write(to: root.appendingPathComponent("releases.json"))
+
+        // The 403 that prompted this left the sheet empty on every launch,
+        // because nothing was ever kept.
+        let updates = Updates(root: root)
+        #expect(updates.releases.count == 1)
+        #expect(updates.releases.first?.tagName == "v1.23.0")
+        #expect(!updates.listIsPartial, "an API-sourced list answers questions a feed one cannot")
+    }
+
+    @MainActor
+    @Test("no cache is an empty list, not a crash")
+    func noCache() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("seo-audit-updates-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let updates = Updates(root: root)
+        #expect(updates.releases.isEmpty)
+        #expect(!updates.listIsPartial, "nothing to show is not a partial list")
+    }
+}

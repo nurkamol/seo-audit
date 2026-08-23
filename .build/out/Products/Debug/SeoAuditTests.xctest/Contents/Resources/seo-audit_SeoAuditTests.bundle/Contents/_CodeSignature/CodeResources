@@ -8,6 +8,10 @@
 		<data>
 		FLnS+UlGof2xMYUCcr3L6t8GL6k=
 		</data>
+		<key>Resources/releases.atom</key>
+		<data>
+		Ux+cTJ2BcHLE7Xl7Yjg/nvjk2qA=
+		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
@@ -16,6 +20,13 @@
 			<key>hash2</key>
 			<data>
 			S6y+fDivgC4FzkiEbSUsal4XFk0kYcxZ0MRLbelFWac=
+			</data>
+		</dict>
+		<key>Resources/releases.atom</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qhVya5FMCmgeFq2gzCpEGl+pAvw1+IkuLaJ032zxsjg=
 			</data>
 		</dict>
 	</dict>

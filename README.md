@@ -400,7 +400,7 @@ reason.
 |---|---|---|
 | `--md <file>` | — | Write a Markdown report |
 | `--html <file>` | — | Write a self-contained HTML report — one file, no assets |
-| `--json <file>` | — | Write a JSON report — also usable as a baseline |
+| `--json <file>` | — | Write a JSON report — findings, the grouped `causes` with their scope lines, and `meta`. Also usable as a baseline, which carries the findings only |
 | `--csv <file>` | — | Write the findings as a spreadsheet, one row each |
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
 | `--update-baseline` | — | Rewrite the baseline after comparing |

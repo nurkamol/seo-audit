@@ -1,0 +1,4 @@
+module SeoAudit {
+header "SeoAudit-Swift.h"
+export *
+}

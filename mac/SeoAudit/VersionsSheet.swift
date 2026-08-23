@@ -26,9 +26,30 @@ struct VersionsSheet: View {
             .padding(20)
 
             if let problem = updates.problem {
-                Label(problem, systemImage: "exclamationmark.triangle")
+                HStack(spacing: 8) {
+                    Label(problem, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    // A dead end is not a message. Whatever went wrong, the
+                    // releases page still answers.
+                    Button("Open releases") { Links.open(Links.releases) }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            } else if updates.listIsPartial {
+                // Said rather than hidden: the feed does not mark prereleases,
+                // so this list is shown but is not answering "is there an
+                // update". A missing caveat reads exactly like no caveat.
+                Label("Read from the releases feed, which does not mark prereleases — "
+                      + "check the release notes before moving to the newest one.",
+                      systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 8)
             }
@@ -48,9 +69,10 @@ struct VersionsSheet: View {
                     if let release = selected ?? updates.releases.first {
                         Detail(release: release, updates: updates)
                     } else {
-                        ContentUnavailableView("No releases yet",
+                        ContentUnavailableView("No releases to show",
                                                systemImage: "shippingbox",
-                                               description: Text("Check again, or open the repository."))
+                                               description: Text("GitHub did not answer. Try Check now, "
+                                                                 + "or open the releases page."))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

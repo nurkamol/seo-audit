@@ -12,6 +12,7 @@ enum Links {
     static let repo = URL(string: "https://github.com/nurkamol/seo-audit")!
     static let issues = URL(string: "https://github.com/nurkamol/seo-audit/issues/new")!
     static let changelog = URL(string: "https://github.com/nurkamol/seo-audit/blob/main/CHANGELOG.md")!
+    static let releases = URL(string: "https://github.com/nurkamol/seo-audit/releases")!
     static let checks = URL(string: "https://github.com/nurkamol/seo-audit#what-it-checks")!
     static let licence = URL(string: "https://github.com/nurkamol/seo-audit/blob/main/LICENSE")!
 

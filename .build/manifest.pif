@@ -5,11 +5,11 @@
       "name" : "seo-audit",
       "path" : "/Users/nurkamol/coding/seo-audit",
       "projects" : [
-        "a8c8a93f0566beee32861a36f08c3420f2622feeaf771fd1411f6c52cf203ad8",
+        "89995ec6ff772ed75e0f2b297dedfc3bb434d9b0e2992bcda9c23afde313f3d3",
         "470842a6fc7f33666d53e97857f85bc13583f764af48eb250f5373da5177580b"
       ]
     },
-    "signature" : "210438be9d4779280af23671e1db55095240bf0fcb30fa2f9cd63ffba3077c53",
+    "signature" : "24c377d242702a20ff58d9225f6b13432fee25dc0b283dd6881a18bf0d388f3e",
     "type" : "workspace"
   },
   {
@@ -224,6 +224,14 @@
           {
             "fileType" : "file",
             "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_4",
+            "name" : "/Users/nurkamol/coding/seo-audit/mac/Tests/SeoAuditTests/releases.atom",
+            "path" : "/Users/nurkamol/coding/seo-audit/mac/Tests/SeoAuditTests/releases.atom",
+            "sourceTree" : "<absolute>",
+            "type" : "file"
+          },
+          {
+            "fileType" : "file",
+            "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5",
             "name" : "$(CONFIGURATION_BUILD_DIR)/seo-audit_SeoAuditTests.bundle",
             "path" : "$(CONFIGURATION_BUILD_DIR)/seo-audit_SeoAuditTests.bundle",
             "sourceTree" : "<group>",
@@ -233,7 +241,15 @@
             "children" : [
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_0",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_0",
+                "name" : "AtomReleases.swift",
+                "path" : "AtomReleases.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_1",
                 "name" : "ContentView.swift",
                 "path" : "ContentView.swift",
                 "sourceTree" : "<group>",
@@ -241,7 +257,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_1",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_2",
                 "name" : "Engine.swift",
                 "path" : "Engine.swift",
                 "sourceTree" : "<group>",
@@ -249,7 +265,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_2",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_3",
                 "name" : "Export.swift",
                 "path" : "Export.swift",
                 "sourceTree" : "<group>",
@@ -257,7 +273,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_3",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_4",
                 "name" : "History.swift",
                 "path" : "History.swift",
                 "sourceTree" : "<group>",
@@ -265,7 +281,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_4",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_5",
                 "name" : "Library.swift",
                 "path" : "Library.swift",
                 "sourceTree" : "<group>",
@@ -273,7 +289,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_5",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_6",
                 "name" : "PDF.swift",
                 "path" : "PDF.swift",
                 "sourceTree" : "<group>",
@@ -281,7 +297,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_6",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_7",
                 "name" : "Report.swift",
                 "path" : "Report.swift",
                 "sourceTree" : "<group>",
@@ -289,7 +305,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_7",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_8",
                 "name" : "ReportView.swift",
                 "path" : "ReportView.swift",
                 "sourceTree" : "<group>",
@@ -297,7 +313,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_8",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_9",
                 "name" : "SeoAuditApp.swift",
                 "path" : "SeoAuditApp.swift",
                 "sourceTree" : "<group>",
@@ -305,7 +321,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_9",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_10",
                 "name" : "Stages.swift",
                 "path" : "Stages.swift",
                 "sourceTree" : "<group>",
@@ -313,7 +329,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_10",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_11",
                 "name" : "Updates.swift",
                 "path" : "Updates.swift",
                 "sourceTree" : "<group>",
@@ -321,14 +337,14 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_11",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_12",
                 "name" : "VersionsSheet.swift",
                 "path" : "VersionsSheet.swift",
                 "sourceTree" : "<group>",
                 "type" : "file"
               }
             ],
-            "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_5",
+            "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6",
             "name" : "/Users/nurkamol/coding/seo-audit/mac/SeoAudit",
             "path" : "/Users/nurkamol/coding/seo-audit/mac/SeoAudit",
             "sourceTree" : "<absolute>",
@@ -338,7 +354,15 @@
             "children" : [
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_0",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_0",
+                "name" : "AtomReleases.swift",
+                "path" : "AtomReleases.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_1",
                 "name" : "ContentView.swift",
                 "path" : "ContentView.swift",
                 "sourceTree" : "<group>",
@@ -346,7 +370,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_1",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_2",
                 "name" : "Engine.swift",
                 "path" : "Engine.swift",
                 "sourceTree" : "<group>",
@@ -354,7 +378,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_2",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_3",
                 "name" : "Export.swift",
                 "path" : "Export.swift",
                 "sourceTree" : "<group>",
@@ -362,7 +386,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_3",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_4",
                 "name" : "History.swift",
                 "path" : "History.swift",
                 "sourceTree" : "<group>",
@@ -370,7 +394,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_4",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_5",
                 "name" : "Library.swift",
                 "path" : "Library.swift",
                 "sourceTree" : "<group>",
@@ -378,7 +402,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_5",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_6",
                 "name" : "PDF.swift",
                 "path" : "PDF.swift",
                 "sourceTree" : "<group>",
@@ -386,7 +410,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_6",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_7",
                 "name" : "Report.swift",
                 "path" : "Report.swift",
                 "sourceTree" : "<group>",
@@ -394,7 +418,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_7",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_8",
                 "name" : "ReportView.swift",
                 "path" : "ReportView.swift",
                 "sourceTree" : "<group>",
@@ -402,7 +426,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_8",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_9",
                 "name" : "SeoAuditApp.swift",
                 "path" : "SeoAuditApp.swift",
                 "sourceTree" : "<group>",
@@ -410,7 +434,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_9",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_10",
                 "name" : "Stages.swift",
                 "path" : "Stages.swift",
                 "sourceTree" : "<group>",
@@ -418,7 +442,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_10",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_11",
                 "name" : "Updates.swift",
                 "path" : "Updates.swift",
                 "sourceTree" : "<group>",
@@ -426,14 +450,14 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_11",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_12",
                 "name" : "VersionsSheet.swift",
                 "path" : "VersionsSheet.swift",
                 "sourceTree" : "<group>",
                 "type" : "file"
               }
             ],
-            "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6",
+            "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7",
             "name" : "/Users/nurkamol/coding/seo-audit/mac/SeoAudit",
             "path" : "/Users/nurkamol/coding/seo-audit/mac/SeoAudit",
             "sourceTree" : "<absolute>",
@@ -452,15 +476,15 @@
       "projectIsPackage" : "true",
       "projectName" : "seo-audit",
       "targets" : [
-        "32b675decdbafaf2d9c553228c789d98ad15ab70d9a7fe23c6cabd84a47bf346",
-        "347e6117c9e045f423de036d529f4a01b84bbca505f84d86222cf90181dc633e",
+        "ff80f9a6bfe5a2fb6585d7bd609a30f575e130c70024b9c112b3dc5091ac98d1",
+        "504e347972341c803137d89c3dd6a51ea66603ac61beac7e6bbea952a942049e",
         "d7d129fe73b95827d770a6bf89533f8eaadd2ccb77725f2c06ecf6f727018de0",
-        "c144233fb4e8876a3f0ef5d75bb80c9e8e94ebd59d2c26ebd7125e98e99828b3",
-        "9acda9b0d8670b95ab4047177ccf86fb4d6b43426526f50b3251231685d51acb",
+        "ada544e3f84d94a69bebcc3cf352a867d72d5d828c04891470a104c04375d339",
+        "4f204be8df35b4a94a146c076d80e92629639c7edb8511e9548f2d2d98500a19",
         "416a343b977a17313133cfe5474fa3b7de6086a61bc9c09f32bfe865465b3131"
       ]
     },
-    "signature" : "a8c8a93f0566beee32861a36f08c3420f2622feeaf771fd1411f6c52cf203ad8",
+    "signature" : "89995ec6ff772ed75e0f2b297dedfc3bb434d9b0e2992bcda9c23afde313f3d3",
     "type" : "project"
   },
   {
@@ -596,7 +620,7 @@
           "buildFiles" : [
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_4",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAuditTests.SeoAuditTests::BUILDPHASE_1::0",
               "platformFilters" : [
 
@@ -657,7 +681,7 @@
       "productTypeIdentifier" : "com.apple.product-type.bundle.unit-test",
       "type" : "standard"
     },
-    "signature" : "32b675decdbafaf2d9c553228c789d98ad15ab70d9a7fe23c6cabd84a47bf346",
+    "signature" : "ff80f9a6bfe5a2fb6585d7bd609a30f575e130c70024b9c112b3dc5091ac98d1",
     "type" : "target"
   },
   {
@@ -723,6 +747,16 @@
               ],
               "removeHeadersOnCopy" : "false",
               "resourceRule" : "copy"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_4",
+              "guid" : "PACKAGE-RESOURCE:SeoAuditTests::BUILDPHASE_0::1",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false",
+              "resourceRule" : "copy"
             }
           ],
           "guid" : "PACKAGE-RESOURCE:SeoAuditTests::BUILDPHASE_0",
@@ -748,7 +782,7 @@
       "productTypeIdentifier" : "com.apple.product-type.bundle",
       "type" : "standard"
     },
-    "signature" : "347e6117c9e045f423de036d529f4a01b84bbca505f84d86222cf90181dc633e",
+    "signature" : "504e347972341c803137d89c3dd6a51ea66603ac61beac7e6bbea952a942049e",
     "type" : "target"
   },
   {
@@ -973,7 +1007,7 @@
           "buildFiles" : [
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_0",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_0",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::0",
               "platformFilters" : [
 
@@ -982,7 +1016,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_1",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_1",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::1",
               "platformFilters" : [
 
@@ -991,7 +1025,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_2",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_2",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::2",
               "platformFilters" : [
 
@@ -1000,7 +1034,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_3",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_3",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::3",
               "platformFilters" : [
 
@@ -1009,7 +1043,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_4",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_4",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::4",
               "platformFilters" : [
 
@@ -1018,7 +1052,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_5",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_5",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::5",
               "platformFilters" : [
 
@@ -1027,7 +1061,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_6",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_6",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::6",
               "platformFilters" : [
 
@@ -1036,7 +1070,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_7",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_7",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::7",
               "platformFilters" : [
 
@@ -1045,7 +1079,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_8",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_8",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::8",
               "platformFilters" : [
 
@@ -1054,7 +1088,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_9",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_9",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::9",
               "platformFilters" : [
 
@@ -1063,7 +1097,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_10",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_10",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::10",
               "platformFilters" : [
 
@@ -1072,8 +1106,17 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_5::REF_11",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_11",
               "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::11",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_12",
+              "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::12",
               "platformFilters" : [
 
               ],
@@ -1103,7 +1146,7 @@
       "productTypeIdentifier" : "com.apple.product-type.tool",
       "type" : "standard"
     },
-    "signature" : "c144233fb4e8876a3f0ef5d75bb80c9e8e94ebd59d2c26ebd7125e98e99828b3",
+    "signature" : "ada544e3f84d94a69bebcc3cf352a867d72d5d828c04891470a104c04375d339",
     "type" : "target"
   },
   {
@@ -1241,7 +1284,7 @@
           "buildFiles" : [
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_0",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_0",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::0",
               "platformFilters" : [
 
@@ -1250,7 +1293,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_1",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_1",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::1",
               "platformFilters" : [
 
@@ -1259,7 +1302,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_2",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_2",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::2",
               "platformFilters" : [
 
@@ -1268,7 +1311,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_3",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_3",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::3",
               "platformFilters" : [
 
@@ -1277,7 +1320,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_4",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_4",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::4",
               "platformFilters" : [
 
@@ -1286,7 +1329,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_5",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_5",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::5",
               "platformFilters" : [
 
@@ -1295,7 +1338,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_6",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_6",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::6",
               "platformFilters" : [
 
@@ -1304,7 +1347,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_7",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_7",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::7",
               "platformFilters" : [
 
@@ -1313,7 +1356,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_8",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_8",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::8",
               "platformFilters" : [
 
@@ -1322,7 +1365,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_9",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_9",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::9",
               "platformFilters" : [
 
@@ -1331,7 +1374,7 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_10",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_10",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::10",
               "platformFilters" : [
 
@@ -1340,8 +1383,17 @@
             },
             {
               "codeSignOnCopy" : "false",
-              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_11",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_11",
               "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::11",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_12",
+              "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::12",
               "platformFilters" : [
 
               ],
@@ -1371,7 +1423,7 @@
       "productTypeIdentifier" : "org.swift.product-type.common.object",
       "type" : "standard"
     },
-    "signature" : "9acda9b0d8670b95ab4047177ccf86fb4d6b43426526f50b3251231685d51acb",
+    "signature" : "4f204be8df35b4a94a146c076d80e92629639c7edb8511e9548f2d2d98500a19",
     "type" : "target"
   },
   {

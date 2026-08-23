@@ -23,7 +23,7 @@ let package = Package(
             name: "SeoAuditTests",
             dependencies: ["SeoAudit"],
             path: "mac/Tests/SeoAuditTests",
-            resources: [.copy("payload.json")]
+            resources: [.copy("payload.json"), .copy("releases.atom")]
         ),
     ]
 )

@@ -1,0 +1,660 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/nurkamol/seo-audit/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/nurkamol/seo-audit/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/nurkamol/seo-audit/releases.atom"/>
+  <title>Release notes from seo-audit</title>
+  <updated>2026-08-23T18:55:51Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.23.0</id>
+    <updated>2026-08-23T18:56:29Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.23.0"/>
+    <title>1.23.0 — a window that remembers</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--csv&lt;/code&gt;, and every format in the Mac app.&lt;/strong&gt; The findings as a spreadsheet:&lt;br&gt;
+one row each, with the page, the section, whether it is indexable, how many&lt;br&gt;
+links point at it, how far from the homepage, and impressions where Search&lt;br&gt;
+Console has been asked. A flat table on purpose — the grouped view is what&lt;br&gt;
+the report is for, this is for sorting 2,081 rows by impressions or handing a&lt;br&gt;
+filtered slice to a developer. Written with a byte-order mark, which is the&lt;br&gt;
+difference between Excel showing &quot;Maison Éthérique&quot; and &quot;Maison Ã‰thÃ©rique&quot;.&lt;/p&gt;
+&lt;p&gt;The app exports &lt;strong&gt;PDF, HTML, Markdown, CSV and JSON&lt;/strong&gt;, and owns none of those&lt;br&gt;
+formats: it holds the findings it was streamed and posts them back to the&lt;br&gt;
+engine&#39;s new &lt;code&gt;/render&lt;/code&gt; endpoint, which runs the same writers the CLI uses. A&lt;br&gt;
+report exported from the app and one written by &lt;code&gt;seo-audit --csv&lt;/code&gt; are the&lt;br&gt;
+same file. PDF is the exception, because it is a drawing of what is on screen&lt;br&gt;
+rather than a format the engine has. JSON is written exactly as it arrived,&lt;br&gt;
+so a re-encode cannot quietly drop a field the app&#39;s models do not know yet.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;A website, and Help inside the app.&lt;/strong&gt; &lt;a href=&quot;https://nurkamol.github.io/seo-audit/&quot; rel=&quot;nofollow&quot;&gt;https://nurkamol.github.io/seo-audit/&lt;/a&gt;&lt;br&gt;
+is built from &lt;code&gt;docs/&lt;/code&gt;. The app&#39;s Help menu, its sidebar and a proper About&lt;br&gt;
+sheet all point at it, so the answer to &quot;what is this&quot; is one click away&lt;br&gt;
+rather than a search.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Reports are kept.&lt;/strong&gt; A 325-page site takes seven minutes to crawl, and&lt;br&gt;
+losing that because a window was closed is the difference between a tool&lt;br&gt;
+somebody opens twice and one they open once. Every finished run is written to&lt;br&gt;
+Application Support as the exact JSON the engine produced — not the app&#39;s idea&lt;br&gt;
+of it — so a report saved by one version still opens in the next, and &lt;code&gt;jq&lt;/code&gt;&lt;br&gt;
+works on it. The sidebar lists them with the date and what they found; a&lt;br&gt;
+click reopens one instantly.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The Mac app has tests.&lt;/strong&gt; Thirteen, over the models, the URL normalising,&lt;br&gt;
+version ordering and the library, run by &lt;code&gt;swift test&lt;/code&gt;. The important one&lt;br&gt;
+decodes a &lt;strong&gt;real engine payload&lt;/strong&gt; captured from a live run, because the way&lt;br&gt;
+this app breaks is the engine changing its output and nothing noticing until&lt;br&gt;
+somebody opens a window. The views are deliberately untested: a snapshot of a&lt;br&gt;
+glass card asserts what the design happens to be today and fails every time&lt;br&gt;
+it improves.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CI builds the app on every change.&lt;/strong&gt; Until now Swift was only compiled when&lt;br&gt;
+a tag was pushed, so a break landed on &lt;code&gt;main&lt;/code&gt; and waited for release day.&lt;br&gt;
+&lt;code&gt;mac-app.yml&lt;/code&gt; runs the tests, builds the bundle and then captures a fresh&lt;br&gt;
+engine payload and checks the app still decodes every field it needs — drift&lt;br&gt;
+fails in CI rather than in a window.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The app is called SEO Audit.&lt;/strong&gt; The command line stays &lt;code&gt;seo-audit&lt;/code&gt;, the&lt;br&gt;
+bundle id stays &lt;code&gt;com.nurkamol.seo-audit&lt;/code&gt; and the cask token stays&lt;br&gt;
+&lt;code&gt;seo-audit&lt;/code&gt;: a display name is for people, those three are for machines.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;A new icon.&lt;/strong&gt; The old one was the sitemap mark from the logo, which is&lt;br&gt;
+accurate and abstract. This is a magnifier over a rising line — what the tool&lt;br&gt;
+looks for, and what finding it is for. Drawn flat on the macOS squircle&lt;br&gt;
+rather than the glossy bevel that style implies, because gloss is a 2010 idiom&lt;br&gt;
+and the specular highlight is the first thing to disappear at 16 pixels.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The icons weigh a tenth of what they did.&lt;/strong&gt; &lt;code&gt;docs/icon.png&lt;/code&gt; was 697 KB of&lt;br&gt;
+unoptimised PNG for a flat glyph, used at 96px on a web page; it is 24 KB at&lt;br&gt;
+512px now, the website uses the 1.5 KB SVG instead, and the app&#39;s &lt;code&gt;.icns&lt;/code&gt; went&lt;br&gt;
+from 1.1 MB to 189 KB. &lt;code&gt;build.sh&lt;/code&gt; shrinks the iconset when &lt;code&gt;pngquant&lt;/code&gt; is&lt;br&gt;
+installed and skips it when not, because a build that needs a package manager&lt;br&gt;
+to produce an icon is not a build anyone can run.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;brew trust&lt;/code&gt; is in the install instructions.&lt;/strong&gt; Homebrew 6 refuses to load a&lt;br&gt;
+cask from a tap nobody has vouched for, and the warning it prints when you&lt;br&gt;
+skip it is easy to scroll past. Found by tapping the repository and&lt;br&gt;
+installing from it, which also turned up &lt;code&gt;depends_on macos: &quot;&amp;gt;= :tahoe&quot;&lt;/code&gt;&lt;br&gt;
+being the deprecated spelling of &lt;code&gt;depends_on macos: :tahoe&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--serve&lt;/code&gt; no longer exits the moment it starts under a redirected stdin.&lt;/strong&gt;&lt;br&gt;
+It shuts down when its stdin closes, so that closing the app&#39;s window also&lt;br&gt;
+takes the engine away. The check asked whether stdin was a terminal, and&lt;br&gt;
+&lt;code&gt;--serve &amp;lt; /dev/null&lt;/code&gt; is not one either — reading it ends at once. It asks&lt;br&gt;
+whether stdin is a pipe or a socket now: Node hands a child a socketpair&lt;br&gt;
+rather than a FIFO, so testing only for a FIFO would have fixed the redirect&lt;br&gt;
+and broken the app. Both cases are tests. Found by the CI job added in this&lt;br&gt;
+release, on its first run, which is the entire argument for adding it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The website had no vertical padding.&lt;/strong&gt; &lt;code&gt;.wrap&lt;/code&gt; set the &lt;code&gt;padding&lt;/code&gt; shorthand&lt;br&gt;
+to add a side gutter, and a class outranks the &lt;code&gt;header&lt;/code&gt;, &lt;code&gt;section&lt;/code&gt; and&lt;br&gt;
+&lt;code&gt;footer&lt;/code&gt; type selectors — so it zeroed the top and bottom padding of every&lt;br&gt;
+block on the page. The badges spread themselves across the column for a&lt;br&gt;
+related reason: &lt;code&gt;header img { margin: 0 auto }&lt;/code&gt; was meant for the logo and&lt;br&gt;
+matched them too, and an &lt;code&gt;auto&lt;/code&gt; margin on a flex item absorbs the free space,&lt;br&gt;
+which is how &lt;code&gt;justify-content: center&lt;/code&gt; centred nothing.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.22.0</id>
+    <updated>2026-08-23T18:20:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.22.0"/>
+    <title>v1.22.0 — a Mac app that is a window, not a second engine</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The macOS app is a real application now.&lt;/strong&gt; &lt;code&gt;./mac/build.sh&lt;/code&gt; produces a&lt;br&gt;
+signed &lt;code&gt;seo-audit.app&lt;/code&gt; with its own icon, &lt;code&gt;Info.plist&lt;/code&gt; and engine inside it —&lt;br&gt;
+no Xcode project, because &lt;code&gt;swiftc&lt;/code&gt; and the command line tools are what&lt;br&gt;
+&quot;anyone can build it&quot; has to mean. &lt;code&gt;Package.swift&lt;/code&gt; is there so Xcode can open&lt;br&gt;
+the folder anyway.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;The report is drawn natively.&lt;/strong&gt; No web view anywhere in the app: glass cause&lt;br&gt;
+cards that expand into the pages they affect, filtering by level, search, and&lt;br&gt;
+PDF export rendered from the same views that are on screen. 1,431 lines of&lt;br&gt;
+SwiftUI.&lt;/p&gt;
+&lt;p&gt;It is still not a second implementation. The app runs the CLI as a child&lt;br&gt;
+process and reads its stream, and the grouping into causes travels with the&lt;br&gt;
+findings — &lt;code&gt;byCause()&lt;/code&gt; stays the only implementation of that rule. The seam is&lt;br&gt;
+explicit in &lt;code&gt;Report.swift&lt;/code&gt;: one protocol, &lt;code&gt;AuditEngine&lt;/code&gt;, so a Swift engine&lt;br&gt;
+later would be a second conformance and no change to any view above it.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--no-node&lt;/code&gt; builds a 1.7 MB app&lt;/strong&gt; that uses the Node already on the machine;&lt;br&gt;
+the default bundles one and is 109 MB, of which 108 MB is Node and under one&lt;br&gt;
+is everything this project wrote. Zipped, that is 36 MB — a quarter of what&lt;br&gt;
+Slack asks for.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Versions, updates and downgrades.&lt;/strong&gt; The sidebar checks GitHub&#39;s releases&lt;br&gt;
+once a day and lists every one with its notes, newest first. Moving between&lt;br&gt;
+them — in either direction, because a release that makes a report worse should&lt;br&gt;
+be undoable without reading a manual — runs one Homebrew command in Terminal.&lt;/p&gt;
+&lt;p&gt;The app deliberately &lt;strong&gt;does not replace itself&lt;/strong&gt;. That needs a Developer ID&lt;br&gt;
+and notarisation to be safe, and an unsigned application rewriting its own&lt;br&gt;
+bundle is indistinguishable from something you would not want. Homebrew&lt;br&gt;
+verifies a checksum first; the browser leaves Gatekeeper a say.&lt;/p&gt;
+&lt;p&gt;A Homebrew cask and a release workflow come with it: the cask&#39;s version and&lt;br&gt;
+checksum are written by CI when a tag is pushed, so the formula cannot&lt;br&gt;
+describe a build that does not exist.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The engine stream can speak JSON.&lt;/strong&gt; &lt;code&gt;?format=json&lt;/code&gt; on &lt;code&gt;/stream&lt;/code&gt; sends the&lt;br&gt;
+findings, the meta and the causes instead of a rendered page. The native app&lt;br&gt;
+is the only caller today; anything else that wants structured output over a&lt;br&gt;
+stream can use it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;--serve 0&lt;/code&gt; asked for the help text instead of a port.&lt;/strong&gt; Zero is falsy, and&lt;br&gt;
+&lt;code&gt;if (opts.serve)&lt;/code&gt; sent it to the wrong branch — so the macOS app, which asks&lt;br&gt;
+the operating system to pick a free port, opened onto an engine that never&lt;br&gt;
+started. Found by building the app rather than by reading it.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.21.0</id>
+    <updated>2026-08-23T17:31:26Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.21.0"/>
+    <title>v1.21.0 — a professional tool, not a longer list</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--compare-as&lt;/code&gt;: the same page, asked for by two different readers.&lt;/strong&gt; A site&lt;br&gt;
+that serves one thing to Googlebot and another to a browser is either cloaking&lt;br&gt;
+or misconfiguring its bot protection, and both are invisible to an audit that&lt;br&gt;
+fetches once.&lt;/p&gt;
+&lt;p&gt;Not a byte comparison — a nonce, a timestamp and a cart count all differ&lt;br&gt;
+between two fetches by the same client. What is compared is what a search&lt;br&gt;
+engine reads: status, title, canonical, robots meta, word count and link&lt;br&gt;
+count, the last two with a tenth of slack so ordinary dynamic content does&lt;br&gt;
+not fire.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;forbes.com&lt;/strong&gt; serves Googlebot 225 words where Chrome gets 503, and the same&lt;br&gt;
+on every page sampled. &lt;strong&gt;nytimes.com&lt;/strong&gt; differs by 3% and correctly stays&lt;br&gt;
+silent. jekyllrb.com is identical on all ten and says so, because a clean&lt;br&gt;
+comparison is a result rather than an absence.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--search-console&lt;/code&gt;: findings ordered by what the pages actually do.&lt;/strong&gt; Every&lt;br&gt;
+other ordering here is derived from the site&#39;s own markup and is a proxy.&lt;br&gt;
+Impressions are not. Opt-in, credentials read from the environment or&lt;br&gt;
+&lt;code&gt;~/.config/seo-audit/.env&lt;/code&gt; and never from a repository, a domain property&lt;br&gt;
+named &lt;code&gt;sc-domain:example.com&lt;/code&gt;, and the window ends three days back because&lt;br&gt;
+Search Console counts the last three incompletely.&lt;/p&gt;
+&lt;p&gt;Missing credentials, or a property the account cannot read, are a note: an&lt;br&gt;
+audit that dies because an optional integration failed is worse than one that&lt;br&gt;
+says so. &lt;strong&gt;Tested against a fake API rather than a real one&lt;/strong&gt; — nobody here&lt;br&gt;
+has a property to point it at, so the request shape, the token exchange and&lt;br&gt;
+the date window are covered by tests and the live call is not.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--serve&lt;/code&gt;, and a macOS app around it.&lt;/strong&gt; &lt;code&gt;node bin/seo-audit.mjs --serve&lt;/code&gt;&lt;br&gt;
+opens the same form the hosted version serves, on &lt;code&gt;127.0.0.1:4321&lt;/code&gt; — no&lt;br&gt;
+account, no bill, and none of a Worker&#39;s limits.&lt;/p&gt;
+&lt;p&gt;It is not a second implementation. &lt;code&gt;worker/index.mjs&lt;/code&gt; was written against&lt;br&gt;
+&lt;code&gt;Request&lt;/code&gt; and &lt;code&gt;Response&lt;/code&gt; in 1.12.0 precisely so that Node could answer with&lt;br&gt;
+it too, and &lt;code&gt;src/serve.mjs&lt;/code&gt; is thirty lines of adapter between &lt;code&gt;node:http&lt;/code&gt;&lt;br&gt;
+and the fetch API. The Worker&#39;s password gate is satisfied rather than&lt;br&gt;
+skipped — a random token is minted locally and presented on every request,&lt;br&gt;
+because a bypass inside the deployed code is a bypass that can reach&lt;br&gt;
+production one refactor later.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;mac/SeoAudit/main.swift&lt;/code&gt; is a window around that: it starts the CLI with&lt;br&gt;
+&lt;code&gt;--serve&lt;/code&gt; and points a &lt;code&gt;WKWebView&lt;/code&gt; at it. A shell, never a port — no check is&lt;br&gt;
+written twice.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Running it found a bug that reading it would not have.&lt;/strong&gt; The server&lt;br&gt;
+outlived the app, held port 4321, and the next launch failed. A child knows&lt;br&gt;
+it has a parent by stdin being a pipe, so &lt;code&gt;--serve&lt;/code&gt; now exits when that pipe&lt;br&gt;
+closes, and the app hands it one. In a terminal stdin is a TTY and Ctrl-C is&lt;br&gt;
+still the way out.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Printing is a first-class output.&lt;/strong&gt; ⌘P on the HTML report now produces&lt;br&gt;
+something worth sending: forced light colours rather than a browser&#39;s &quot;print&lt;br&gt;
+backgrounds&quot; setting, margins, no finding split across a page break, and the&lt;br&gt;
+causes taking the first page to themselves. Verified by rendering a real&lt;br&gt;
+report to PDF and looking at it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Causes are ordered by reach, not just by breadth.&lt;/strong&gt; The link graph has been&lt;br&gt;
+built inside &lt;code&gt;crossPageChecks&lt;/code&gt; and thrown away since 1.11.0, which meant the&lt;br&gt;
+two checks that read it could disagree about the same site and nothing else&lt;br&gt;
+could see it at all. It is now built once in &lt;code&gt;src/graph.mjs&lt;/code&gt; and read by the&lt;br&gt;
+orphan check, by click depth, and by the report.&lt;/p&gt;
+&lt;p&gt;Every finding on a crawled page carries how many pages link to it and how far&lt;br&gt;
+it is from the homepage. Causes are ordered worst first, then by &lt;strong&gt;how much&lt;br&gt;
+of the site points at them&lt;/strong&gt;, then by how many pages they cover. On&lt;br&gt;
+jekyllrb.com that puts &lt;code&gt;schema-incomplete&lt;/code&gt; on 7 pages with 1,047 links in&lt;br&gt;
+ahead of &lt;code&gt;duplicate-title&lt;/code&gt; on 10 — seven pages the site points at constantly&lt;br&gt;
+beat ten it mentions once.&lt;/p&gt;
+&lt;p&gt;Both numbers are counts of links that were actually read. Nothing is weighted&lt;br&gt;
+or scored: absent stays absent, because &quot;nothing links here&quot; and &quot;this was&lt;br&gt;
+never measured&quot; are different answers.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;A section stops at two path segments.&lt;/strong&gt; Past that a path is usually a date&lt;br&gt;
+or a taxonomy rather than a different template. jekyllrb.com&#39;s dated archive&lt;br&gt;
+was becoming one section per month, so 1,206 findings arrived as 602 &quot;things&lt;br&gt;
+to change&quot; — a number nobody can act on. Capping at two took it to 214 and&lt;br&gt;
+left a Shopify store&#39;s eight sections exactly as they were.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;The &lt;code&gt;--json&lt;/code&gt; report keeps what the HTML shows.&lt;/strong&gt; &lt;code&gt;serialize()&lt;/code&gt; picked five&lt;br&gt;
+fields, so &lt;code&gt;indexable&lt;/code&gt; — and now &lt;code&gt;reach&lt;/code&gt; — never reached the file. A baseline&lt;br&gt;
+still carries only the five: it is committed and diffed in git, and how many&lt;br&gt;
+links point at a page changes every time the site does, so a baseline whose&lt;br&gt;
+diff churns is a baseline nobody reads. The report carries everything.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.20.0</id>
+    <updated>2026-08-23T17:04:11Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.20.0"/>
+    <title>v1.20.0 — the report says what to change, and you choose who asks</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;--browser&lt;/code&gt; and &lt;code&gt;--os&lt;/code&gt;: crawl as a real browser, or as a search crawler.&lt;/strong&gt;&lt;br&gt;
+&lt;code&gt;chrome&lt;/code&gt;, &lt;code&gt;firefox&lt;/code&gt;, &lt;code&gt;safari&lt;/code&gt;, &lt;code&gt;edge&lt;/code&gt;, &lt;code&gt;googlebot&lt;/code&gt;, &lt;code&gt;googlebot-desktop&lt;/code&gt; and&lt;br&gt;
+&lt;code&gt;bingbot&lt;/code&gt;, on &lt;code&gt;macos&lt;/code&gt;, &lt;code&gt;windows&lt;/code&gt;, &lt;code&gt;linux&lt;/code&gt;, &lt;code&gt;android&lt;/code&gt; or &lt;code&gt;ios&lt;/code&gt; — defaulting to&lt;br&gt;
+the system it is running on.&lt;/p&gt;
+&lt;p&gt;Three reasons, and none of them is dressing up. A site that answers a browser&lt;br&gt;
+and blocks everything else is common, and the report from a blocked crawl is&lt;br&gt;
+a report about the block. Some sites serve different HTML to a crawler than&lt;br&gt;
+to a person, and fetching as Googlebot is the only way to see what Google is&lt;br&gt;
+given. And Google indexes what its &lt;em&gt;smartphone&lt;/em&gt; crawler sees, which on a site&lt;br&gt;
+serving something different to phones is the page that matters.&lt;/p&gt;
+&lt;p&gt;Googlebot&#39;s two user agents are quoted from Google&#39;s own crawler&lt;br&gt;
+documentation; Google prints the Chrome version there as the placeholder&lt;br&gt;
+&lt;code&gt;W.X.Y.Z&lt;/code&gt;, so a concrete one is substituted because the real crawler sends&lt;br&gt;
+one.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;A combination that does not exist is refused rather than approximated&lt;/strong&gt; —&lt;br&gt;
+&lt;code&gt;--browser safari --os windows&lt;/code&gt; describes a machine nobody has, and the whole&lt;br&gt;
+point of the flag is to be believed by a server. &lt;code&gt;--os&lt;/code&gt; alongside a crawler&lt;br&gt;
+says so and carries on, since a crawler&#39;s user agent names no machine.&lt;/p&gt;
+&lt;p&gt;The strings are a snapshot and will age. &lt;code&gt;--user-agent&lt;/code&gt; still takes a literal&lt;br&gt;
+string and outranks &lt;code&gt;--browser&lt;/code&gt; when both are given.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Findings are grouped by cause.&lt;/strong&gt; A real store produced &lt;strong&gt;2,081 findings&lt;br&gt;
+across 347 URLs&lt;/strong&gt;, four checks accounting for 80% of them and 1,685 of them&lt;br&gt;
+under &lt;code&gt;/products/&lt;/code&gt; — which is not 1,685 problems but one Shopify template&lt;br&gt;
+repeated 194 times. The report made the reader work that out, page after&lt;br&gt;
+page, and most readers stop instead.&lt;/p&gt;
+&lt;p&gt;The rule is one sentence: the same check, on pages of the same section, is&lt;br&gt;
+one piece of work. A section is the path a page&#39;s template lives under —&lt;br&gt;
+&lt;code&gt;/products/&lt;/code&gt;, &lt;code&gt;/blogs/the-library/&lt;/code&gt;, &lt;code&gt;/&lt;/code&gt; — because that is how a generated&lt;br&gt;
+site is built. Nothing guesses at severity or invents a score; it groups,&lt;br&gt;
+counts and orders.&lt;/p&gt;
+&lt;p&gt;That store&#39;s 2,081 findings are 62 things to change, and every report format&lt;br&gt;
+now opens with the widest of them:&lt;/p&gt;
+&lt;div class=&quot;snippet-clipboard-content notranslate position-relative overflow-auto&quot; data-snippet-clipboard-copy-content=&quot;✗  No &amp;lt;h1&amp;gt;                              10 pages under /pages/
+✗  Structured data is not valid JSON     3 pages under /collections/
+!  Heading level jumps from h1 to h3    225 pages under /products/ — 69% of the crawl
+!  Title may be truncated in results    162 pages under /products/&quot;&gt;&lt;pre class=&quot;notranslate&quot;&gt;&lt;code&gt;✗  No &amp;lt;h1&amp;gt;                              10 pages under /pages/
+✗  Structured data is not valid JSON     3 pages under /collections/
+!  Heading level jumps from h1 to h3    225 pages under /products/ — 69% of the crawl
+!  Title may be truncated in results    162 pages under /products/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;Terminal, Markdown and HTML share &lt;code&gt;byCause()&lt;/code&gt; and &lt;code&gt;causeScope()&lt;/code&gt; so the three&lt;br&gt;
+cannot drift. Under a handful of causes the section is not rendered at all —&lt;br&gt;
+the list below already reads as its own summary.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;A minute of slack on &lt;code&gt;schema-date-order&lt;/code&gt;.&lt;/strong&gt; A real store produced twelve&lt;br&gt;
+inversions and &lt;strong&gt;eleven were exactly one second&lt;/strong&gt; — Shopify&#39;s theme writing&lt;br&gt;
+&lt;code&gt;datePublished&lt;/code&gt; and &lt;code&gt;dateModified&lt;/code&gt; from timestamps that round apart. The&lt;br&gt;
+twelfth was nine hours, and it was the only one anybody could act on. An&lt;br&gt;
+inversion under a minute is a generator artifact and is no longer reported,&lt;br&gt;
+the same way a date less than a day in the future is not.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;A rate limit is not a missing file either.&lt;/strong&gt; 1.15.0 taught the page checks&lt;br&gt;
+that HTTP 429 describes the crawl rather than the page; &lt;code&gt;src/site.mjs&lt;/code&gt; never&lt;br&gt;
+learned it. Re-running a real store on 1.19.0 reported &lt;strong&gt;No llms.txt&lt;/strong&gt; for a&lt;br&gt;
+site that serves one at 200 — it had answered 429 during the crawl, and&lt;br&gt;
+&lt;code&gt;!res.ok&lt;/code&gt; was being read as &quot;absent&quot;.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;robots.txt&lt;/code&gt; and &lt;code&gt;llms.txt&lt;/code&gt; now report missing only on 404, 410 or no answer&lt;br&gt;
+at all. A rate limit, a 403 from bot protection or a 5xx means the answer was&lt;br&gt;
+not given, and &quot;there is no robots.txt&quot; is an answer. The favicon check&lt;br&gt;
+already worked this way, which is why it was unaffected.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;rate-limit-slowed&lt;/code&gt; no longer claims every page was read.&lt;/strong&gt; In the run that&lt;br&gt;
+found the above, 164 of 325 pages were rate-limited away — so the note&lt;br&gt;
+explaining the slow run was contradicting the 164 findings underneath it.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.19.0</id>
+    <updated>2026-08-23T13:31:49Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.19.0"/>
+    <title>v1.19.0 — six checks that read a page against itself</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Four contradictions, each read off something already parsed.&lt;/strong&gt; None of them&lt;br&gt;
+needs a request, and each reports a page disagreeing with itself rather than&lt;br&gt;
+a judgement about it.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;img-lazy-priority&lt;/code&gt;&lt;/strong&gt; — &lt;code&gt;loading=&quot;lazy&quot;&lt;/code&gt; and &lt;code&gt;fetchpriority=&quot;high&quot;&lt;/code&gt; on one&lt;br&gt;
+image. The first says do not fetch this until it is nearly on screen; the&lt;br&gt;
+second says fetch it before everything else, and the first decides when.&lt;br&gt;
+&lt;code&gt;info&lt;/code&gt;, not a warning, because a browser does apply the priority once a lazy&lt;br&gt;
+image finally enters the queue — what it cannot be is deliberate on the image&lt;br&gt;
+the page is judged on, which is the only image &lt;code&gt;fetchpriority&lt;/code&gt; is usually put&lt;br&gt;
+on. &lt;code&gt;images[].loading&lt;/code&gt; had been parsed and read by nothing since 1.0;&lt;br&gt;
+&lt;code&gt;fetchpriority&lt;/code&gt; is new.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;content-language-mismatch&lt;/code&gt;&lt;/strong&gt; — the &lt;code&gt;Content-Language&lt;/code&gt; header and&lt;br&gt;
+&lt;code&gt;&amp;lt;html lang&amp;gt;&lt;/code&gt; disagreeing. Compared by primary subtag, so &lt;code&gt;en-GB&lt;/code&gt; and &lt;code&gt;en&lt;/code&gt;&lt;br&gt;
+are the same claim, and a header listing several languages agrees with itself&lt;br&gt;
+if the page&#39;s is one of them.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;schema-date-order&lt;/code&gt; and &lt;code&gt;schema-date-future&lt;/code&gt;&lt;/strong&gt; — structured data saying a&lt;br&gt;
+page was modified before it was published, or carrying a date that has not&lt;br&gt;
+happened yet. Google reads both when deciding how fresh a page is. A day of&lt;br&gt;
+slack on the future, the same allowance the sitemap&#39;s &lt;code&gt;lastmod&lt;/code&gt; check makes,&lt;br&gt;
+and a date this tool cannot parse is a date it has no opinion about.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;sitemap-duplicate-url&lt;/code&gt;&lt;/strong&gt; — the same URL listed twice, across two files of&lt;br&gt;
+an index or twice within one.&lt;/p&gt;
+&lt;p&gt;The last one needed narrowing against real sitemaps, and by shape rather than&lt;br&gt;
+by name. wordpress.org lists &lt;code&gt;/&lt;/code&gt; in &lt;code&gt;sitemap-1.xml&lt;/code&gt; and then forty more times&lt;br&gt;
+in &lt;code&gt;image-sitemap-1.xml&lt;/code&gt; — 681 entries for 171 pages — because an image&lt;br&gt;
+sitemap is one entry per image, which is the format working exactly as&lt;br&gt;
+intended. But the namespace proves nothing: Yoast declares &lt;code&gt;xmlns:image&lt;/code&gt; on&lt;br&gt;
+every file it writes, and css-tricks.com&#39;s &lt;code&gt;post-sitemap2.xml&lt;/code&gt; carries image&lt;br&gt;
+elements while being an ordinary list of posts. So a file whose locs are&lt;br&gt;
+mostly repeats is not listing pages and is not compared. wordpress.org goes&lt;br&gt;
+silent; css-tricks.com keeps its real finding, one post listed in both&lt;br&gt;
+&lt;code&gt;post-sitemap2.xml&lt;/code&gt; and &lt;code&gt;post-sitemap3.xml&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The three page-level ones are silent across 49 pages of maisonetherique.com,&lt;br&gt;
+css-tricks.com, smashingmagazine.com, elementor.com and wordpress.org/news.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;favicon-broken&lt;/code&gt; and &lt;code&gt;favicon-missing&lt;/code&gt;&lt;/strong&gt; — Google draws a favicon beside&lt;br&gt;
+every result a site owns and shows a default globe where it finds none. It&lt;br&gt;
+reads the declaration from the home page and accepts three &lt;code&gt;rel&lt;/code&gt; values:&lt;br&gt;
+&lt;code&gt;icon&lt;/code&gt;, &lt;code&gt;apple-touch-icon&lt;/code&gt; and &lt;code&gt;apple-touch-icon-precomposed&lt;/code&gt;. Because &lt;code&gt;rel&lt;/code&gt;&lt;br&gt;
+is a token list, the legacy &lt;code&gt;shortcut icon&lt;/code&gt; is matched by the &lt;code&gt;icon&lt;/code&gt; in it&lt;br&gt;
+without needing a rule of its own.&lt;/p&gt;
+&lt;p&gt;Exactly two things are reported, both facts: a &lt;strong&gt;declared&lt;/strong&gt; icon that is not&lt;br&gt;
+there, and &lt;strong&gt;no declaration&lt;/strong&gt; with nothing at &lt;code&gt;/favicon.ico&lt;/code&gt; either. A site&lt;br&gt;
+serving one from a path it never declared is working as intended, and&lt;br&gt;
+guessing otherwise would be inventing a finding. One request, and the home&lt;br&gt;
+page it reads was already fetched to settle the host in 1.16.0.&lt;/p&gt;
+&lt;p&gt;Three details the real web supplied:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;A page counts as absent. &lt;code&gt;/favicon.ico&lt;/code&gt; answering 200 with HTML is the&lt;br&gt;
+site&#39;s catch-all handler, and it reaches a search engine as no icon just as&lt;br&gt;
+surely as a 404 does.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;data:,&lt;/code&gt; is left alone. example.com and motherfuckingwebsite.com both ship&lt;br&gt;
+the empty data URI that stops a browser asking for a favicon at all — a&lt;br&gt;
+deliberate choice, with nothing to fetch.&lt;/li&gt;
+&lt;li&gt;The plain &lt;code&gt;icon&lt;/code&gt; is preferred over the iOS ones, so an &lt;code&gt;apple-touch-icon&lt;/code&gt;&lt;br&gt;
+404 is not reported while a working favicon sits beside it.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;403 is not a missing favicon, the same judgement the &lt;code&gt;og:image&lt;/code&gt; sweep makes.&lt;br&gt;
+Silent on maisonetherique.com, jekyllrb.com, css-tricks.com, wordpress.org&lt;br&gt;
+(whose icon is on another host entirely), smashingmagazine.com,&lt;br&gt;
+elementor.com, example.com, info.cern.ch and textfiles.com; fires on&lt;br&gt;
+danluu.com, which declares none and 404s &lt;code&gt;/favicon.ico&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.18.0</id>
+    <updated>2026-08-23T13:05:59Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.18.0"/>
+    <title>v1.18.0 — one phrase, two pages</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;anchor-ambiguous&lt;/code&gt;&lt;/strong&gt; — one phrase pointing at two different pages. The&lt;br&gt;
+mirror of &lt;code&gt;anchor-generic&lt;/code&gt;, over the anchor text 1.13.0 started keeping:&lt;br&gt;
+&quot;Collections&quot; linking to both &lt;code&gt;/docs/collections/&lt;/code&gt; and&lt;br&gt;
+&lt;code&gt;/docs/step-by-step/09-collections/&lt;/code&gt; tells Google the two are the same thing,&lt;br&gt;
+so they compete for the query instead of one of them winning. No requests —&lt;br&gt;
+the data is already in memory.&lt;/p&gt;
+&lt;p&gt;The roadmap predicted this would be noisy before it was right, and it was.&lt;br&gt;
+Four real sites narrowed it, each contributing a class of false positive:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;elementor.com offers each logo as &quot;SVG&quot; and &quot;PNG&quot;, which collides with&lt;br&gt;
+every other logo on the page. A link whose text is a file format labels a&lt;br&gt;
+download; asset extensions are skipped.&lt;/li&gt;
+&lt;li&gt;smashingmagazine.com puts &quot;Jump to table of contents&quot; on every ebook page,&lt;br&gt;
+each pointing at its own. The words describe the movement, not the&lt;br&gt;
+destination — &lt;code&gt;jump/skip/go/back/return/scroll to …&lt;/code&gt; are skipped.&lt;/li&gt;
+&lt;li&gt;wordpress.org&#39;s download page says &quot;md5&quot; beside &lt;strong&gt;2,730&lt;/strong&gt; checksums. Above&lt;br&gt;
+a handful of destinations a phrase is a label in a list, not a description,&lt;br&gt;
+so a collision is reported only up to five. The same page contributed&lt;br&gt;
+&quot;7 1&quot; — a version number, which is why the digits check is not just &lt;code&gt;\d+&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Both destinations must be pages this crawl actually fetched.&lt;/strong&gt; Two of the&lt;br&gt;
+first collisions found were not two pages at all: elementor.com&#39;s&lt;br&gt;
+&lt;code&gt;/about/privacy/&lt;/code&gt; 301s to &lt;code&gt;/terms/privacy/&lt;/code&gt;, and smashingmagazine.com&#39;s&lt;br&gt;
+&lt;code&gt;/categories/business&lt;/code&gt; 301s to &lt;code&gt;/category/business&lt;/code&gt;. One page under two&lt;br&gt;
+URLs linked by the same words is a stale link — &lt;code&gt;link-redirects&lt;/code&gt; already&lt;br&gt;
+reports it — and calling it two competing pages would be false.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;What survives is quiet on partial crawls and useful on whole ones: silent&lt;br&gt;
+across 30-page samples of elementor.com, smashingmagazine.com and&lt;br&gt;
+wordpress.org, and on a full 210-page crawl of jekyllrb.com it finds eleven&lt;br&gt;
+pairs where the reference page and the tutorial chapter carry the same words.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Typographic entities are decoded.&lt;/strong&gt; &lt;code&gt;&amp;amp;raquo;&lt;/code&gt;, &lt;code&gt;&amp;amp;mdash;&lt;/code&gt;, &lt;code&gt;&amp;amp;hellip;&lt;/code&gt;,&lt;br&gt;
+curly quotes and numeric entities were left as-is, so &quot;here&#39;s their page&lt;br&gt;
+»&quot; normalised to a phrase with the word &quot;raquo&quot; in it. Found in anchor&lt;br&gt;
+text; it applies to every field &lt;code&gt;parse.mjs&lt;/code&gt; decodes.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.17.0</id>
+    <updated>2026-08-23T12:52:01Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.17.0"/>
+    <title>v1.17.0 — count images by file, not by URL</title>
+    <content type="html">&lt;h3&gt;Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;The image sweep counts files, not URLs.&lt;/strong&gt; An image CDN serves one file at&lt;br&gt;
+every size asked for — &lt;code&gt;photo.avif?v=17&amp;amp;width=150&lt;/code&gt;, &lt;code&gt;&amp;amp;width=300&lt;/code&gt;, &lt;code&gt;&amp;amp;width=750&lt;/code&gt;&lt;br&gt;
+— and each of those was a separate entry against the 200-image cap, and a&lt;br&gt;
+separate request. &lt;code&gt;width&lt;/code&gt;, &lt;code&gt;height&lt;/code&gt;, &lt;code&gt;w&lt;/code&gt;, &lt;code&gt;h&lt;/code&gt; and &lt;code&gt;dpr&lt;/code&gt; are now dropped before&lt;br&gt;
+deduping.&lt;/p&gt;
+&lt;p&gt;Measured rather than assumed, because the roadmap entry asking for this said&lt;br&gt;
+to: across 45 pages of a real store, &lt;strong&gt;767 distinct URLs became 488 distinct&lt;br&gt;
+files&lt;/strong&gt;, a third of the sweep asking the same question again. A live run of&lt;br&gt;
+the same 45 pages now reports 488 where it used to report 767. It is not the&lt;br&gt;
+tenfold saving the mechanism suggested, and the honest number is the one&lt;br&gt;
+worth writing down.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;v&lt;/code&gt; is deliberately kept. A different version is a different asset and a&lt;br&gt;
+stale one really can 404, which is a finding worth keeping. The trade taken&lt;br&gt;
+is that one size is checked on behalf of the others: a CDN that refuses an&lt;br&gt;
+unusual width will not be caught, which errs towards saying nothing rather&lt;br&gt;
+than towards saying something wrong.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Both capped messages name the number to set.&lt;/strong&gt; &lt;code&gt;image-sweep-capped&lt;/code&gt; now&lt;br&gt;
+says how many files the site has and what to set &lt;code&gt;maxImageChecks&lt;/code&gt; to;&lt;br&gt;
+&lt;code&gt;truncated&lt;/code&gt; says &lt;code&gt;--limit 325&lt;/code&gt; rather than &quot;raise it with --limit&quot;. The&lt;br&gt;
+report already knew both numbers.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.16.0</id>
+    <updated>2026-08-23T12:38:03Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.16.0"/>
+    <title>v1.16.0 — read robots.txt on the host that answers</title>
+    <content type="html">&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Site-level checks are read on the host that answers.&lt;/strong&gt; Auditing&lt;br&gt;
+&lt;code&gt;example.com&lt;/code&gt; when the site lives at &lt;code&gt;www.example.com&lt;/code&gt; left &lt;code&gt;origin&lt;/code&gt; on the&lt;br&gt;
+host that only ever returns 301, while the crawl followed the redirect for&lt;br&gt;
+pages — &lt;code&gt;discover()&lt;/code&gt; has always used &lt;code&gt;chain()&lt;/code&gt;. So robots.txt, llms.txt and&lt;br&gt;
+every response header were read off a redirect.&lt;/p&gt;
+&lt;p&gt;On a real store that meant three findings, none of them true: a flat &quot;No&lt;br&gt;
+robots.txt&quot; for a site with a good one — agent instructions, a UCP endpoint,&lt;br&gt;
+the lot — an llms.txt reported missing on a host that does not serve it, and&lt;br&gt;
+a &lt;code&gt;Referrer-Policy&lt;/code&gt; verdict taken from a 301&#39;s headers.&lt;/p&gt;
+&lt;p&gt;The homepage&#39;s redirect chain is now followed before anything else, and where&lt;br&gt;
+it settles on another host the audit moves there and says so as&lt;br&gt;
+&lt;code&gt;origin-redirected&lt;/code&gt;. That is what a crawler does: RFC 9309 asks for at least&lt;br&gt;
+five redirects to be followed for robots.txt, and Google follows them.&lt;/p&gt;
+&lt;p&gt;Re-running that store from its bare domain: &lt;code&gt;robots-missing&lt;/code&gt; and&lt;br&gt;
+&lt;code&gt;llms-missing&lt;/code&gt; both went silent, and the one real finding of the three —&lt;br&gt;
+no &lt;code&gt;Referrer-Policy&lt;/code&gt; — is now reported against &lt;code&gt;https://www.…&lt;/code&gt; and read from&lt;br&gt;
+a response that actually exists. The host-variant check is unaffected: it&lt;br&gt;
+strips &lt;code&gt;www.&lt;/code&gt; before building its variants, so it tests the same three&lt;br&gt;
+either way.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.15.0</id>
+    <updated>2026-08-23T12:06:39Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.15.0"/>
+    <title>v1.15.0 — a rate limit is not a broken page</title>
+    <content type="html">&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;A rate limit is no longer reported as a broken page.&lt;/strong&gt; A Shopify store&lt;br&gt;
+answered HTTP 429 to &lt;strong&gt;70 of its 200 crawled pages&lt;/strong&gt; at the default&lt;br&gt;
+concurrency, and every one came back as &lt;code&gt;page-status&lt;/code&gt; — &quot;Page did not return&lt;br&gt;
+200&quot;, at error level. The pages were fine. Requested eight seconds apart the&lt;br&gt;
+same URLs answered 200, on the tool&#39;s own user agent, so it was the crawl&#39;s&lt;br&gt;
+speed and nothing else.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;src/http.mjs&lt;/code&gt; treated any status under 500 as a final answer, so a 429 was&lt;br&gt;
+never retried. Now it is: the run pauses globally, honours &lt;code&gt;Retry-After&lt;/code&gt;&lt;br&gt;
+where it is sent — Shopify sends none, hence a default that doubles to a&lt;br&gt;
+ceiling of eight seconds — and &lt;strong&gt;halves the concurrency and leaves it down&lt;/strong&gt;,&lt;br&gt;
+because retrying a rate limit at the speed that caused it just spends the&lt;br&gt;
+budget again. After twenty refusals it stops asking, so a host that means it&lt;br&gt;
+costs a slow finish rather than an hour.&lt;/p&gt;
+&lt;p&gt;A page that still answers 429 is reported as &lt;code&gt;rate-limited&lt;/code&gt; at &lt;strong&gt;info&lt;/strong&gt;: the&lt;br&gt;
+server described the crawl, not the page. It is also no longer counted as&lt;br&gt;
+&quot;not indexable&quot; — a page nobody could fetch has unknown indexability, and&lt;br&gt;
+&quot;not indexable&quot; is an answer.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Orphans are not looked for across a crawl that did not see the site.&lt;/strong&gt; The&lt;br&gt;
+same report called &lt;strong&gt;122 pages orphans&lt;/strong&gt; while, three findings further down,&lt;br&gt;
+declining to measure click depth because the link graph was a fragment. Both&lt;br&gt;
+read the same graph. One check refusing to answer while its neighbour answers&lt;br&gt;
+confidently from the same data is not a defensible position.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;orphan-page&lt;/code&gt; now stands down when the crawl was truncated by &lt;code&gt;--limit&lt;/code&gt;, or&lt;br&gt;
+when more than a tenth of the crawled pages did not load, and says so once as&lt;br&gt;
+&lt;code&gt;orphan-check-skipped&lt;/code&gt;. Click depth shares the condition so the two cannot&lt;br&gt;
+drift apart.&lt;/p&gt;
+&lt;p&gt;Re-running that store with the pages it was missing: &lt;strong&gt;70 errors became 0,&lt;br&gt;
+122 orphans became 5&lt;/strong&gt;, and 70 pages stopped being counted as not indexable.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;rate-limit-slowed&lt;/code&gt;&lt;/strong&gt; — said once at the end of a run that was throttled,&lt;br&gt;
+with how many times the server asked and what the concurrency came down to.&lt;br&gt;
+Not a finding about the site: it is the only thing that lets an eight-minute&lt;br&gt;
+run read as &quot;slower than usual&quot; rather than &quot;something is wrong&quot;.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/1327685872/v1.14.0</id>
+    <updated>2026-08-23T11:33:17Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/nurkamol/seo-audit/releases/tag/v1.14.0"/>
+    <title>v1.14.0 — read the canonical of page 2</title>
+    <content type="html">&lt;h3&gt;Added&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;&lt;code&gt;canonical-paginated&lt;/code&gt;&lt;/strong&gt; — page 2 of an archive handing its indexing to page&lt;br&gt;
+1, or to any other page of the same sequence. Google&#39;s guidance is one&lt;br&gt;
+sentence long: &quot;Don&#39;t use the first page of a paginated sequence as the&lt;br&gt;
+canonical page.&quot; Page 2 is not the same content as page 1, so it is a request&lt;br&gt;
+Google is under no obligation to honour and may ignore; where it is honoured,&lt;br&gt;
+the whole archive after the first page leaves the index and takes with it the&lt;br&gt;
+only route to every article old enough to have fallen off page 1. It is the&lt;br&gt;
+click-depth story one floor up, and it arrives switched on rather than being&lt;br&gt;
+chosen.&lt;/p&gt;
+&lt;p&gt;Four of the six real archives checked while building this ship it:&lt;br&gt;
+css-tricks.com, wordpress.org/news, smashingmagazine.com and&lt;br&gt;
+blog.mozilla.org. The two that name themselves — elementor.com and&lt;br&gt;
+sitepoint.com — are silent, which is the half that matters.&lt;/p&gt;
+&lt;p&gt;Only two URL shapes are read, &lt;code&gt;/page/2/&lt;/code&gt; and &lt;code&gt;?page=2&lt;/code&gt;, because they are the&lt;br&gt;
+two that can be recognised without guessing. A bare trailing number like&lt;br&gt;
+&lt;code&gt;/blog/2/&lt;/code&gt; is as often a year or an id, &lt;code&gt;?p=2&lt;/code&gt; is a WordPress &lt;em&gt;post&lt;/em&gt; id and&lt;br&gt;
+not a page of anything, and &lt;code&gt;?start=&lt;/code&gt;/&lt;code&gt;?offset=&lt;/code&gt; have no first page to work&lt;br&gt;
+back to. A shape that has to be guessed at is not read at all.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;The check had to be put where these pages actually turn up.&lt;/strong&gt; A sitemap&lt;br&gt;
+does not list them: 0 of 9,273 sitemap URLs across css-tricks.com,&lt;br&gt;
+wordpress.org and smashingmagazine.com were paginated, so a crawl of the&lt;br&gt;
+sitemap never meets page 2 and the check would have been correct and dormant.&lt;br&gt;
+The internal-link sweep already fetches every link target to see whether it&lt;br&gt;
+works, and was discarding the HTML — so the same response now answers a third&lt;br&gt;
+question, at the cost of no extra request. Verified against the live site:&lt;br&gt;
+smashingmagazine.com/articles/ links to pages 2 and 3, and both are reported,&lt;br&gt;
+in the 106 requests the sweep was making anyway.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>nurkamol</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/2298005?s=60&amp;v=4"/>
+  </entry>
+</feed>
