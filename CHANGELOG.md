@@ -5,6 +5,38 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`canonical-paginated`** — page 2 of an archive handing its indexing to page
+  1, or to any other page of the same sequence. Google's guidance is one
+  sentence long: "Don't use the first page of a paginated sequence as the
+  canonical page." Page 2 is not the same content as page 1, so it is a request
+  Google is under no obligation to honour and may ignore; where it is honoured,
+  the whole archive after the first page leaves the index and takes with it the
+  only route to every article old enough to have fallen off page 1. It is the
+  click-depth story one floor up, and it arrives switched on rather than being
+  chosen.
+
+  Four of the six real archives checked while building this ship it:
+  css-tricks.com, wordpress.org/news, smashingmagazine.com and
+  blog.mozilla.org. The two that name themselves — elementor.com and
+  sitepoint.com — are silent, which is the half that matters.
+
+  Only two URL shapes are read, `/page/2/` and `?page=2`, because they are the
+  two that can be recognised without guessing. A bare trailing number like
+  `/blog/2/` is as often a year or an id, `?p=2` is a WordPress *post* id and
+  not a page of anything, and `?start=`/`?offset=` have no first page to work
+  back to. A shape that has to be guessed at is not read at all.
+
+  **The check had to be put where these pages actually turn up.** A sitemap
+  does not list them: 0 of 9,273 sitemap URLs across css-tricks.com,
+  wordpress.org and smashingmagazine.com were paginated, so a crawl of the
+  sitemap never meets page 2 and the check would have been correct and dormant.
+  The internal-link sweep already fetches every link target to see whether it
+  works, and was discarding the HTML — so the same response now answers a third
+  question, at the cost of no extra request. Verified against the live site:
+  smashingmagazine.com/articles/ links to pages 2 and 3, and both are reported,
+  in the 106 requests the sweep was making anyway.
+
 ## [1.13.0] — 2026-08-21
 
 ### Added

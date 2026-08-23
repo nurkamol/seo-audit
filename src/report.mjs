@@ -169,7 +169,7 @@ const CATEGORY_OF = {
   'canonical-other': 'Indexability', 'canonical-dead': 'Indexability',
   'canonical-redirects': 'Indexability', 'soft-404': 'Indexability',
   'canonical-chain': 'Indexability', 'robots-conflict': 'Indexability',
-  'canonical-noindex': 'Indexability',
+  'canonical-noindex': 'Indexability', 'canonical-paginated': 'Indexability',
 
   // Content
   'title-missing': 'Content', 'title-long': 'Content', 'title-short': 'Content',

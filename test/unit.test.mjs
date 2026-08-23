@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { attr, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
-import { pageChecks, crossPageChecks, sitemapChecks } from '../src/checks.mjs';
+import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
 import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
@@ -619,6 +619,104 @@ test('a long tail of deep pages is capped and counted', () => {
   assert.equal(found.filter((finding) => finding.id === 'deep-page').length, 20);
   const more = found.find((finding) => finding.id === 'deep-page-more');
   assert.match(more.title, /^5 more pages/);
+});
+
+// --- pagination -----------------------------------------------------------
+
+test('the two pagination shapes that can be read are read, and the rest are left alone', () => {
+  assert.deepEqual(seriesOf('https://x.test/blog/page/2/'), { base: 'https://x.test/blog/', page: 2 });
+  assert.deepEqual(seriesOf('https://x.test/blog/page/2'), { base: 'https://x.test/blog/', page: 2 });
+  assert.deepEqual(seriesOf('https://x.test/blog/?page=2'), { base: 'https://x.test/blog/', page: 2 });
+  assert.deepEqual(seriesOf('https://x.test/blog/?paged=4&tag=a'), { base: 'https://x.test/blog/?tag=a', page: 4 });
+
+  // A URL with no pagination is page 1 of its own sequence, which makes the
+  // two comparable without a special case at the call site.
+  assert.deepEqual(seriesOf('https://x.test/blog/'), { base: 'https://x.test/blog/', page: 1 });
+
+  // Deliberately unread: a bare trailing number is as often a year or an id,
+  // ?p= is a WordPress post id and not a page of anything, and a page number
+  // that is not a number is not a page number.
+  for (const url of ['https://x.test/blog/2/', 'https://x.test/?p=123', 'https://x.test/blog/?page=abc']) {
+    assert.equal(seriesOf(url).page, 1, url);
+  }
+});
+
+const withCanonical = (target, at) =>
+  ids(pageChecks(page(
+    `<html lang="en"><head><title>A title long enough to pass</title>` +
+    `<meta name="description" content="${'d'.repeat(80)}">` +
+    `<meta name="viewport" content="width=device-width"><link rel="canonical" href="${target}">` +
+    `</head><body><main><h1>x</h1></main></body></html>`,
+    at,
+  )));
+
+test('a page of a sequence canonicalised to another page of it is an error', () => {
+  // Google: "Don't use the first page of a paginated sequence as the canonical
+  // page." Page 2 is not the same content as page 1.
+  assert.ok(withCanonical('https://x.test/blog/', 'https://x.test/blog/page/2/').includes('canonical-paginated'));
+  assert.ok(withCanonical('https://x.test/blog/', 'https://x.test/blog/?page=2').includes('canonical-paginated'));
+  assert.ok(withCanonical('https://x.test/blog/?page=2', 'https://x.test/blog/?page=3').includes('canonical-paginated'));
+  // The first page named explicitly is the same mistake spelled out.
+  assert.ok(withCanonical('https://x.test/blog/page/1/', 'https://x.test/blog/page/2/').includes('canonical-paginated'));
+});
+
+test('a page of a sequence that names itself is not reported', () => {
+  // The half that matters. This is what the guidance actually asks for.
+  const found = withCanonical('https://x.test/blog/page/2/', 'https://x.test/blog/page/2/');
+  assert.ok(!found.includes('canonical-paginated'));
+  assert.ok(!found.includes('canonical-other'));
+  // And page 1 canonicalising to the URL without the pagination is not a page
+  // of a sequence handing itself away; it is two URLs for one page.
+  assert.ok(!withCanonical('https://x.test/blog/', 'https://x.test/blog/page/1/').includes('canonical-paginated'));
+});
+
+test('a canonical pointing somewhere else entirely is still just canonical-other', () => {
+  const found = withCanonical('https://x.test/archive/', 'https://x.test/blog/page/2/');
+  assert.ok(!found.includes('canonical-paginated'), 'a different sequence is a different question');
+  assert.ok(found.includes('canonical-other'));
+
+  // A view-all page is the one target Google used to bless, and it is not the
+  // first page of the sequence, so it does not fire either.
+  assert.ok(!withCanonical('https://x.test/blog/all/', 'https://x.test/blog/page/2/').includes('canonical-paginated'));
+
+  // An ordinary page deferring elsewhere is unchanged.
+  assert.ok(withCanonical('https://x.test/other/', 'https://x.test/p/').includes('canonical-other'));
+});
+
+test('the link sweep reads the canonical of a paginated page it was already fetching', async () => {
+  // A sitemap does not list page 2 of an archive — 0 of 9,273 URLs across three
+  // real sites — so the sweep is where these are met or they are not met at
+  // all. The response was already being fetched to see whether the link works.
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) =>
+      url === `${origin}/blog/page/2/`
+        ? { body: '<html><head><link rel="canonical" href="https://x.test/blog/"></head></html>' }
+        : notFound(url),
+    ),
+    [linkPage(origin, [`${origin}/blog/page/2/`])],
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  const finding = out.find((f) => f.id === 'canonical-paginated');
+  assert.ok(finding, 'expected the sweep to read it');
+  assert.equal(finding.url, `${origin}/blog/page/2/`);
+  assert.equal(finding.level, 'error');
+});
+
+test('the sweep leaves an ordinary link target, and a page that names itself, alone', async () => {
+  const origin = 'https://x.test';
+  const bodies = {
+    [`${origin}/blog/page/2/`]: '<link rel="canonical" href="https://x.test/blog/page/2/">',
+    [`${origin}/about/`]: '<link rel="canonical" href="https://x.test/team/">',
+  };
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (bodies[url] ? { body: `<html><head>${bodies[url]}</head></html>` } : notFound(url))),
+    [linkPage(origin, Object.keys(bodies))],
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(!out.some((f) => f.id === 'canonical-paginated'));
 });
 
 // --- anchor text ----------------------------------------------------------

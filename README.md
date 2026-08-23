@@ -461,6 +461,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | The viewport isn't a fixed pixel width — `width=1024` lays the page out that wide on a phone and scales it down, and that is what Google indexes | warning |
 | Canonical present, single, self-referencing | warning / error / note |
 | The canonical target isn't `noindex` — a page that hands its indexing to one leaves the index with it | error |
+| Page 2 of an archive names itself, not page 1 — Google's guidance is "Don't use the first page of a paginated sequence as the canonical page", and a sitemap almost never lists these pages, so they're read where they're linked | error |
 | The canonical target isn't itself canonicalised elsewhere — Google needn't follow a chain | warning |
 | `og:title`, `og:description`, `og:image` present | warning |
 | `og:image` is an absolute URL — a scraper has no page to resolve a relative one against | error |
@@ -520,6 +521,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
 | There is something to audit at all — no sitemap *and* no crawlable homepage is `nothing-crawlable` | error |
 | Every internal link resolves — the site-wide 404 sweep | error |
+| Any linked page that turns out to be page 2 of a sequence gets its canonical read, from the response the sweep already fetched | error |
 | Outbound links resolve, with `--check-external` — only a 404, 410 or no answer counts | warning / note |
 | Every `<img>` actually loads — 403 is hotlink protection, not a broken file, and is not reported | error |
 | Every `hreflang` alternate actually loads, including versions outside the crawl | error |

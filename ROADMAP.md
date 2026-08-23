@@ -4,22 +4,8 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Four candidates, queued and not yet started. None of them needs anything this
-tool cannot already do, and three of the four need no requests at all.
-
-### Pagination canonicals
-
-Page 2 of an archive canonicalising to page 1. Google's documentation is
-explicit that this is wrong, and the consequence is quiet: every page of the
-archive after the first leaves the index, and every article reachable only from
-those pages loses its way in — the click-depth story one floor up.
-
-Nothing in the repository has heard of pagination. There is no mention of
-`page/2`, `?page=` or `rel=next` anywhere in `src/`. Detection costs no
-requests and involves no judgement: a crawled URL carrying a pagination segment
-whose canonical is that same URL with the segment removed either is or is not
-that shape. WordPress, Shopify and several static-site blog templates ship it
-turned on.
+Three candidates, queued and not yet started. None of them needs anything this
+tool cannot already do, and two of the three need no requests at all.
 
 ### The same anchor text on two destinations
 
@@ -54,14 +40,14 @@ check table uses:
 - Schema `datePublished` after `dateModified`, or either one in the future.
 - The same URL listed in two files of one sitemap index.
 
-### Three things worth keeping in front of all four
+### Three things worth keeping in front of all three
 
 **The room left is not in fetching more, it is in reading what has already been
 fetched.** Click depth cost no requests — the link graph had been in memory
 since 0.3.0, and only its extreme case, the orphan, was ever reported. The
 viewport string has been parsed and kept since the first commit and was only
-ever tested for existing. Three of the four candidates above are the same
-shape.
+ever tested for existing. Both remaining candidates above are the same shape,
+and so was the one that just left this list.
 
 **A check is narrowed by real sites, not by argument.** The candidate that
 followed from that lesson was anchor text, and 1.13.0 shipped it. It needed the
@@ -89,6 +75,13 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Pagination canonicals** (unreleased) — page 2 of an archive canonicalising
+  to page 1, which four of the six real archives tested were doing, including
+  wordpress.org's own news blog. The check itself was arithmetic; the work was
+  discovering that a sitemap never lists these pages — 0 of 9,273 across three
+  sites — so a correct check would have sat dormant. It reads them off the
+  internal-link sweep instead, which was already fetching them to see whether
+  they resolved and throwing the HTML away.
 - **Anchor text** (1.13.0) — the words attached to a link, which the parser
   had been discarding since the first commit, and the only description of a
   page that does not come from the page itself. `link-no-text` for a

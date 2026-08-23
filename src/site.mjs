@@ -4,7 +4,7 @@ import { connect } from 'node:tls';
 import { mapLimit } from './http.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
 import { parseHtml } from './parse.mjs';
-import { schemaNodes } from './checks.mjs';
+import { schemaNodes, seriesOf, paginatedCanonical } from './checks.mjs';
 
 // Two weeks is enough to renew by hand if the automation has quietly stopped,
 // which is the failure this is for — nobody is short of warning about a
@@ -264,7 +264,20 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   const results = await mapLimit(targets, 6, async (target) => {
     const res = await fetcher.get(target);
     opts.onProgress?.({ phase: 'links', status: res.status, ms: res.ms, url: target });
-    return { target, status: res.status, type: res.headers.get('content-type') ?? '' };
+    const type = res.headers.get('content-type') ?? '';
+    // A third question the same response answers — and the only place it can be
+    // asked. A sitemap does not list page 2 of an archive: across css-tricks,
+    // wordpress.org and smashingmagazine, 0 of 9,273 sitemap URLs were
+    // paginated, so these pages are met here or not at all.
+    //
+    // Read now rather than by keeping the body: a sweep of two hundred targets
+    // holding two hundred documents in memory to read one tag out of a handful
+    // of them is not a trade worth making.
+    const canonical =
+      res.ok && /text\/html/i.test(type) && seriesOf(target).page > 1
+        ? (parseHtml(res.body, target).canonical?.[0] ?? null)
+        : null;
+    return { target, status: res.status, type, canonical };
   });
 
   if (all.length > targets.length) {
@@ -281,6 +294,11 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       out.push(f('error', 'broken-link', 'Link to a page that does not exist',
         `${target} — linked from ${seen.get(target).slice(0, 3).join(', ')}`, seen.get(target)[0]));
     }
+  }
+
+  for (const { target, canonical } of results) {
+    const finding = paginatedCanonical(target, canonical);
+    if (finding) out.push(finding);
   }
 
   // Linked, reachable, and absent from the sitemap — the mirror image of an

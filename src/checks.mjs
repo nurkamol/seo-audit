@@ -43,6 +43,75 @@ const ALT_PLACEHOLDER = new Set([
 // A screen reader reads alt in one breath, with no way to skim or pause.
 const ALT_MAX = 125;
 
+// --- Pagination -------------------------------------------------------------
+// Only the two shapes that can be read without guessing. `/page/2/` is what
+// WordPress, Ghost, Hugo, Eleventy and Astro all generate, and `?page=2` is
+// what most of the rest do.
+//
+// Deliberately absent: a bare trailing number like `/blog/2/`, which is just as
+// often a year or an id; `?p=2`, which is a WordPress *post* id and not a page
+// of anything; and `?start=`/`?offset=`, where the first page is not a number
+// this can work back to. A shape that has to be guessed at is not read at all.
+const PAGE_IN_PATH = /\/page\/(\d+)\/?$/i;
+const PAGE_PARAMS = ['page', 'paged'];
+
+/** The sequence a URL belongs to: where it starts, and which page this is.
+ *
+ *  A URL carrying no pagination is page 1 of its own sequence, which makes the
+ *  two comparable without a special case at the call site. */
+export function seriesOf(rawUrl) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { base: rawUrl, page: 1 };
+  }
+
+  const inPath = url.pathname.match(PAGE_IN_PATH);
+  if (inPath) {
+    const base = new URL(url);
+    base.pathname = url.pathname.replace(PAGE_IN_PATH, '/');
+    return { base: base.toString(), page: Number(inPath[1]) };
+  }
+
+  for (const param of PAGE_PARAMS) {
+    const value = url.searchParams.get(param);
+    if (value === null || !/^\d+$/.test(value)) continue;
+    const base = new URL(url);
+    base.searchParams.delete(param);
+    return { base: base.toString(), page: Number(value) };
+  }
+
+  return { base: url.toString(), page: 1 };
+}
+
+/** Page 2 of an archive handing its indexing to page 1 — or to any other page
+ *  of the same sequence — as a finding, or null.
+ *
+ *  Google's guidance is one sentence long and unambiguous: "Don't use the first
+ *  page of a paginated sequence as the canonical page." Page 2 is not the same
+ *  content as page 1, so the request is one Google is under no obligation to
+ *  honour and may simply ignore; where it is honoured, the whole archive after
+ *  the first page leaves the index, taking with it the only route to every
+ *  article old enough to have fallen off page 1. It is a default that arrives
+ *  switched on rather than something anyone chose — css-tricks.com,
+ *  wordpress.org/news, smashingmagazine.com and blog.mozilla.org all ship it.
+ *
+ *  Shared with the link sweep in src/site.mjs, which is where these pages are
+ *  usually met: a sitemap almost never lists them. */
+export function paginatedCanonical(url, canonical) {
+  if (!canonical) return null;
+  const here = seriesOf(url);
+  const target = seriesOf(canonical);
+  if (here.page < 2 || here.page === target.page) return null;
+  if (withoutSlash(here.base) !== withoutSlash(target.base)) return null;
+  return f('error', 'canonical-paginated', 'Canonical points at another page of the sequence',
+    `This is page ${here.page} and its canonical is ${canonical}` +
+      `${target.page === 1 ? ' — the first page' : ` — page ${target.page}`}. Google's guidance is ` +
+      '"Don\'t use the first page of a paginated sequence as the canonical page", because page ' +
+      `${here.page} is not the same content. Each page in a sequence should name itself.`, url);
+}
+
 // --- Anchor text ------------------------------------------------------------
 // Words that describe the act of clicking rather than what is on the other
 // side. Deliberately short and unarguable: every entry here is a phrase that
@@ -293,8 +362,13 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     out.push(f('error', 'canonical-multiple', 'Several canonical links',
       `Google ignores all of them when they conflict: ${doc.canonical.join(', ')}`, url));
   } else if (doc.canonical[0].replace(/\/$/, '') !== url.replace(/\/$/, '')) {
-    out.push(f('info', 'canonical-other', 'Canonical points elsewhere',
-      `→ ${doc.canonical[0]} (deliberate for a duplicate, a problem otherwise)`, url));
+    const paginated = paginatedCanonical(url, doc.canonical[0]);
+    if (paginated) {
+      out.push(paginated);
+    } else {
+      out.push(f('info', 'canonical-other', 'Canonical points elsewhere',
+        `→ ${doc.canonical[0]} (deliberate for a duplicate, a problem otherwise)`, url));
+    }
   }
 
   // --- Social -------------------------------------------------------------
