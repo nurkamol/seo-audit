@@ -841,10 +841,16 @@ export function dryRunReport(plan) {
   }
 
   out.push('');
+  if (plan.sinceRefused) {
+    out.push(`  ${yellow('--since was not usable.')} ${plan.sinceRefused}`);
+    out.push('');
+  }
   out.push(`  ${bold(String(plan.listed))} URLs listed, ${bold(String(plan.wouldCheck))} would be checked`
     + (plan.skippedByLimit
       ? `, ${yellow(`${plan.skippedByLimit} past --limit ${plan.limit}`)}`
       : ''));
+  if (plan.skippedBySince) out.push(dim(`  ${plan.skippedBySince} unchanged since the date given`));
+  if (plan.excluded) out.push(dim(`  ${plan.excluded} excluded by --exclude`));
 
   if (plan.sections.length > 1) {
     out.push('');

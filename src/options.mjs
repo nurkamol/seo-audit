@@ -31,6 +31,8 @@ export const OPTIONS = [
   { flag: '--os', query: 'os', app: true },
   { flag: '--user-agent', query: 'userAgent', app: true },
   { flag: '--write-sitemap', query: 'sitemap-out', app: true, via: 'the Export menu' },
+  { flag: '--since', query: null, app: 'not yet — it needs a date picker and a sense of when the last run was, which the window has in the library and does not offer yet' },
+  { flag: '--exclude', query: null, app: 'not yet — a list of patterns needs somewhere to live in Settings, and one text field would be worse than nothing' },
 
   // --- reached another way ------------------------------------------------
   { flag: '--dry-run', query: null, app: true, via: 'the Preview button' },

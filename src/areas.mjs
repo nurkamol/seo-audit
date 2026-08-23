@@ -95,6 +95,10 @@ const CATEGORY_OF = {
 
   // Sitemap & robots
   'no-sitemap': 'Sitemap & robots', truncated: 'Sitemap & robots',
+  // What the run was told to leave out. Facts about the crawl rather than
+  // about the site, and they sit beside `truncated` for that reason.
+  since: 'Sitemap & robots', 'since-not-usable': 'Sitemap & robots',
+  excluded: 'Sitemap & robots',
   'sitemap-not-checked': 'Sitemap & robots',
   'rate-limit-slowed': 'Sitemap & robots',
   'robots-missing': 'Sitemap & robots', 'robots-blocks-all': 'Sitemap & robots',

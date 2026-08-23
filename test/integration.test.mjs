@@ -180,6 +180,49 @@ test('a site with no sitemap is crawled by following links instead of refused', 
   }
 });
 
+test('--exclude keeps URLs out of the crawl, and always says so', async () => {
+  const site = await startFixtureSite();
+  try {
+    const full = await audit(site.origin, { concurrency: 1 });
+    const some = await audit(site.origin, { concurrency: 1, exclude: ['/ru/**'] });
+
+    assert.ok(some.meta.pages < full.meta.pages, 'fewer pages were crawled');
+    const note = some.findings.find((f) => f.id === 'excluded');
+    assert.ok(note, 'a crawl that quietly shrank is a report about pages nobody looked at');
+    assert.equal(note.level, 'info', 'a fact about the run, not a fault of the site');
+    assert.match(note.detail, /\/ru\/\*\*/, 'it names the pattern');
+    assert.match(note.detail, /not about the site/);
+
+    // Nothing is reported about a page that was never fetched.
+    assert.ok(!some.findings.some((f) => (f.url ?? '').includes('/ru/')));
+    // And with no patterns there is no note at all.
+    assert.ok(!full.findings.some((f) => f.id === 'excluded'));
+  } finally {
+    await site.stop();
+  }
+});
+
+test('--since on a sitemap that cannot answer checks everything and says why', async () => {
+  // The fixture's sitemap carries no lastmod, which is the common case and the
+  // one where guessing would be worst.
+  const site = await startFixtureSite();
+  try {
+    const result = await audit(site.origin, { concurrency: 1, since: '2026-01-01' });
+    const refused = result.findings.find((f) => f.id === 'since-not-usable');
+
+    assert.ok(refused, 'it says the filter did not apply');
+    assert.equal(refused.level, 'warn');
+    assert.match(refused.detail, /lastmod/);
+    assert.match(refused.detail, /this report is complete/,
+      'and that nothing was silently skipped');
+    // The crawl went ahead in full rather than checking nothing.
+    assert.ok(result.meta.pages > 1);
+    assert.ok(!result.findings.some((f) => f.id === 'since'));
+  } finally {
+    await site.stop();
+  }
+});
+
 test('a preview describes the crawl that would happen, and fetches no page', async () => {
   const site = await startFixtureSite();
   try {

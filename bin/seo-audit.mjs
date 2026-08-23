@@ -32,6 +32,11 @@ const HELP = `
                        page that answered 200, is HTML, is indexable and is
                        its own canonical. Refuses on a crawl that did not
                        see the whole site, rather than writing a short one
+    --since <date>     crawl only URLs the sitemap says changed on or after
+                       this date. Refuses when lastmod cannot answer it —
+                       absent, or one build stamp on every URL
+    --exclude <glob>   leave URLs out of the crawl. Repeatable. Globs match
+                       paths, where * stops at a slash and ** does not
     --dry-run          say what would be crawled and stop. A handful of
                        requests instead of hundreds, for checking the tool is
                        pointed at the right site before spending the minutes
@@ -125,6 +130,10 @@ function parseArgs(argv) {
     else if (arg === '--quiet' || arg === '-q') opts.quiet = true;
     else if (arg === '--verbose') opts.verbose = true;
     else if (arg === '--dry-run') opts.dryRun = true;
+    else if (arg === '--since') opts.since = value();
+    // Repeatable: one pattern per flag reads better than one flag with a
+    // comma-separated list, and a URL can contain a comma.
+    else if (arg === '--exclude') (opts.exclude ??= []).push(value());
     else if (arg === '--write-sitemap') opts.writeSitemap = value();
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();

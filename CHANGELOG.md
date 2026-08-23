@@ -6,6 +6,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--since <date>`.** A five-thousand-page site audited every week does not
+  need five thousand requests — the sitemap already says which pages moved, and
+  `lastmod` has been parsed since early on and read by one check. On
+  jekyllrb.com, `--since 2026-06-01` crawled **98 pages instead of 210**.
+
+  Two refusals, both from the same place: a `lastmod` nobody maintains is worse
+  than none, because it looks like an answer. A sitemap with no `lastmod` at
+  all, and one carrying a single build stamp on every URL, both make the filter
+  meaningless — so it says so, checks everything, and says the report is
+  complete. A URL with no `lastmod` is **kept**: not knowing when a page
+  changed is not evidence that it did not.
+
+- **`--exclude <glob>`.** There was no way to keep URLs out of a crawl at all —
+  the config file has ignore rules for checks, not for URLs. Faceted search, tag
+  archives and paginated listings dominate the crawl budget and the report on a
+  real store. Repeatable, and it reuses the glob dialect `--psi` already uses,
+  where `*` stops at a slash and `**` does not. What it skipped is **always
+  reported**, because a crawl that quietly shrank is a report that reads as a
+  clean bill of health for pages nobody looked at.
+
+  Both are applied by `--dry-run` too, so a preview keeps describing the crawl
+  that would actually happen.
+
 - **The command line and the window are kept honest about each other.** The CLI
   grew to thirty-three flags and the window reached ten, and nothing anywhere
   said which of the other twenty-three were decisions and which were oversights.
@@ -25,6 +48,13 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   machine of whoever adds the flag. It found `--ignore` undeclared on its first
   run. The table is served at `/options` as well, so "can the app do X" has a
   fetchable answer.
+
+### Fixed
+- **`src/config.mjs` was a binary file to git.** `matchGlob` used a literal NUL
+  byte as a placeholder while translating `**`, which works at runtime and makes
+  the whole file register as binary — so `grep` found nothing in it and the glob
+  matcher that already existed was invisible to anybody looking for one. Written
+  as `\u0000` now. Behaviour is unchanged, checked against seven patterns.
 
 ## [1.25.0] — 2026-08-24
 

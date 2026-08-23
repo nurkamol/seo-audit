@@ -129,3 +129,55 @@ export function describe(result, path) {
   }
   return out.join('\n') + '\n';
 }
+
+/** Which sitemap URLs changed since a date, and whether that can be answered.
+ *
+ *  A five-thousand-page site audited every week does not need five thousand
+ *  requests: the sitemap already says which pages moved. The saving is real
+ *  enough to be worth the two refusals below, both of which come from the same
+ *  place — a `lastmod` nobody maintains is worse than none, because it looks
+ *  like an answer.
+ *
+ *  A URL with no `lastmod` is **kept**. Not knowing when a page changed is not
+ *  evidence that it did not, and the whole value of this is that the pages it
+ *  skips are ones the site said are unchanged.
+ */
+export function changedSince(entries, since) {
+  const cutoff = Date.parse(since);
+  if (!Number.isFinite(cutoff)) {
+    return { refused: `"${since}" is not a date. Pass one like 2026-08-17.` };
+  }
+
+  const dated = entries.filter((e) => e.lastmod && Number.isFinite(Date.parse(e.lastmod)));
+  if (dated.length === 0) {
+    return {
+      refused:
+        'No URL in this sitemap carries a lastmod, so there is nothing to compare a date against. ' +
+        'Run without --since.',
+    };
+  }
+
+  // One date on every URL is a build stamp, which is the thing crawlers learn
+  // to ignore — and here it would mean checking everything or nothing
+  // depending on which side of the stamp the date fell.
+  const days = new Set(dated.map((e) => new Date(Date.parse(e.lastmod)).toISOString().slice(0, 10)));
+  if (days.size === 1 && dated.length > 1) {
+    return {
+      refused:
+        `Every dated URL in this sitemap carries ${[...days][0]}, which is a build stamp rather than ` +
+        'a record of when each page changed. --since would check all of them or none of them.',
+    };
+  }
+
+  const changed = [];
+  const unknown = [];
+  const skipped = [];
+  for (const entry of entries) {
+    const at = entry.lastmod ? Date.parse(entry.lastmod) : NaN;
+    if (!Number.isFinite(at)) unknown.push(entry.loc);
+    else if (at >= cutoff) changed.push(entry.loc);
+    else skipped.push(entry.loc);
+  }
+
+  return { urls: [...changed, ...unknown], changed, unknown, skipped, refused: null };
+}

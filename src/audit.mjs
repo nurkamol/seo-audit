@@ -8,10 +8,10 @@ import { siteChecks } from './site.mjs';
 import { linkGraph } from './graph.mjs';
 import { compareAgents } from './compare.mjs';
 import { searchConsole } from './console.mjs';
-import { applyIgnores, expectationChecks } from './config.mjs';
+import { applyIgnores, expectationChecks, matchGlob } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 import { sectionOf } from './causes.mjs';
-import { rebuild } from './sitemap.mjs';
+import { rebuild, changedSince } from './sitemap.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -248,11 +248,76 @@ export async function audit(target, opts = {}) {
 
   let pages;
   let truncated = 0;
-  const bySitemap = urls.length > 0;
+
+  // --- only what the sitemap says changed ---------------------------------
+  // A five-thousand-page site audited weekly does not need five thousand
+  // requests. Refused rather than approximated when the sitemap's lastmod
+  // cannot answer it — see changedSince().
+  let considered = urls;
+  if (opts.since && urls.length) {
+    const changed = changedSince(entries, opts.since);
+    if (changed.refused) {
+      findings.push({
+        level: 'warn',
+        id: 'since-not-usable',
+        title: 'Could not limit the crawl to what changed',
+        detail: `${changed.refused} Every URL was checked instead, so this report is complete.`,
+        url: origin,
+      });
+    } else {
+      considered = changed.urls;
+      findings.push({
+        level: 'info',
+        id: 'since',
+        title: `${changed.skipped.length} URL(s) were unchanged since ${opts.since}`,
+        detail:
+          `The sitemap says ${changed.changed.length} page(s) changed on or after ${opts.since}` +
+          (changed.unknown.length
+            ? `, and ${changed.unknown.length} carry no lastmod and were checked anyway — not knowing ` +
+              'when a page changed is not evidence that it did not'
+            : '') +
+          `. Nothing below says anything about the ${changed.skipped.length} that were skipped.`,
+        url: origin,
+      });
+    }
+  }
+
+  // --- URLs the run was told to leave alone -------------------------------
+  // Faceted search, tag archives and paginated listings dominate the crawl
+  // budget and the report on a real store, and there was no way to keep them
+  // out. Applied before the limit, so excluding is what makes room rather than
+  // just moving which pages get cut.
+  const patterns = opts.exclude ?? [];
+  const excluded = [];
+  const wanted = patterns.length
+    ? considered.filter((url) => {
+        const path = (() => { try { return new URL(url).pathname; } catch { return url; } })();
+        const hit = patterns.some((pattern) => matchGlob(pattern, path));
+        if (hit) excluded.push(url);
+        return !hit;
+      })
+    : considered;
+
+  if (excluded.length) {
+    // Always reported. A crawl that quietly shrank is a report that reads as a
+    // clean bill of health for pages nobody looked at.
+    findings.push({
+      level: 'info',
+      id: 'excluded',
+      title: `${excluded.length} URL(s) were excluded by --exclude`,
+      detail:
+        `${patterns.join(', ')} matched ${excluded.length} of the ${considered.length} URLs considered, ` +
+        `so ${wanted.length} were left to check. This is a fact about the run, not about the site — ` +
+        `nothing below says anything about the excluded pages. First few: ${excluded.slice(0, 3).join(', ')}`,
+      url: origin,
+    });
+  }
+
+  const bySitemap = wanted.length > 0;
 
   if (bySitemap) {
-    const list = urls.slice(0, limit);
-    truncated = urls.length - list.length;
+    const list = wanted.slice(0, limit);
+    truncated = wanted.length - list.length;
     pages = await mapLimit(list, concurrency, async (pageUrl) => {
       const res = await fetcher.get(pageUrl);
       const isHtml = /text\/html/i.test(res.headers.get('content-type') ?? '');
@@ -573,15 +638,38 @@ export async function preview(target, opts = {}) {
     }
   }
 
-  const { urls, source, tried, rateLimited } = await discover(
+  const { urls, entries, source, tried, rateLimited } = await discover(
     origin,
     fetcher,
     opts.sitemap ?? (asked.pathname.match(/\.xml$/i) ? target : null),
   );
 
   const limit = opts.limit ?? 200;
+
+  // The same two filters the crawl applies, or this would describe a different
+  // run from the one it is previewing — which is worse than not previewing.
+  let considered = urls;
+  let sinceRefused = null;
+  let skippedBySince = 0;
+  if (opts.since && urls.length) {
+    const changed = changedSince(entries, opts.since);
+    if (changed.refused) sinceRefused = changed.refused;
+    else {
+      considered = changed.urls;
+      skippedBySince = changed.skipped.length;
+    }
+  }
+  const patterns = opts.exclude ?? [];
+  const beforeExcluding = considered.length;
+  if (patterns.length) {
+    considered = considered.filter((url) => {
+      const path = (() => { try { return new URL(url).pathname; } catch { return url; } })();
+      return !patterns.some((pattern) => matchGlob(pattern, path));
+    });
+  }
+
   const sections = new Map();
-  for (const url of urls) {
+  for (const url of considered) {
     const section = sectionOf(url);
     sections.set(section, (sections.get(section) ?? 0) + 1);
   }
@@ -594,15 +682,18 @@ export async function preview(target, opts = {}) {
     sitemap: source,
     tried,
     listed: urls.length,
+    skippedBySince: skippedBySince,
+    sinceRefused,
+    excluded: beforeExcluding - considered.length,
     // Without a sitemap the crawl follows links and cannot know in advance how
     // many pages it will find. Saying "up to the limit" is the honest answer.
-    wouldCheck: urls.length ? Math.min(urls.length, limit) : null,
-    skippedByLimit: urls.length > limit ? urls.length - limit : 0,
+    wouldCheck: considered.length ? Math.min(considered.length, limit) : null,
+    skippedByLimit: considered.length > limit ? considered.length - limit : 0,
     limit,
     // The biggest parts of the site, which is what decides whether the limit is
     // in the right place.
     sections: [...sections].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([path, count]) => ({ path, count })),
-    sample: urls.slice(0, 10),
+    sample: considered.slice(0, 10),
     requests: fetcher.count,
     ms: Date.now() - started,
   };

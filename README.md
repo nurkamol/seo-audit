@@ -402,6 +402,8 @@ reason.
 |---|---|---|
 | `--md <file>` | — | Write a Markdown report |
 | `--html <file>` | — | Write a self-contained HTML report — one file, no assets |
+| `--since <date>` | — | Crawl only URLs the sitemap says changed on or after this date. Refuses when `lastmod` cannot answer it |
+| `--exclude <glob>` | — | Leave URLs out of the crawl. Repeatable; `*` stops at a slash, `**` does not |
 | `--dry-run` | — | Say what would be crawled and stop. A handful of requests instead of hundreds |
 | `--write-sitemap <file>` | — | Write the sitemap this site should have had. Refuses on a crawl that did not see the whole site |
 | `--json <file>` | — | Write a JSON report — findings, the grouped `causes` with their scope lines, and `meta`. Also usable as a baseline, which carries the findings only |

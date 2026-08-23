@@ -7,7 +7,7 @@ import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
 import { fingerprint, similarity, cluster } from '../src/dupes.mjs';
-import { rebuild, describe as describeSitemap } from '../src/sitemap.mjs';
+import { rebuild, changedSince, describe as describeSitemap } from '../src/sitemap.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
@@ -2695,6 +2695,51 @@ test('a report keeps the traffic a baseline drops', () => {
 test('parsing a non-report JSON file explains itself', () => {
   assert.throws(() => parseBaseline('{"hello":true}', 'x.json'), /no findings array/);
   assert.throws(() => parseBaseline('not json', 'x.json'), /not valid JSON/);
+});
+
+// --- only what changed -----------------------------------------------------
+
+test('changed-since answers from lastmod, and keeps what it cannot date', () => {
+  const entries = [
+    { loc: 'https://x.test/new/', lastmod: '2026-08-20' },
+    { loc: 'https://x.test/old/', lastmod: '2026-01-02' },
+    { loc: 'https://x.test/undated/', lastmod: null },
+    { loc: 'https://x.test/exactly/', lastmod: '2026-08-17' },
+  ];
+  const result = changedSince(entries, '2026-08-17');
+
+  assert.equal(result.refused, null);
+  assert.deepEqual(result.changed, ['https://x.test/new/', 'https://x.test/exactly/'],
+    'on the date counts as changed');
+  assert.deepEqual(result.skipped, ['https://x.test/old/']);
+  // Not knowing when a page changed is not evidence that it did not, and the
+  // value of this is that what it skips was declared unchanged.
+  assert.deepEqual(result.unknown, ['https://x.test/undated/']);
+  assert.ok(result.urls.includes('https://x.test/undated/'));
+});
+
+test('changed-since refuses rather than guessing', () => {
+  const dated = [{ loc: 'https://x.test/a/', lastmod: '2026-08-20' }];
+
+  assert.match(changedSince(dated, 'next tuesday').refused, /is not a date/);
+
+  // A lastmod nobody maintains is worse than none: it looks like an answer.
+  assert.match(
+    changedSince([{ loc: 'https://x.test/a/', lastmod: null }], '2026-08-17').refused,
+    /No URL in this sitemap carries a lastmod/,
+  );
+
+  // One date on every URL is a build stamp. Filtering on it would take
+  // everything or nothing depending on which side of the stamp the date fell.
+  const stamped = changedSince([
+    { loc: 'https://x.test/a/', lastmod: '2026-08-24T10:00:00Z' },
+    { loc: 'https://x.test/b/', lastmod: '2026-08-24T10:00:01Z' },
+  ], '2026-08-17');
+  assert.match(stamped.refused, /build stamp/);
+
+  // A single dated URL is not a build stamp — there is nothing to compare it
+  // with, and refusing there would refuse every one-page site.
+  assert.equal(changedSince(dated, '2026-08-17').refused, null);
 });
 
 // --- the sitemap this site should have had ---------------------------------
