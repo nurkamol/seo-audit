@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.27.0] — 2026-08-24
+
 ### Added
 - **Silencing a check, from the window.** `--ignore` has been on the command
   line for a long time and there was no way to say "I can live with this" from a
