@@ -5,7 +5,31 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.23.0] — 2026-08-23
+
 ### Added
+
+- **`--csv`, and every format in the Mac app.** The findings as a spreadsheet:
+  one row each, with the page, the section, whether it is indexable, how many
+  links point at it, how far from the homepage, and impressions where Search
+  Console has been asked. A flat table on purpose — the grouped view is what
+  the report is for, this is for sorting 2,081 rows by impressions or handing a
+  filtered slice to a developer. Written with a byte-order mark, which is the
+  difference between Excel showing "Maison Éthérique" and "Maison Ã‰thÃ©rique".
+
+  The app exports **PDF, HTML, Markdown, CSV and JSON**, and owns none of those
+  formats: it holds the findings it was streamed and posts them back to the
+  engine's new `/render` endpoint, which runs the same writers the CLI uses. A
+  report exported from the app and one written by `seo-audit --csv` are the
+  same file. PDF is the exception, because it is a drawing of what is on screen
+  rather than a format the engine has. JSON is written exactly as it arrived,
+  so a re-encode cannot quietly drop a field the app's models do not know yet.
+
+- **A website, and Help inside the app.** <https://nurkamol.github.io/seo-audit/>
+  is built from `docs/`. The app's Help menu, its sidebar and a proper About
+  sheet all point at it, so the answer to "what is this" is one click away
+  rather than a search.
+
 - **Reports are kept.** A 325-page site takes seven minutes to crawl, and
   losing that because a window was closed is the difference between a tool
   somebody opens twice and one they open once. Every finished run is written to
@@ -29,9 +53,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fails in CI rather than in a window.
 
 ### Changed
+
 - **The app is called SEO Audit.** The command line stays `seo-audit`, the
   bundle id stays `com.nurkamol.seo-audit` and the cask token stays
   `seo-audit`: a display name is for people, those three are for machines.
+
+- **A new icon.** The old one was the sitemap mark from the logo, which is
+  accurate and abstract. This is a magnifier over a rising line — what the tool
+  looks for, and what finding it is for. Drawn flat on the macOS squircle
+  rather than the glossy bevel that style implies, because gloss is a 2010 idiom
+  and the specular highlight is the first thing to disappear at 16 pixels.
 
 - **The icons weigh a tenth of what they did.** `docs/icon.png` was 697 KB of
   unoptimised PNG for a flat glyph, used at 96px on a web page; it is 24 KB at
@@ -41,40 +72,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to produce an icon is not a build anyone can run.
 
 ### Fixed
+
 - **`brew trust` is in the install instructions.** Homebrew 6 refuses to load a
   cask from a tap nobody has vouched for, and the warning it prints when you
   skip it is easy to scroll past. Found by tapping the repository and
   installing from it, which also turned up `depends_on macos: ">= :tahoe"`
   being the deprecated spelling of `depends_on macos: :tahoe`.
 
-### Added
-- **`--csv`, and every format in the Mac app.** The findings as a spreadsheet:
-  one row each, with the page, the section, whether it is indexable, how many
-  links point at it, how far from the homepage, and impressions where Search
-  Console has been asked. A flat table on purpose — the grouped view is what
-  the report is for, this is for sorting 2,081 rows by impressions or handing a
-  filtered slice to a developer. Written with a byte-order mark, which is the
-  difference between Excel showing "Maison Éthérique" and "Maison Ã‰thÃ©rique".
+- **`--serve` no longer exits the moment it starts under a redirected stdin.**
+  It shuts down when its stdin closes, so that closing the app's window also
+  takes the engine away. The check asked whether stdin was a terminal, and
+  `--serve < /dev/null` is not one either — reading it ends at once. It asks
+  whether stdin is a pipe or a socket now: Node hands a child a socketpair
+  rather than a FIFO, so testing only for a FIFO would have fixed the redirect
+  and broken the app. Both cases are tests. Found by the CI job added in this
+  release, on its first run, which is the entire argument for adding it.
 
-  The app exports **PDF, HTML, Markdown, CSV and JSON**, and owns none of those
-  formats: it holds the findings it was streamed and posts them back to the
-  engine's new `/render` endpoint, which runs the same writers the CLI uses. A
-  report exported from the app and one written by `seo-audit --csv` are the
-  same file. PDF is the exception, because it is a drawing of what is on screen
-  rather than a format the engine has. JSON is written exactly as it arrived,
-  so a re-encode cannot quietly drop a field the app's models do not know yet.
-
-- **A website, and Help inside the app.** <https://nurkamol.github.io/seo-audit/>
-  is built from `docs/`. The app's Help menu, its sidebar and a proper About
-  sheet all point at it, so the answer to "what is this" is one click away
-  rather than a search.
-
-### Changed
-- **A new icon.** The old one was the sitemap mark from the logo, which is
-  accurate and abstract. This is a magnifier over a rising line — what the tool
-  looks for, and what finding it is for. Drawn flat on the macOS squircle
-  rather than the glossy bevel that style implies, because gloss is a 2010 idiom
-  and the specular highlight is the first thing to disappear at 16 pixels.
+- **The website had no vertical padding.** `.wrap` set the `padding` shorthand
+  to add a side gutter, and a class outranks the `header`, `section` and
+  `footer` type selectors — so it zeroed the top and bottom padding of every
+  block on the page. The badges spread themselves across the column for a
+  related reason: `header img { margin: 0 auto }` was meant for the logo and
+  matched them too, and an `auto` margin on a flex item absorbs the free space,
+  which is how `justify-content: center` centred nothing.
 
 ## [1.22.0] — 2026-08-23
 
