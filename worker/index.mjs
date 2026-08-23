@@ -98,6 +98,42 @@ export function targetFor(input, env) {
 }
 
 /** How many pages this deployment will crawl, whatever the form asked for. */
+/** Check ids, comma-separated. Bounded and pattern-checked: this ends up
+ *  matched against every finding, and a list of ten thousand ids would be a way
+ *  to make a run expensive. */
+export function idList(raw) {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^[a-z0-9-]{1,60}$/.test(s))
+    .slice(0, 100);
+}
+
+/** PageSpeed Insights, off unless the deployment allows it.
+ *
+ *  Every target is a call to Google that takes seconds and spends a quota, so
+ *  on a hosted deployment a stranger could otherwise spend somebody's budget by
+ *  passing a parameter. `--serve` sets ALLOW_PSI because the window it serves is
+ *  the person running it. */
+export function psiOptions(params, env) {
+  if (env.ALLOW_PSI !== '1') return {};
+  const targets = (params.get('psi') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  if (!targets.length) return {};
+
+  const asked = Number.parseInt(params.get('psi-sample') ?? '', 10);
+  const strategy = params.get('psi-strategy');
+  return {
+    psi: targets,
+    psiSample: Number.isFinite(asked) && asked > 0 ? Math.min(asked, 10) : undefined,
+    psiStrategy: strategy === 'desktop' ? 'desktop' : 'mobile',
+  };
+}
+
 /** How hard to crawl. Clamped, because a request parameter that sets how many
  *  connections a stranger's site receives is a parameter worth bounding — and
  *  because 1 is a real answer: a site answering 429 gets through at 1 and does
@@ -433,6 +469,12 @@ export async function handle(request, env, ctx, deps = {}) {
           // it needs per-page data a client is never sent. Costs one cached
           // request; everything else it reads is already in memory.
           writeSitemap: url.searchParams.get('sitemap-out') === '1',
+          // Checks the run was told to silence. Only ever removes findings, so
+          // it needs no gate — and meta.ignored still reports how many, because
+          // a silenced check that says nothing is indistinguishable from one
+          // that passed.
+          ignore: idList(url.searchParams.get('ignore')),
+          ...psiOptions(url.searchParams, env),
           sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
           userAgent: agentFor(url.searchParams, env),
           // Switched off rather than left to fail — see NO_CERTIFICATE_CHECK.

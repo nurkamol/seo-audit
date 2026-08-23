@@ -57,6 +57,53 @@ final class CrawlSettings: ObservableObject {
     /// treats differently. Wins over the two menus above when it is set.
     @AppStorage("seo-audit.crawl.userAgent") var userAgent = ""
 
+    /// Checks this person has decided to live with, as a comma-separated list
+    /// because `@AppStorage` holds strings. Silencing is per-machine on purpose:
+    /// a decision a whole team should share belongs in the config file the
+    /// repository commits, not in one person's preferences.
+    @AppStorage("seo-audit.crawl.ignored") private var ignoredList = ""
+
+    var ignored: [String] {
+        get { ignoredList.split(separator: ",").map(String.init).filter { !$0.isEmpty } }
+        set { ignoredList = Set(newValue).sorted().joined(separator: ",") }
+    }
+
+    func silence(_ id: String) { ignored = ignored + [id] }
+    func unsilence(_ id: String) { ignored = ignored.filter { $0 != id } }
+    func isSilenced(_ id: String) -> Bool { ignored.contains(id) }
+
+    // --- PageSpeed ----------------------------------------------------------
+    /// Performance is the one thing this tool refuses to estimate. `--psi` asks
+    /// Google for Google's own measurement, which is the only honest way a
+    /// window will ever show it — and each target is seconds of waiting, which
+    /// is why it is off by default and sampled when on.
+    enum Performance: String, CaseIterable, Identifiable {
+        case off, homepage, sample
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .off: "Off"
+            case .homepage: "Home page"
+            case .sample: "A sample"
+            }
+        }
+
+        /// What `--psi` is given. Empty means the flag is not passed at all.
+        var targets: [String] {
+            switch self {
+            case .off: []
+            case .homepage: ["/"]
+            case .sample: ["/**"]
+            }
+        }
+    }
+
+    @AppStorage("seo-audit.psi.mode") var performance: Performance = .off
+    @AppStorage("seo-audit.psi.sample") var performanceSample = 3
+    @AppStorage("seo-audit.psi.desktop") var performanceOnDesktop = false
+
     /// The list of presets comes from the engine, so adding one to
     /// `src/agents.mjs` adds it to this menu and nothing here needs editing.
     @Published private(set) var browsers: [String] = []
@@ -102,6 +149,16 @@ final class CrawlSettings: ObservableObject {
         }
         let trimmed = sitemap.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { items.append(.init(name: "sitemap", value: trimmed)) }
+
+        if !ignored.isEmpty { items.append(.init(name: "ignore", value: ignored.joined(separator: ","))) }
+
+        if performance != .off {
+            items.append(.init(name: "psi", value: performance.targets.joined(separator: ",")))
+            if performance == .sample {
+                items.append(.init(name: "psi-sample", value: String(performanceSample)))
+            }
+            if performanceOnDesktop { items.append(.init(name: "psi-strategy", value: "desktop")) }
+        }
         return items
     }
 }
@@ -180,6 +237,65 @@ struct SettingsScene: View {
                     .fixedSize(horizontal: false, vertical: true)
             } header: {
                 Text("Identify as")
+            }
+
+            Section {
+                Picker("Measure", selection: $settings.performance) {
+                    ForEach(CrawlSettings.Performance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if settings.performance == .sample {
+                    Stepper(value: $settings.performanceSample, in: 1...10) {
+                        LabeledContent("Pages") {
+                            Text("\(settings.performanceSample)").monospacedDigit()
+                        }
+                    }
+                }
+                if settings.performance != .off {
+                    Toggle("Measure as a desktop browser", isOn: $settings.performanceOnDesktop)
+                }
+                Text("Google measures it, over its own network, in a real browser. This app never "
+                     + "estimates performance — a plausible wrong number is worse than no number. "
+                     + "Each page takes a few seconds, which is why it is sampled.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("A PageSpeed API key is optional and raises the quota. The engine reads "
+                     + "PSI_API_KEY, or ~/.config/seo-audit/.env — the same two places the command "
+                     + "line looks, so a key already set there is already working. This app never "
+                     + "holds it.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Performance")
+            }
+
+            Section {
+                if settings.ignored.isEmpty {
+                    Text("Nothing is silenced. Right-click a finding in a report to silence its "
+                         + "check for future runs on this machine.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(settings.ignored, id: \.self) { id in
+                        HStack {
+                            Text(id).font(.system(.callout, design: .monospaced))
+                            Spacer(minLength: 0)
+                            Button("Stop silencing") { settings.unsilence(id) }
+                                .buttonStyle(.glass)
+                                .controlSize(.small)
+                        }
+                    }
+                    Text("A report still says how many findings were silenced. A check that has been "
+                         + "quietened must never read the same as one that passed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } header: {
+                Text("Silenced checks")
             }
 
             Section {

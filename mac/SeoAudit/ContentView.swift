@@ -157,7 +157,8 @@ struct ContentView: View {
                                Export.save(format, report: report, host: run.host,
                                            engine: engine.base, raw: session.raw)
                            },
-                           compare: { earlier in comparing = Pair(earlier: earlier, host: run.host) })
+                           compare: { earlier in comparing = Pair(earlier: earlier, host: run.host) },
+                           silence: { id in withAnimation(.snappy) { settings.silence(id) } })
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
             } else if let failure = session.failure {
                 Card(alignment: .leading) {

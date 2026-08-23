@@ -31,6 +31,10 @@ export const OPTIONS = [
   { flag: '--os', query: 'os', app: true },
   { flag: '--user-agent', query: 'userAgent', app: true },
   { flag: '--write-sitemap', query: 'sitemap-out', app: true, via: 'the Export menu' },
+  { flag: '--ignore', query: 'ignore', app: true, via: 'right-clicking a finding, and the Settings list' },
+  { flag: '--psi', query: 'psi', app: true, via: 'Settings → Performance' },
+  { flag: '--psi-sample', query: 'psi-sample', app: true, via: 'Settings → Performance' },
+  { flag: '--psi-strategy', query: 'psi-strategy', app: true, via: 'Settings → Performance' },
   { flag: '--since', query: null, app: 'not yet — it needs a date picker and a sense of when the last run was, which the window has in the library and does not offer yet' },
   { flag: '--exclude', query: null, app: 'not yet — a list of patterns needs somewhere to live in Settings, and one text field would be worse than nothing' },
 
@@ -52,12 +56,9 @@ export const OPTIONS = [
   { flag: '--update-baseline', query: null, app: 'a baseline is a file a repository commits' },
   { flag: '--config', query: null, app: 'a config file is a file a repository commits' },
   { flag: '--redirects', query: null, app: 'a migration map is a file a repository commits' },
-  { flag: '--ignore', query: null, app: 'not yet — nothing in the window silences a check, and it should' },
+
 
   // --- not yet, and that is a decision rather than an oversight ------------
-  { flag: '--psi', query: null, app: 'not yet — needs a PageSpeed key, a credential this window does not hold' },
-  { flag: '--psi-sample', query: null, app: 'not yet — see --psi' },
-  { flag: '--psi-strategy', query: null, app: 'not yet — see --psi' },
   { flag: '--search-console', query: null, app: 'not yet — needs an OAuth client, and has never run against the live API' },
   { flag: '--against', query: null, app: 'not yet — the window compares two kept runs instead of two live deployments' },
   { flag: '--compare-as', query: null, app: 'not yet — it fetches a sample of pages a second time, and the window has no control for spending that' },

@@ -640,3 +640,78 @@ struct RebuiltSitemapTests {
         #expect(items.contains { $0.name == "sitemap-out" && $0.value == "1" })
     }
 }
+
+@Suite("Silencing a check, and asking Google")
+struct SilenceAndPerformanceTests {
+    @MainActor
+    private func fresh() -> CrawlSettings {
+        let settings = CrawlSettings()
+        settings.ignored = []
+        settings.performance = .off
+        settings.performanceSample = 3
+        settings.performanceOnDesktop = false
+        return settings
+    }
+
+    @MainActor
+    @Test("silencing survives, deduplicates, and can be undone")
+    func silence() {
+        let settings = fresh()
+        defer { settings.ignored = [] }
+
+        settings.silence("thin-content")
+        settings.silence("img-srcset")
+        settings.silence("thin-content")          // twice from two cards
+        #expect(settings.ignored == ["img-srcset", "thin-content"], "sorted, and once each")
+        #expect(settings.isSilenced("thin-content"))
+
+        let items = settings.queryItems(for: Run(url: "https://a.test", limit: 10))
+        #expect(items.first { $0.name == "ignore" }?.value == "img-srcset,thin-content")
+
+        settings.unsilence("thin-content")
+        #expect(settings.ignored == ["img-srcset"])
+        #expect(!settings.isSilenced("thin-content"))
+    }
+
+    @MainActor
+    @Test("silencing nothing sends nothing")
+    func noneSilenced() {
+        let settings = fresh()
+        let items = settings.queryItems(for: Run(url: "https://a.test", limit: 10))
+        #expect(!items.contains { $0.name == "ignore" })
+    }
+
+    @MainActor
+    @Test("performance is off unless asked for, and sampled when it is")
+    func performance() {
+        let settings = fresh()
+        defer { settings.performance = .off; settings.performanceOnDesktop = false }
+
+        // Off is off: no psi parameter at all, so the engine's default holds.
+        #expect(!settings.queryItems(for: Run(url: "https://a.test", limit: 10)).contains { $0.name.hasPrefix("psi") })
+
+        settings.performance = .homepage
+        var byName = Dictionary(settings.queryItems(for: Run(url: "https://a.test", limit: 10))
+            .map { ($0.name, $0.value) }, uniquingKeysWith: { a, _ in a })
+        #expect(byName["psi"] == "/")
+        #expect(byName["psi-sample"] == nil, "one page is not a sample")
+        #expect(byName["psi-strategy"] == nil, "mobile is the engine's default")
+
+        settings.performance = .sample
+        settings.performanceSample = 5
+        settings.performanceOnDesktop = true
+        byName = Dictionary(settings.queryItems(for: Run(url: "https://a.test", limit: 10))
+            .map { ($0.name, $0.value) }, uniquingKeysWith: { a, _ in a })
+        #expect(byName["psi"] == "/**")
+        #expect(byName["psi-sample"] == "5")
+        #expect(byName["psi-strategy"] == "desktop")
+    }
+
+    @Test("every performance mode says what it means")
+    func described() {
+        #expect(CrawlSettings.Performance.off.targets.isEmpty)
+        for mode in CrawlSettings.Performance.allCases {
+            #expect(!mode.label.isEmpty)
+        }
+    }
+}

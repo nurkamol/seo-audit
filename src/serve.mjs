@@ -32,6 +32,12 @@ export async function serve({ port = 4321, host = '127.0.0.1', maxPages, allowed
     ...(maxPages ? { MAX_PAGES: String(maxPages) } : {}),
     ...(allowedHosts ? { ALLOWED_HOSTS: allowedHosts } : {}),
     ...(userAgent ? { USER_AGENT: userAgent } : {}),
+    // PageSpeed is allowed here and nowhere else by default: --serve is bound to
+    // the loopback address and the person running it is the person it serves, so
+    // spending their own PSI quota is their decision. A deployed Worker leaves
+    // this unset, where a stranger passing ?psi= would be spending somebody
+    // else's.
+    ALLOW_PSI: '1',
   };
 
   const server = createServer(async (incoming, outgoing) => {

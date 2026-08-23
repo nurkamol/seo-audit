@@ -5,6 +5,40 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Silencing a check, from the window.** `--ignore` has been on the command
+  line for a long time and there was no way to say "I can live with this" from a
+  report. Right-click a finding and its check is left out of future runs on this
+  machine; Settings lists what is silenced, to undo it. Silencing lives on the
+  finding because that is where somebody is standing when they disagree with it
+  — a list in Settings is where you go to undo this, not to do it.
+
+  A report still says **how many findings were silenced**, in the same line as
+  the counts. `meta.ignored` has been in the payload since long before this and
+  the window never showed it, which meant a check somebody quietened read
+  exactly like a check that passed.
+
+  Per-machine on purpose: a decision a whole team should share belongs in the
+  config file the repository commits, not in one person's preferences.
+
+- **PageSpeed Insights, from the window.** Off, the home page, or a sample of up
+  to ten pages, on mobile or desktop. Google measures it in a real browser over
+  its own network, which is the only way this tool will ever show performance —
+  it refuses to estimate it, and a plausible wrong number is worse than none.
+
+  **This app never holds an API key.** A key is optional, and the engine looks
+  for it in `PSI_API_KEY` and `~/.config/seo-audit/.env` — the same two places
+  the command line looks — so a key already set is already working, and one that
+  is not gets the anonymous quota and a note saying so. There was no reason to
+  build credential storage for a credential that is optional and already has a
+  home.
+
+  It is gated on the engine side rather than the app side: `--serve` sets
+  `ALLOW_PSI` because it is bound to the loopback address and the person running
+  it is the person it serves. A deployed Worker leaves it unset, where a
+  stranger passing `?psi=` would be spending somebody else's quota and somebody
+  else's seconds.
+
 ## [1.26.0] — 2026-08-24
 
 ### Added

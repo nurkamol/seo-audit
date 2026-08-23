@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   handle, authorized, sameSecret, targetFor, pageLimit, progressText,
-  crawlConcurrency, sitemapOverride, agentFor,
+  crawlConcurrency, sitemapOverride, agentFor, idList, psiOptions,
 } from '../worker/index.mjs';
 
 const SECRET = 'hunter2-hunter2';
@@ -197,10 +197,53 @@ test('what a run can be told to do is served, reasons included', async () => {
   const body = await res.json();
 
   assert.ok(body.run.some((o) => o.flag === '--concurrency' && o.query === 'concurrency'));
-  // The half that is usually missing: what is not there, and why.
-  const psi = body.notInApp.find((o) => o.flag === '--psi');
-  assert.ok(psi, 'a flag the window does not reach is still listed');
-  assert.match(psi.reason, /key/, 'with the reason, not just its absence');
+  // The half that is usually missing: what is not there, and why. Picked
+  // because it needs an OAuth client rather than a decision, so it will be the
+  // last one standing — this assertion had to be moved off --psi once the
+  // window reached it, which is the table working.
+  const console_ = body.notInApp.find((o) => o.flag === '--search-console');
+  assert.ok(console_, 'a flag the window does not reach is still listed');
+  assert.match(console_.reason, /OAuth/, 'with the reason, not just its absence');
+});
+
+test('silenced checks are a list of ids, not an open field', () => {
+  assert.deepEqual(idList('thin-content, img-srcset'), ['thin-content', 'img-srcset']);
+  assert.deepEqual(idList(null), []);
+  assert.deepEqual(idList(''), []);
+  // Every id is matched against every finding, so this is bounded and shaped.
+  assert.deepEqual(idList('Bad Id,../../etc,<script>'), []);
+  assert.equal(idList(Array.from({ length: 500 }, () => 'thin-content').join(',')).length, 100);
+});
+
+test('PageSpeed is off unless the deployment says otherwise', () => {
+  const q = (s) => new URLSearchParams(s);
+
+  // A hosted deployment: a stranger passing ?psi= would be spending somebody
+  // else's quota and somebody else's seconds.
+  assert.deepEqual(psiOptions(q('psi=/'), {}), {});
+  assert.deepEqual(psiOptions(q('psi=/'), { ALLOW_PSI: '0' }), {});
+
+  const on = psiOptions(q('psi=/,/docs/**&psi-strategy=desktop'), { ALLOW_PSI: '1' });
+  assert.deepEqual(on.psi, ['/', '/docs/**']);
+  assert.equal(on.psiStrategy, 'desktop');
+
+  // Each target is seconds of waiting, so the sample is clamped and anything
+  // that is not "desktop" is mobile rather than passed through.
+  assert.equal(psiOptions(q('psi=/&psi-sample=99'), { ALLOW_PSI: '1' }).psiSample, 10);
+  assert.equal(psiOptions(q('psi=/&psi-strategy=nonsense'), { ALLOW_PSI: '1' }).psiStrategy, 'mobile');
+  // Asking for nothing is not asking.
+  assert.deepEqual(psiOptions(q(''), { ALLOW_PSI: '1' }), {});
+});
+
+test('what the window silences reaches the audit', async () => {
+  const record = {};
+  await read(await handle(
+    get('/stream?url=https://example.com&ignore=thin-content,img-srcset', { token: SECRET }),
+    env(),
+    null,
+    { audit: fakeAudit(record), report: () => '' },
+  ));
+  assert.deepEqual(record.opts.ignore, ['thin-content', 'img-srcset']);
 });
 
 test('a preview says what a run would do without doing it', async () => {

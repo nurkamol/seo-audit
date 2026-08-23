@@ -16,6 +16,7 @@ struct ReportView: View {
     var back: () -> Void
     var export: (ExportFormat) -> Void
     var compare: (StoredReport) -> Void = { _ in }
+    var silence: (String) -> Void = { _ in }
 
     @State private var expanded: Set<String> = []
     @State private var search = ""
@@ -52,7 +53,8 @@ struct ReportView: View {
                                 cause: cause,
                                 findings: report.findings(for: cause),
                                 open: expanded.contains(cause.identity),
-                                cards: cards
+                                cards: cards,
+                                silence: { silence(cause.id) }
                             ) {
                                 withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
                                     if expanded.contains(cause.identity) {
@@ -173,7 +175,13 @@ private struct Header: View {
     private var summary: String {
         let n = report.findings.count
         let c = report.causes.count
-        return "\(report.meta.pages) pages · \(n) findings · \(c) thing\(c == 1 ? "" : "s") to change"
+        var line = "\(report.meta.pages) pages · \(n) findings · \(c) thing\(c == 1 ? "" : "s") to change"
+        // Never omitted. A check somebody silenced must not read the same as a
+        // check that passed, which is the whole reason this number exists.
+        if let silenced = report.meta.ignored, silenced > 0 {
+            line += " · \(silenced) silenced"
+        }
+        return line
     }
 }
 
@@ -237,6 +245,9 @@ private struct CauseCard: View {
     let findings: [Finding]
     let open: Bool
     var cards: Namespace.ID
+    // Before `toggle`, so the trailing closure at the call site is still the
+    // one that opens the card.
+    var silence: () -> Void = {}
     var toggle: () -> Void
 
     var body: some View {
@@ -288,6 +299,18 @@ private struct CauseCard: View {
         }
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
         .glassEffectID(cause.identity, in: cards)
+        // Where somebody decides they can live with a check: on the finding
+        // itself, at the moment they are looking at it and disagreeing with it.
+        // A list buried in Settings is where you go to undo this, not to do it.
+        .contextMenu {
+            Button {
+                silence()
+            } label: {
+                Label("Silence \(cause.id)", systemImage: "bell.slash")
+                Text("Leaves it out of future runs on this machine. Reports still say how many "
+                     + "findings were silenced.")
+            }
+        }
     }
 }
 

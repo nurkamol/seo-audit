@@ -100,6 +100,8 @@ place to look.
 | **Check outbound links** | `--check-external`. Slower, and only a 404, 410 or no answer is reported |
 | **Identify as** | The browser and OS presets from `src/agents.mjs`, fetched from the engine's `/agents` rather than listed again in Swift. A combination that cannot exist is refused by the engine and the run goes ahead as itself |
 | **User agent** | `--user-agent`. A string of your own, which wins over the two menus above. Bounded and stripped of control characters, because it ends up in a request header |
+| **Performance** | `--psi`, `--psi-sample`, `--psi-strategy`. Off, the home page, or a sample. Google measures it in a real browser over its own network; this app never estimates it. A key is optional and the engine finds it the same two ways the CLI does — `PSI_API_KEY` or `~/.config/seo-audit/.env` — so **this app never holds one** |
+| **Silenced checks** | `--ignore`. Right-click a finding to silence its check; the list lives here to undo it. Per-machine on purpose: a decision a team shares belongs in the config file the repository commits |
 | **Sitemap** | `--sitemap`, for one somewhere the usual names miss. Validated against the host being audited — otherwise the hosted version would be a fetcher for anything the machine it runs on can reach |
 
 Anything left at its default is **not sent**. The engine's defaults stay written
@@ -176,10 +178,10 @@ for anyone without Xcode.
 swift test
 ```
 
-Thirty-five, over the models, the URL normalising, version ordering, the
+Forty-three, over the models, the URL normalising, version ordering, the
 library, the releases feed, the version cache, the PDF writer, what the settings
 send, that the app keeps everything in one folder, which runs a comparison
-offers, and what a preview reports. The one that matters decodes a **real engine payload** captured from a
+offers, what a preview reports, and what silencing and PageSpeed put on a run. The one that matters decodes a **real engine payload** captured from a
 live run and kept as a fixture, because the way this app breaks is the engine
 changing its output and nothing noticing until a window is opened. CI captures
 a fresh payload on every change and checks the app still decodes every field it
