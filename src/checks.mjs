@@ -13,6 +13,7 @@
 import { linkGraph, key as graphKey } from './graph.mjs';
 
 import { attr, stripMarkupInAttributes } from './parse.mjs';
+import { cluster } from './dupes.mjs';
 
 // Defaults, overridable per site under `limits` in the config file. A
 // documentation site and a shop disagree about what "thin" means, and the tool
@@ -906,6 +907,49 @@ export function crossPageChecks(pages, opts = {}) {
   for (const [desc, urls] of groupBy('description')) {
     out.push(f('warn', 'duplicate-description', 'Same meta description on several pages',
       `${urls.length} pages: ${urls.slice(0, 4).join(', ')}`, urls[0]));
+  }
+
+  // --- The same page again ------------------------------------------------
+  // Titles and descriptions have been compared for a long time; the bodies
+  // never were, and that is the axis a hundred product pages differ on by one
+  // word. They compete with each other for one result and spend the crawl
+  // budget that would have gone to the pages that are actually different.
+  //
+  // Three narrowings, because this is exactly the shape of check that cries
+  // wolf. A page that says noindex is not in the index to be duplicated in.
+  // A page whose canonical points somewhere else has already declared itself a
+  // copy — that is the fix, correctly applied, and reporting it would be
+  // reporting a solved problem. And a page without a marked content region has
+  // no comparable text at all.
+  const comparable = live.filter((p) => {
+    if (!p.doc.fingerprint) return false;
+    if (/noindex/i.test(p.doc.robots ?? '')) return false;
+    const canonical = p.doc.canonical?.[0];
+    return !canonical || canonical.replace(/\/$/, '') === p.url.replace(/\/$/, '');
+  });
+
+  for (const group of cluster(comparable.map((p) => ({ url: p.url, fingerprint: p.doc.fingerprint })))) {
+    const percent = Math.round(group.similarity * 100);
+    out.push(f('warn', 'duplicate-content', `${group.urls.length} pages are the same page again`,
+      `Their content is at least ${percent}% identical, and none of them says which one Google ` +
+        `should keep: ${group.urls.slice(0, 4).join(', ')}` +
+        (group.urls.length > 4 ? `, and ${group.urls.length - 4} more` : '') +
+        '. Give the copies a rel=canonical pointing at the one that should rank, or make them ' +
+        'different pages.',
+      group.urls[0]));
+  }
+
+  // A missing finding reads exactly like a passing one, so the pages this
+  // could not look at are counted rather than passed over.
+  const uncomparable = live.filter((p) => !p.doc.fingerprint).length;
+  if (uncomparable > 0 && live.length > 1) {
+    out.push(f('info', 'duplicate-content-not-checked',
+      `${uncomparable} page(s) were not compared for duplicate content`,
+      'Content is compared inside <main> or <article>. Without one of those the text of a page is ' +
+        'the whole document, navigation and footer included, and every page of a small site would ' +
+        'look like a copy of every other. Pages under about a hundred words are skipped for the ' +
+        'same reason — at that length two pages share most of their words whatever they say.',
+      pages[0]?.url));
   }
 
   // Whether the link graph is worth reading at all. A page that was not

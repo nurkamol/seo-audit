@@ -5,6 +5,8 @@
 // well-formed markup produced by a static site generator, which is what this
 // audits. Anything ambiguous is reported as unknown rather than guessed.
 
+
+import { fingerprint } from './dupes.mjs';
 const stripTags = (s) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 const decode = (s) =>
@@ -100,7 +102,10 @@ export function parseHtml(rawHtml, pageUrl) {
     .replace(/<style[\s\S]*?<\/style>/gi, ' ');
 
   const head = (markup.match(/<head[\s\S]*?<\/head>/i) ?? [''])[0];
-  const main = (markup.match(/<main[\s\S]*?<\/main>/i) ?? [''])[0] || markup;
+  const mainRegion = (markup.match(/<main[\s\S]*?<\/main>/i) ?? [''])[0]
+    || (markup.match(/<article[\s\S]*?<\/article>/i) ?? [''])[0]
+    || null;
+  const main = mainRegion || markup;
 
   const metas = [...markup.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
   const metaBy = (key, value) => {
@@ -310,6 +315,12 @@ export function parseHtml(rawHtml, pageUrl) {
       ],
     },
     words: countWords(bodyText),
+    // A sketch of the content, for finding pages that are the same page again.
+    // Only when the page marked its content region: without `<main>` or
+    // `<article>` the text above is the whole document, navigation and footer
+    // included, and every page of a small site would look like every other.
+    // Saying "not compared" is the honest answer; guessing is not.
+    fingerprint: mainRegion ? fingerprint(bodyText) : null,
   };
 }
 

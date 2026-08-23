@@ -4,6 +4,22 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
+Four things chosen together, one shipped:
+
+- [x] **Pages that are the same page again** — the bodies compared, not just the
+      titles and descriptions. No extra requests: the text was already read for
+      `words` and thrown away.
+- [ ] **Compare two kept runs in the macOS app** — `diff()` exists in
+      `src/baseline.mjs` and the app has stored every run since 1.23.0; nothing
+      connects them. "Did my fix work" is the question that makes somebody open
+      a tool a second time.
+- [ ] **`--write-sitemap`** — the crawl knows every URL, its status, whether it
+      is indexable and where its canonical points. When it reports a sitemap
+      that is missing pages or listing dead ones, it can write the corrected
+      file rather than only describing it.
+- [ ] **Run `--search-console` against a live property** — see below; still the
+      one thing here that has never been proven against the real API.
+
 Empty, and this time it stayed empty for more than a day's work. Everything the
 professional-tool plan queued has shipped: grouping, ordering by reach, a report
 that prints, a local server, a macOS window, two readers compared, and Search

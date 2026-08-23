@@ -6,6 +6,7 @@ import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSit
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
+import { fingerprint, similarity, cluster } from '../src/dupes.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
@@ -2693,6 +2694,103 @@ test('a report keeps the traffic a baseline drops', () => {
 test('parsing a non-report JSON file explains itself', () => {
   assert.throws(() => parseBaseline('{"hello":true}', 'x.json'), /no findings array/);
   assert.throws(() => parseBaseline('not json', 'x.json'), /not valid JSON/);
+});
+
+// --- the same page again ---------------------------------------------------
+
+// Deterministic pseudo-prose. Real page text does not repeat long runs, and a
+// repeated phrase collapses to a handful of distinct five-word shingles — which
+// makes any hand-written filler a much weaker test than it looks.
+function prose(seed, count = 400) {
+  const vocab = ('vase ceramic glaze kiln lisbon studio artisan clay wheel matte gloss cobalt ochre '
+    + 'handmade fired collection design texture surface form shape colour finish stoneware porcelain '
+    + 'terracotta slip burnish oxide reduction stack shelf cone temperature quartz feldspar silica').split(' ');
+  let x = seed;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    x = (x * 1103515245 + 12345) >>> 0;
+    out.push(vocab[x % vocab.length]);
+  }
+  return out.join(' ');
+}
+
+const contentPage = (url, text, extra = '') =>
+  page(`<html><head>${extra}</head><body><nav>home shop about contact</nav>` +
+       `<main><p>${text}</p></main><footer>all rights reserved</footer></body></html>`, url);
+
+test('a sketch measures content, and refuses when there is not enough of it', () => {
+  const base = prose(7);
+  const changed = base.replace(/^(\S+\s\S+\s\S+\s)\S+/, '$1turquoise');
+
+  assert.equal(similarity(fingerprint(base), fingerprint(base)), 1);
+  assert.ok(similarity(fingerprint(base), fingerprint(changed)) > 0.9,
+    'one word in four hundred is the same page');
+  assert.ok(similarity(fingerprint(base), fingerprint(prose(4242))) < 0.1,
+    'different words are a different page');
+  // Half the text shared is a related page, not a copy, and must not group.
+  assert.ok(similarity(fingerprint(base), fingerprint(prose(7, 200) + ' ' + prose(99, 200))) < 0.9);
+
+  // Too short to say anything about: at that length two pages share most of
+  // their words whatever they say.
+  assert.equal(fingerprint('only a handful of words on this page'), null);
+});
+
+test('pages that are the same page again are reported once, as a group', () => {
+  const base = prose(11);
+  const pages = [
+    contentPage('https://x.test/a', base),
+    contentPage('https://x.test/b', base.replace(/^(\S+\s)\S+/, '$1turquoise')),
+    contentPage('https://x.test/c', base.replace(/^(\S+\s)\S+/, '$1vermilion')),
+    contentPage('https://x.test/d', prose(4242)),
+  ];
+  const found = crossPageChecks(pages).filter((x) => x.id === 'duplicate-content');
+
+  assert.equal(found.length, 1, 'three copies are one thing to fix, not three');
+  assert.match(found[0].title, /3 pages/);
+  assert.match(found[0].detail, /% identical/);
+  assert.match(found[0].detail, /rel=canonical/, 'it says what to do about it');
+  assert.ok(!found[0].detail.includes('/d'), 'the page that differs is not in the group');
+});
+
+test('a declared copy is a solved problem, not a finding', () => {
+  // The three narrowings, each on its own. A page that says noindex is not in
+  // the index to be duplicated in; a page whose canonical points at another is
+  // the fix already applied; a page with no marked content region has no
+  // comparable text.
+  const base = prose(13);
+  const canonical = '<link rel="canonical" href="https://x.test/one">';
+
+  const declared = crossPageChecks([
+    contentPage('https://x.test/one', base),
+    contentPage('https://x.test/two', base, canonical),
+    contentPage('https://x.test/three', base, canonical),
+  ]).filter((x) => x.id === 'duplicate-content');
+  assert.equal(declared.length, 0, 'a canonical pointing elsewhere is the answer, not the problem');
+
+  const noindexed = crossPageChecks([
+    contentPage('https://x.test/one', base),
+    contentPage('https://x.test/two', base, '<meta name="robots" content="noindex">'),
+  ]).filter((x) => x.id === 'duplicate-content');
+  assert.equal(noindexed.length, 0);
+
+  // No <main> and no <article>: the text would be the whole document, and on a
+  // small site every page would look like a copy of every other.
+  const unmarked = (url) => page(
+    `<html><body><nav>home shop about</nav><div><p>${base}</p></div><footer>x</footer></body></html>`, url);
+  const bare = crossPageChecks([unmarked('https://x.test/one'), unmarked('https://x.test/two')]);
+  assert.ok(!ids(bare).includes('duplicate-content'), 'a whole document is not comparable text');
+  const note = bare.find((x) => x.id === 'duplicate-content-not-checked');
+  assert.ok(note, 'and it says so rather than passing silently');
+  assert.equal(note.level, 'info');
+});
+
+test('<article> counts as a content region, because plenty of sites use it', () => {
+  const base = prose(17);
+  const article = (url) => page(
+    `<html><body><nav>home</nav><article><p>${base}</p></article></body></html>`, url);
+  const found = crossPageChecks([article('https://x.test/one'), article('https://x.test/two')])
+    .filter((x) => x.id === 'duplicate-content');
+  assert.equal(found.length, 1);
 });
 
 // --- checks ---------------------------------------------------------------

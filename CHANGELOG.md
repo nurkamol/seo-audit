@@ -5,6 +5,32 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Pages that are the same page again.** Titles and descriptions have been
+  compared since early on; the bodies never were, and that is the axis a hundred
+  product pages differ on by one word — they compete with each other for one
+  result and spend the crawl budget that would have gone to the pages that are
+  actually different. It costs **no extra requests**: the text was already read
+  and measured for `words` and then thrown away, and what is kept instead is a
+  64-number MinHash sketch, a few hundred bytes a page. Banding the sketches
+  means most pairs are never compared, so it stays linear rather than quadratic
+  on a five-thousand-page site.
+
+  Three narrowings, because this is exactly the shape of check that cries wolf.
+  A page that says `noindex` is not in the index to be duplicated in. A page
+  whose `rel=canonical` points at another page has already declared itself a
+  copy — that is the fix, correctly applied, and reporting it would be reporting
+  a solved problem. And a page with no `<main>` or `<article>` has no comparable
+  text: without one, the text of a page is the whole document, navigation and
+  footer included, and every page of a small site would look like a copy of
+  every other. That last case is **counted and reported**, never passed over.
+
+  Two real sites before shipping: on jekyllrb.com it found `/docs/conduct/` and
+  `/docs/code_of_conduct/`, both 200, both with self-referencing canonicals, and
+  their content regions identical — a true one, and the same pair `duplicate-title`
+  had been pointing at without being able to prove why. On a 120-page store it
+  found **nothing**, which is the half that matters.
+
 ## [1.24.1] — 2026-08-24
 
 ### Added

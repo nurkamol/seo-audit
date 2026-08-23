@@ -43,6 +43,7 @@ const CATEGORY_OF = {
   'desc-missing': 'Content', 'desc-long': 'Content', 'desc-short': 'Content',
   'h1-missing': 'Content', 'h1-multiple': 'Content', 'heading-skip': 'Content',
   'thin-content': 'Content', 'duplicate-title': 'Content', 'duplicate-description': 'Content',
+  'duplicate-content': 'Content', 'duplicate-content-not-checked': 'Content',
   'lang-missing': 'Content', 'charset-missing': 'Content', 'viewport-missing': 'Content',
   'viewport-locked': 'Content', 'viewport-fixed-width': 'Content',
 

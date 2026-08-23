@@ -669,6 +669,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No sitemap URL is disallowed by `robots.txt` — the site contradicting itself | error |
 | Every sitemap URL is actually indexable — not `noindex`, not canonicalised away | warning |
 | Each sitemap file is within the protocol's 50,000 URLs and 50MB | error |
+| **Pages that are the same page again** — the bodies compared, not just titles and descriptions. Silent on a page that says `noindex`, on a page whose `rel=canonical` already points at the original, and on a page with no `<main>` or `<article>` to read content from, which it says rather than skips | warning |
 | A sitemap is actually absent before absence is reported — a probe that answers 429 is `sitemap-not-checked`, not `no-sitemap` | warning |
 | The sitemap declares `lastmod` at all | note |
 | `lastmod` differs between pages — one date on every URL is a build stamp, and crawlers learn to ignore it | note |
