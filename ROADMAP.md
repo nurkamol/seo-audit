@@ -73,13 +73,14 @@ quiet across some 12,000 anchors on eight sites and fires on five certificate
 PDFs nobody can read. That ratio is the point, not a disappointment. Budget for
 it happening again.
 
-**A false positive can come from the crawl rather than from a check.** Both
-1.15.0 fixes were in how the site was *fetched*, not in what was examined:
-`page-status` was reading a rate limit as a broken page, and `orphan-page` was
-reading a fragment as a site. Every check downstream of a bad fetch inherits
-it, and the report gives no sign — 70 pages reported as failing looked exactly
-like 70 pages failing. When a finding count is implausible, suspect the crawl
-before the checks.
+**A false positive can come from the crawl rather than from a check.** Three
+fixes in a row now, none of them in a check: 1.15.0's `page-status` was reading
+a rate limit as a broken page and `orphan-page` was reading a fragment as a
+site, and 1.16.0's site-level checks were reading a 301's headers as a site's
+headers. Every check downstream of a bad fetch inherits it, and the report
+gives no sign — 70 pages reported as failing look exactly like 70 pages
+failing. When a finding count is implausible, suspect the crawl before the
+checks.
 
 **There are two runtimes now**, a standing cost taken on in 1.12.0. A check
 that reaches for a Node built-in works in the CLI and disappears in the Worker,
@@ -97,7 +98,7 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **Site-level checks read the host that answers** (unreleased) — auditing a
+- **Site-level checks read the host that answers** (1.16.0) — auditing a
   bare domain whose site lives at `www.` read robots.txt, llms.txt and the
   security headers off the 301, which was three false findings on any such
   site. The homepage's redirect chain is now followed first and the audit moves

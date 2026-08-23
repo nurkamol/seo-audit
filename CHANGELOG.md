@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-08-23
+
 ### Fixed
 - **Site-level checks are read on the host that answers.** Auditing
   `example.com` when the site lives at `www.example.com` left `origin` on the
