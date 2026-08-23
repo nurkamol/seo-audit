@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.14.0] — 2026-08-23
+
 ### Added
 - **`canonical-paginated`** — page 2 of an archive handing its indexing to page
   1, or to any other page of the same sequence. Google's guidance is one

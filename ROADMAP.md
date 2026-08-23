@@ -75,7 +75,7 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **Pagination canonicals** (unreleased) — page 2 of an archive canonicalising
+- **Pagination canonicals** (1.14.0) — page 2 of an archive canonicalising
   to page 1, which four of the six real archives tested were doing, including
   wordpress.org's own news blog. The check itself was arithmetic; the work was
   discovering that a sitemap never lists these pages — 0 of 9,273 across three
@@ -149,6 +149,13 @@ handed 464 findings about navigation that works.
 - **Measuring performance.** PageSpeed Insights and WebPageTest do it properly, with real browsers, from chosen locations. A `fetch` loop cannot see rendering, and a plausible-looking wrong number is worse than no number.
 - **Keyword density and "SEO scores".** Search engines moved past density two decades ago. A score out of 100 invites optimising for the grader rather than the reader — the failure mode these commercial tools encourage.
 - **Bundling a headless browser.** It would enable a handful of checks and cost the thing that makes this usable: `npx`, no install, runs anywhere.
+  1.14.0 put a number on what that costs. `canonical-paginated` reads page 2
+  of an archive off the link sweep, which only sees pagination that is in the
+  HTML — and css-tricks.com, wordpress.org/news and blog.mozilla.org all have
+  the bug *and* link their pagination with JavaScript, so a full audit of
+  those three cannot reach it, even though pointing the tool straight at
+  `/page/2/` reports it immediately. That is the trade, stated plainly: a
+  known blind spot rather than a bug, and still cheaper than the install.
 - **Anything built on `<h2>`, and the absence of a Twitter card.** Both are
   parsed and read by no check, which looked like an opportunity until it was
   examined. Every check `h2` can support is a style opinion — "a long page with
