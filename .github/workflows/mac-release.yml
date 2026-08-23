@@ -8,7 +8,10 @@ name: macOS app
 
 on:
   push:
-    tags: ['v*']
+    # Version tags only. `v1` floats forward with every compatible release and
+    # matches `v*`, so it started a second build that would have tried to
+    # attach a Mac app to a release named v1, which does not exist.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   workflow_dispatch:
     inputs:
       tag:
@@ -79,17 +82,24 @@ jobs:
 
       - name: Point the cask at it
         run: |
+          # A tag build is a detached, shallow checkout: there is no local main
+          # to commit onto, which is what the first run of this discovered.
+          # Fetch it, switch, and edit there — no stash, nothing to unwind.
+          git fetch --depth=1 origin main
+          git checkout -B main origin/main
+
           cask=Casks/seo-audit.rb
-          sed -i '' -e "s/^  version .*/  version \"${{ steps.package.outputs.version }}\"/" "$cask"
-          sed -i '' -e "s/^  sha256 .*/  sha256 \"${{ steps.package.outputs.sha }}\"/" "$cask"
+          sed -i '' -e "s|^  version .*|  version \"${{ steps.package.outputs.version }}\"|" "$cask"
+          sed -i '' -e "s|^  sha256 .*|  sha256 \"${{ steps.package.outputs.sha }}\"|" "$cask"
+          grep -E "^  (version|sha256)" "$cask"
+          ruby -c "$cask"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$cask"
-          # A tag build runs on a detached head; the cask belongs on the branch.
+          # [skip ci]: the cask is not code, and a full test run for a checksum
+          # is a minute of somebody's runner for nothing.
           git diff --cached --quiet || {
-            git stash
-            git checkout main
-            git stash pop
-            git commit -m "Cask: ${{ steps.package.outputs.version }}"
+            git commit -m "Cask: ${{ steps.package.outputs.version }} [skip ci]"
             git push origin main
           }
