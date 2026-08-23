@@ -5,6 +5,32 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Settings is a sidebar of panes, the way macOS lays out System Settings.** It
+  was one form, and seven sections had grown it to about two thousand points of
+  height — the sitemap field was below the fold on any laptop. Everything was
+  reachable and nothing was findable, and a scrollbar is a poor table of
+  contents.
+
+  Seven panes now, each one subject, with the coloured rounded-square icons the
+  platform uses: **Crawl**, **Coverage**, **Identify as**, **Performance**,
+  **Silenced**, **Reports**, **Updates**.
+
+### Added
+- **Reports and Updates are settings now.** They were deliberately left out when
+  Settings was built, on the grounds that the sidebar and the Versions sheet
+  already answered them. With a sidebar of panes that reasoning stops holding —
+  there is room, and "where do my reports live" is a settings question wherever
+  else it gets answered. Reports says how many are kept and what they weigh,
+  reveals the folder, and offers to delete them all. Updates shows the version,
+  when it last checked, a way to check now, and a way to **stop checking
+  automatically** — which is a real preference, because it is one request to
+  GitHub about which software you run.
+
+- **Setting your own user agent greys out the browser and system menus** rather
+  than silently overriding them. The engine has always ignored them when a
+  custom string is set; the window showed all three as live.
+
 ## [1.27.0] — 2026-08-24
 
 ### Added

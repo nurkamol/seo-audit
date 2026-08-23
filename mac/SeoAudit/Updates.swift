@@ -91,6 +91,7 @@ final class Updates: ObservableObject {
     /// machine that talks to GitHub.
     private let feed = URL(string: "https://github.com/nurkamol/seo-audit/releases.atom")!
     private let checkedKey = "seo-audit.updates.lastChecked"
+    private let automaticKey = "seo-audit.updates.automatic"
     private let cache: URL
 
     var current: Version {
@@ -129,9 +130,22 @@ final class Updates: ObservableObject {
         }
     }
 
+    /// Whether to look at all. On by default, because an app that never
+    /// mentions a new version is an app people run an old one of for years —
+    /// and off is a real preference, because it is one request to GitHub about
+    /// which software you run.
+    var automatic: Bool {
+        get { UserDefaults.standard.object(forKey: automaticKey) as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: automaticKey)
+            objectWillChange.send()
+        }
+    }
+
     /// Once a day, not every launch: a version check is not worth a request
     /// every time somebody opens a window.
     func checkIfDue() async {
+        guard automatic else { return }
         if let lastChecked, Date().timeIntervalSince(lastChecked) < 86_400 { return }
         await check()
     }

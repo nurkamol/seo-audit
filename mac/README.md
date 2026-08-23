@@ -88,24 +88,22 @@ is everything else with its reason.
 
 ## Settings
 
-`⌘,` — the flags that change what a run *does*, and only those. Where reports
-are kept and whether to check for updates are already answered by the sidebar
-and the Versions sheet, and a preference that duplicates a screen is a second
-place to look.
+`⌘,` — seven panes with a sidebar, the way macOS lays out System Settings. It
+was one form and it grew to about two thousand points of height: everything was
+reachable and nothing was findable, and a scrollbar is a poor table of contents.
 
-| | |
+| Pane | |
 |---|---|
-| **Speed** | Gentle, Normal or Fast — one, six or twelve connections. Named rather than numbered, because "6" is not a thing anybody knows they want; "this site keeps refusing me" is. Gentle is what gets through a store answering 429 |
-| **Pages per run** | The default `--limit`. A crawl that stops at it says so, with the number it did not reach |
-| **Check outbound links** | `--check-external`. Slower, and only a 404, 410 or no answer is reported |
-| **Identify as** | The browser and OS presets from `src/agents.mjs`, fetched from the engine's `/agents` rather than listed again in Swift. A combination that cannot exist is refused by the engine and the run goes ahead as itself |
-| **User agent** | `--user-agent`. A string of your own, which wins over the two menus above. Bounded and stripped of control characters, because it ends up in a request header |
-| **Performance** | `--psi`, `--psi-sample`, `--psi-strategy`. Off, the home page, or a sample. Google measures it in a real browser over its own network; this app never estimates it. A key is optional and the engine finds it the same two ways the CLI does — `PSI_API_KEY` or `~/.config/seo-audit/.env` — so **this app never holds one** |
-| **Silenced checks** | `--ignore`. Right-click a finding to silence its check; the list lives here to undo it. Per-machine on purpose: a decision a team shares belongs in the config file the repository commits |
-| **Sitemap** | `--sitemap`, for one somewhere the usual names miss. Validated against the host being audited — otherwise the hosted version would be a fetcher for anything the machine it runs on can reach |
+| **Crawl** | `--concurrency` as Gentle / Normal / Fast — one, six or twelve connections. Named rather than numbered, because "6" is not a thing anybody knows they want and "this site keeps refusing me" is. Plus `--sitemap`, for one the usual names miss |
+| **Coverage** | `--limit`, and `--check-external` |
+| **Identify as** | The browser and OS presets from `src/agents.mjs`, fetched from `/agents` rather than listed again in Swift, and `--user-agent` for a string of your own. Setting your own greys out the two menus rather than silently winning |
+| **Performance** | `--psi`: off, the home page, or a sample of up to ten, mobile or desktop. A key is optional and the engine finds it the same two ways the CLI does — **this app never holds one** |
+| **Silenced** | `--ignore`. Right-click a finding to silence its check; this is where it is undone |
+| **Reports** | How many are kept and what they weigh, where they live, and a way to delete them all |
+| **Updates** | The version, whether to check automatically, when it last did, and a way to check now |
 
-Anything left at its default is **not sent**. The engine's defaults stay written
-down in the engine, where changing one takes effect everywhere.
+Anything left at its default is **not sent**, so the engine's defaults stay
+written down in the engine.
 
 ## Exporting a corrected sitemap
 
@@ -202,7 +200,8 @@ team to delete tests.
 | `Stages.swift` | asking for a site, and watching it crawl |
 | `ReportView.swift` | the report: cause cards, filters, pages |
 | `Library.swift` | reports kept on disk, and the sidebar that lists them |
-| `CrawlSettings.swift` | ⌘, — what a run does, and the query it becomes |
+| `CrawlSettings.swift` | what a run does, and the query it becomes |
+| `SettingsScene.swift` | ⌘, — seven panes and the sidebar that finds them |
 | `Comparison.swift` | two runs of one site, and what moved |
 | `Support.swift` | the one folder this app keeps things in |
 | `PDF.swift` | the report on paper — A4 pages, the engine's areas, every affected page |

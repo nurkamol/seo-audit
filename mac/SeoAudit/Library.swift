@@ -94,6 +94,27 @@ final class Library: ObservableObject {
         return (report, data)
     }
 
+    /// Where the kept reports are, for a Settings pane that offers to reveal it.
+    var location: URL { folder }
+
+    /// What they take up. Reports are small, but "small" is a claim somebody is
+    /// entitled to check.
+    var bytesOnDisk: Int {
+        reports.reduce(0) { total, stored in
+            let path = folder.appendingPathComponent(stored.filename).path
+            let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size]) as? Int
+            return total + (size ?? 0)
+        }
+    }
+
+    /// Everything, gone. Separate from `forget` because a button that empties a
+    /// folder should not be the same code path as one that removes a row.
+    func forgetAll() {
+        for stored in reports { deleteFile(stored) }
+        reports = []
+        save()
+    }
+
     /// Every other run of this host, newest first — what a comparison can be
     /// against. `besides` is the one on screen, which is never worth offering
     /// as something to compare itself with.

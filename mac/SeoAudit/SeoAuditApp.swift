@@ -23,6 +23,11 @@ enum Links {
 struct SeoAuditApp: App {
     @StateObject private var engine = Engine()
     @StateObject private var settings = CrawlSettings()
+    // Owned here rather than by the window, because Settings shows them too and
+    // two views reading two different Libraries would disagree about what is on
+    // disk.
+    @StateObject private var library = Library()
+    @StateObject private var updates = Updates()
     @State private var showingAbout = false
 
     var body: some Scene {
@@ -30,6 +35,8 @@ struct SeoAuditApp: App {
             ContentView()
                 .environmentObject(engine)
                 .environmentObject(settings)
+                .environmentObject(library)
+                .environmentObject(updates)
                 .frame(minWidth: 880, minHeight: 620)
                 .sheet(isPresented: $showingAbout) { AboutSheet() }
                 .onReceive(NotificationCenter.default.publisher(for: .showAbout)) { _ in showingAbout = true }
@@ -74,6 +81,8 @@ struct SeoAuditApp: App {
         Settings {
             SettingsScene(settings: settings)
                 .environmentObject(engine)
+                .environmentObject(library)
+                .environmentObject(updates)
         }
     }
 }

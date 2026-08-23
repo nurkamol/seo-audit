@@ -82,9 +82,9 @@ final class Session: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject private var engine: Engine
-    @StateObject private var library = Library()
+    @EnvironmentObject private var library: Library
+    @EnvironmentObject private var updates: Updates
     @StateObject private var session = Session()
-    @StateObject private var updates = Updates()
     @EnvironmentObject private var settings: CrawlSettings
 
     @State private var site = ""
