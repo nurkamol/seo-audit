@@ -5,6 +5,54 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The macOS app is a real application now.** `./mac/build.sh` produces a
+  signed `seo-audit.app` with its own icon, `Info.plist` and engine inside it —
+  no Xcode project, because `swiftc` and the command line tools are what
+  "anyone can build it" has to mean. `Package.swift` is there so Xcode can open
+  the folder anyway.
+
+  **The report is drawn natively.** No web view anywhere in the app: glass cause
+  cards that expand into the pages they affect, filtering by level, search, and
+  PDF export rendered from the same views that are on screen. 1,431 lines of
+  SwiftUI.
+
+  It is still not a second implementation. The app runs the CLI as a child
+  process and reads its stream, and the grouping into causes travels with the
+  findings — `byCause()` stays the only implementation of that rule. The seam is
+  explicit in `Report.swift`: one protocol, `AuditEngine`, so a Swift engine
+  later would be a second conformance and no change to any view above it.
+
+  **`--no-node` builds a 1.7 MB app** that uses the Node already on the machine;
+  the default bundles one and is 109 MB, of which 108 MB is Node and under one
+  is everything this project wrote. Zipped, that is 36 MB — a quarter of what
+  Slack asks for.
+
+- **Versions, updates and downgrades.** The sidebar checks GitHub's releases
+  once a day and lists every one with its notes, newest first. Moving between
+  them — in either direction, because a release that makes a report worse should
+  be undoable without reading a manual — runs one Homebrew command in Terminal.
+
+  The app deliberately **does not replace itself**. That needs a Developer ID
+  and notarisation to be safe, and an unsigned application rewriting its own
+  bundle is indistinguishable from something you would not want. Homebrew
+  verifies a checksum first; the browser leaves Gatekeeper a say.
+
+  A Homebrew cask and a release workflow come with it: the cask's version and
+  checksum are written by CI when a tag is pushed, so the formula cannot
+  describe a build that does not exist.
+
+- **The engine stream can speak JSON.** `?format=json` on `/stream` sends the
+  findings, the meta and the causes instead of a rendered page. The native app
+  is the only caller today; anything else that wants structured output over a
+  stream can use it.
+
+### Fixed
+- **`--serve 0` asked for the help text instead of a port.** Zero is falsy, and
+  `if (opts.serve)` sent it to the wrong branch — so the macOS app, which asks
+  the operating system to pick a free port, opened onto an engine that never
+  started. Found by building the app rather than by reading it.
+
 ## [1.21.0] — 2026-08-23
 
 ### Added

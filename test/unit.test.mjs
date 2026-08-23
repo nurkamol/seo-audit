@@ -1407,6 +1407,30 @@ test('--serve answers the same pages the Worker does, without a password', async
   }
 });
 
+test('--serve 0 asks the operating system for a port', async () => {
+  // What the macOS app does, because guessing a port is how two copies of an
+  // app fight over one. Zero is falsy, and `if (opts.serve)` sent it to the
+  // help text instead — the app opened and the engine never started.
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, ['bin/seo-audit.mjs', '--serve', '0'], { stdio: ['pipe', 'pipe', 'pipe'] });
+  try {
+    const announced = await new Promise((resolve, reject) => {
+      let seen = '';
+      child.stdout.on('data', (chunk) => {
+        seen += String(chunk);
+        const match = seen.match(/serving at (http:\/\/[\d.]+:(\d+)\/)/);
+        if (match) resolve({ url: match[1], port: Number(match[2]) });
+      });
+      child.once('error', reject);
+      setTimeout(() => reject(new Error(`never announced itself: ${seen}`)), 8000);
+    });
+    assert.ok(announced.port > 0, 'the operating system should have picked a real port');
+    assert.equal((await fetch(`${announced.url}robots.txt`)).status, 200);
+  } finally {
+    if (child.exitCode === null) child.kill();
+  }
+});
+
 test('a server started by something, rather than by somebody, dies with it', async () => {
   // The macOS shell spawns this and points a web view at it. The first time it
   // was run for real the server outlived the window, held port 4321, and the

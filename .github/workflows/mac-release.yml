@@ -1,0 +1,84 @@
+# Build the macOS app on a tag and attach it to the release, then point the
+# Homebrew cask at what was actually built.
+#
+# The cask's version and checksum are written here rather than by hand, so the
+# formula can never describe a build that does not exist — which is the usual
+# way a cask breaks.
+name: macOS app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to build and attach to
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the app with Node inside it
+        run: |
+          # The runner's own Node is what gets bundled, so the app works on a
+          # Mac with nothing installed.
+          NODE_BIN="$(command -v node)" ./mac/build.sh
+
+      - name: Check it is what it claims to be
+        run: |
+          app=build/seo-audit.app
+          test -x "$app/Contents/MacOS/seo-audit"
+          test -x "$app/Contents/Resources/node"
+          test -f "$app/Contents/Resources/engine/bin/seo-audit.mjs"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --deep --strict "$app"
+          # The bundled engine has to run, or the app opens onto an error page.
+          "$app/Contents/Resources/node" "$app/Contents/Resources/engine/bin/seo-audit.mjs" --version
+
+      - name: Zip it
+        id: package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [ -n "${{ github.event.inputs.tag }}" ] && version="${{ github.event.inputs.tag }}" && version="${version#v}"
+          name="seo-audit-$version-macos.zip"
+          # ditto rather than zip: it keeps the bundle's symlinks and the
+          # signature intact, which plain zip does not.
+          ditto -c -k --sequesterRsrc --keepParent build/seo-audit.app "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(shasum -a 256 "$name" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          ls -lh "$name"
+
+      - name: Attach it to the release
+        run: gh release upload "v${{ steps.package.outputs.version }}" "${{ steps.package.outputs.name }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Point the cask at it
+        run: |
+          cask=Casks/seo-audit.rb
+          sed -i '' -e "s/^  version .*/  version \"${{ steps.package.outputs.version }}\"/" "$cask"
+          sed -i '' -e "s/^  sha256 .*/  sha256 \"${{ steps.package.outputs.sha }}\"/" "$cask"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$cask"
+          # A tag build runs on a detached head; the cask belongs on the branch.
+          git diff --cached --quiet || {
+            git stash
+            git checkout main
+            git stash pop
+            git commit -m "Cask: ${{ steps.package.outputs.version }}"
+            git push origin main
+          }

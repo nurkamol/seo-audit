@@ -254,7 +254,10 @@ let sites = resolveSites(cli.targets ?? [], file);
 
 // The local UI, which is a different program from here on: no target, no
 // report file, and it runs until interrupted.
-if (opts.serve) {
+// `!== undefined` rather than truthiness: --serve 0 asks the operating system
+// to pick a free port, which is what the macOS app does, and zero is falsy.
+// That bug shipped as "the app opens and the engine never starts".
+if (opts.serve !== undefined) {
   const { serve } = await import('../src/serve.mjs');
   const { url } = await serve({
     port: opts.serve === true ? 4321 : opts.serve,

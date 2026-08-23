@@ -12,6 +12,7 @@
 // See docs/hosting.md for what it costs and what it is allowed to reach.
 import { audit } from '../src/audit.mjs';
 import { html as htmlReport } from '../src/report.mjs';
+import { byCause, causeScope } from '../src/causes.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
 // 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
@@ -280,13 +281,33 @@ export async function handle(request, env, ctx, deps = {}) {
           onProgress: (event) => send('progress', progressText(event, origin)),
           onNote: (note) => send('progress', `note       ${note}`),
         });
-        // The report replaces this page entirely, so it has to carry its own way
-        // back to the form — otherwise the only route is the browser's back
-        // button, onto a page that has finished streaming and shows a stale log.
-        await send('done', render([...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }], meta, {
-          backHref: '/',
-          backLabel: 'Audit another site',
-        }));
+        const all = [...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }];
+
+        // A native client wants the findings, not a page. The grouping travels
+        // with them so that byCause() stays the only implementation of it —
+        // a second one in another language is the drift this project keeps
+        // refusing everywhere else.
+        if (url.searchParams.get('format') === 'json') {
+          await send('done', {
+            meta,
+            findings: all,
+            causes: byCause(all).map((cause) => ({
+              id: cause.id,
+              title: cause.title,
+              level: cause.level,
+              section: cause.section,
+              count: cause.count,
+              pages: cause.pages,
+              scope: causeScope(cause, meta.pages),
+            })),
+          });
+        } else {
+          // The report replaces this page entirely, so it has to carry its own
+          // way back to the form — otherwise the only route is the browser's
+          // back button, onto a page that has finished streaming and shows a
+          // stale log.
+          await send('done', render(all, meta, { backHref: '/', backLabel: 'Audit another site' }));
+        }
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);
       } finally {

@@ -164,14 +164,25 @@ It is not a second implementation. `worker/index.mjs` is written against
 `src/serve.mjs` is thirty lines of adapter. Bound to the loopback address,
 which is the whole of its security model.
 
-There is a macOS app around it in `mac/`, and it is a shell rather than a port:
+There is a macOS app in [`mac/`](mac/README.md):
 
 ```bash
-swiftc -O -o build/SeoAudit mac/SeoAudit/main.swift && build/SeoAudit
+brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+brew install --cask seo-audit
+# or build it yourself — swiftc and the command line tools, nothing else
+./mac/build.sh --run
 ```
 
-It starts the CLI with `--serve` and points a web view at it. No check is
-written twice, because a check written twice is a check that drifts.
+SwiftUI throughout, Liquid Glass, and the report drawn natively: cause cards
+that expand into the pages they affect, filtering, search, PDF export. No web
+view in it.
+
+It is a window over this engine and not a second one. The app runs
+`node bin/seo-audit.mjs --serve` as a child process and reads its stream, and
+the grouping into causes travels with the findings rather than being recomputed
+in Swift — a check written twice is a check that drifts. `Report.swift` keeps
+that seam explicit, so a Swift engine would be one more conformance and no
+change to anything above it.
 
 ### What the pages actually do in Google
 
