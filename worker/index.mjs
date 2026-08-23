@@ -15,6 +15,7 @@ import { html as htmlReport, markdown as markdownReport, csv as csvReport } from
 import { causePayload } from '../src/causes.mjs';
 import { diff } from '../src/baseline.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
+import { runParameters, notInApp } from '../src/options.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
 // 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
@@ -359,6 +360,15 @@ export async function handle(request, env, ctx, deps = {}) {
       }),
       { headers: { 'content-type': 'application/json' } },
     );
+  }
+
+  // What a run can be told to do, and what the window does not reach yet, with
+  // the reason. Served rather than only living in a source file, so "can the
+  // app do X" is a question with an answer somebody can fetch.
+  if (url.pathname === '/options') {
+    return new Response(JSON.stringify({ run: runParameters(), notInApp: notInApp() }), {
+      headers: { 'content-type': 'application/json' },
+    });
   }
 
   // Which browsers and systems can be pretended to be. A client building a menu

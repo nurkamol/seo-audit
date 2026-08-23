@@ -191,6 +191,18 @@ test('a user agent of your own wins, and cannot inject a header', () => {
   assert.match(agentFor(q('userAgent=%20%20&browser=googlebot'), {}), /Googlebot/);
 });
 
+test('what a run can be told to do is served, reasons included', async () => {
+  const res = await handle(get('/options', { token: SECRET }), env());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+
+  assert.ok(body.run.some((o) => o.flag === '--concurrency' && o.query === 'concurrency'));
+  // The half that is usually missing: what is not there, and why.
+  const psi = body.notInApp.find((o) => o.flag === '--psi');
+  assert.ok(psi, 'a flag the window does not reach is still listed');
+  assert.match(psi.reason, /key/, 'with the reason, not just its absence');
+});
+
 test('a preview says what a run would do without doing it', async () => {
   // A full crawl is minutes and a few hundred requests to somebody else's
   // server. This is the way to find out it is pointed at the wrong site first.

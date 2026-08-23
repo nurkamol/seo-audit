@@ -5,6 +5,27 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The command line and the window are kept honest about each other.** The CLI
+  grew to thirty-three flags and the window reached ten, and nothing anywhere
+  said which of the other twenty-three were decisions and which were oversights.
+  It was both, in different places, and there was no way to tell from outside —
+  the same failure this project refuses in its reports, where a missing finding
+  reads exactly like a passing one.
+
+  `src/options.mjs` is now one table with an answer for every flag: `app: true`,
+  or a sentence saying why the window does not reach it. `npm test` enforces it
+  in four directions — a flag with no entry, an entry for a flag that no longer
+  exists, an entry claiming the window sends a parameter it does not, and a
+  parameter the window sends that no flag corresponds to. That last one is a
+  setting that quietly does nothing, which is the worst of the four.
+
+  The test reads the Swift source from Node, deliberately: a macOS-only CI job
+  would fail hours later on somebody else's machine, and this fails on the
+  machine of whoever adds the flag. It found `--ignore` undeclared on its first
+  run. The table is served at `/options` as well, so "can the app do X" has a
+  fetchable answer.
+
 ## [1.25.0] — 2026-08-24
 
 ### Added

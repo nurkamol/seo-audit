@@ -76,6 +76,16 @@ The cask's version and checksum are written by `.github/workflows/mac-release.ym
 when a tag is pushed, so the formula cannot describe a build that does not
 exist.
 
+## What the window reaches, and what it does not
+
+`src/options.mjs` is the answer, and `npm test` enforces it: every flag the
+command line parses carries either `app: true` or a sentence saying why the
+window does not reach it. Adding a flag without deciding fails the build, and so
+does claiming the window sends something it does not.
+
+It is served at `/options` too — `run` is what a client should send, `notInApp`
+is everything else with its reason.
+
 ## Settings
 
 `⌘,` — the flags that change what a run *does*, and only those. Where reports

@@ -69,9 +69,31 @@ it does **not** fire when it shouldn't, which is the half that matters. The
 README table is the tool's documentation of record and drifts immediately if
 this is skipped.
 
-A new flag has one more place to go: `action.yml`, as an input *and* in the
-`args+=` block that assembles the command. An input that never reaches the CLI
-is worse than no input, because it fails silently.
+## Adding a flag
+
+Three places, and the third is enforced.
+
+1. `bin/seo-audit.mjs` — parse it, and add it to the help text.
+2. `action.yml` — as an input *and* in the `args+=` block that assembles the
+   command. An input that never reaches the CLI is worse than no input, because
+   it fails silently.
+3. `src/options.mjs` — say whether the macOS window should reach it. `app: true`
+   if it does; otherwise a **sentence** saying why not. "Not yet" is a fine
+   answer as long as it is written down and says something — the test rejects a
+   bare `'not yet'`.
+
+`npm test` fails until (3) is done, in both directions: a flag with no entry, an
+entry for a flag that no longer exists, an entry claiming the window sends a
+parameter that `CrawlSettings.swift` does not, and a parameter the window sends
+that no flag corresponds to. That last one is a setting that quietly does
+nothing, which is the worst of the four.
+
+The Node test reads the Swift source, which is unusual and deliberate: a
+macOS-only CI job would fail hours later on somebody else's machine, and this
+has to fail on the machine of whoever added the flag, at the moment they add it.
+
+The table is served at `/options` as well, so "can the app do X" is a question
+with a fetchable answer rather than one that needs a source file read.
 
 If the check reaches for a Node built-in, it will vanish in the Worker — read
 the next section before you write it.
