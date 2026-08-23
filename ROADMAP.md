@@ -4,8 +4,41 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Three candidates, queued and not yet started. None of them needs anything this
-tool cannot already do, and two of the three need no requests at all.
+Five candidates, queued and not yet started. None of them needs anything this
+tool cannot already do. The first two came out of one report on one real store,
+which is the usual way things arrive here.
+
+### Site-level checks read the host that answers
+
+A defect, and the highest thing on this list. Audit `example.com` when the site
+lives at `www.example.com` and the crawl follows the redirect for pages —
+`discover()` uses `chain()` — while `origin` stays on the host that only ever
+answers 301. So robots.txt, llms.txt and every security header are read off a
+redirect.
+
+On the store that prompted this, that produced a flat "No robots.txt" for a
+site with a good one, declaring agent instructions and a UCP endpoint; an
+llms.txt reported missing at a host that does not serve the site; and a
+Referrer-Policy verdict taken from a 301's headers. Three findings, none of
+them true.
+
+RFC 9309 asks crawlers to follow at least five redirects for robots.txt, and
+Google does. The fix is to adopt the final host as the origin once the
+homepage's redirect chain settles — the host-variant check already knows how to
+follow it.
+
+### The image sweep counts files, not URLs
+
+`src/site.mjs` dedupes images by absolute URL, and a Shopify store serves one
+file at a dozen widths: `DSC_0075-2.avif?v=1782204062&width=150`, `&width=300`,
+`&width=750`. Each is a separate entry against the 200-image cap, which is how
+a 325-page store reported **2,009 distinct images** and 1,809 of them
+unchecked.
+
+Stripping `width` and `height` before deduping would cut the sweep sharply at
+no loss of coverage — the same file 404s or does not whatever size is asked
+for. The ratio has not been measured yet, so measure it before believing the
+saving.
 
 ### The same anchor text on two destinations
 
@@ -40,14 +73,14 @@ check table uses:
 - Schema `datePublished` after `dateModified`, or either one in the future.
 - The same URL listed in two files of one sitemap index.
 
-### Three things worth keeping in front of all three
+### Four things worth keeping in front of all of them
 
 **The room left is not in fetching more, it is in reading what has already been
 fetched.** Click depth cost no requests — the link graph had been in memory
 since 0.3.0, and only its extreme case, the orphan, was ever reported. The
 viewport string has been parsed and kept since the first commit and was only
-ever tested for existing. Both remaining candidates above are the same shape,
-and so was the one that just left this list.
+ever tested for existing. The anchor-text pair and the contradictions above are
+the same shape, and so was pagination, which left this list in 1.14.0.
 
 **A check is narrowed by real sites, not by argument.** The candidate that
 followed from that lesson was anchor text, and 1.13.0 shipped it. It needed the
@@ -58,6 +91,14 @@ linking to another both with and without a trailing slash. What survived is
 quiet across some 12,000 anchors on eight sites and fires on five certificate
 PDFs nobody can read. That ratio is the point, not a disappointment. Budget for
 it happening again.
+
+**A false positive can come from the crawl rather than from a check.** Both
+1.15.0 fixes were in how the site was *fetched*, not in what was examined:
+`page-status` was reading a rate limit as a broken page, and `orphan-page` was
+reading a fragment as a site. Every check downstream of a bad fetch inherits
+it, and the report gives no sign — 70 pages reported as failing looked exactly
+like 70 pages failing. When a finding count is implausible, suspect the crawl
+before the checks.
 
 **There are two runtimes now**, a standing cost taken on in 1.12.0. A check
 that reaches for a Node built-in works in the CLI and disappears in the Worker,
@@ -75,6 +116,14 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **A rate limit is not a broken page** (1.15.0) — HTTP 429 was reported as
+  `page-status` at error level on 70 of one store's 200 crawled pages, which
+  were all fine. The crawler now waits it out, believes `Retry-After`, halves
+  its concurrency and leaves it down, and reports a page that still refuses as
+  `rate-limited` at info. Alongside it, `orphan-page` stopped calling 122 pages
+  orphans on a crawl that had seen two-thirds of the site — it now stands down
+  on a partial graph, sharing that condition with click depth so the two cannot
+  drift apart.
 - **Pagination canonicals** (1.14.0) — page 2 of an archive canonicalising
   to page 1, which four of the six real archives tested were doing, including
   wordpress.org's own news blog. The check itself was arithmetic; the work was

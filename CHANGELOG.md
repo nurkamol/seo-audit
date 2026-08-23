@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.15.0] — 2026-08-23
+
 ### Fixed
 - **A rate limit is no longer reported as a broken page.** A Shopify store
   answered HTTP 429 to **70 of its 200 crawled pages** at the default
