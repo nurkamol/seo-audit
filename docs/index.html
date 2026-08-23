@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="seo-audit">
 <meta property="og:description" content="Every page, not just the homepage. Zero dependencies, one command, works in CI.">
-<meta property="og:image" content="https://nurkamol.github.io/seo-audit/icon.png">
+<meta property="og:image" content="https://nurkamol.github.io/seo-audit/shots/app.png">
 <meta property="og:type" content="website">
 <style>
   :root {
@@ -79,6 +79,18 @@
   }
   .card h3 { margin: 0 0 .35rem; font-size: 1rem; }
   .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+  /* Screenshots. A border rather than a shadow, because the app's own window
+     already has one and two would look like a sticker. */
+  .shot { margin: 0; }
+  .shot img {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  }
+  .shot figcaption { margin-top: .5rem; color: var(--muted); font-size: .85rem; }
+  .shot.wide { margin-bottom: 1.25rem; }
+  .shots { display: grid; gap: 1.25rem; grid-template-columns: 1.3fr 1fr; align-items: start; }
+  @media (max-width: 34rem) { .shots { grid-template-columns: 1fr; } }
 
   .scroll { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: .93rem; min-width: 30rem; }
@@ -169,6 +181,31 @@
       <p>A fetch loop cannot see rendering. <code>--psi</code> asks Google for Google's
          own measurement instead of guessing.</p>
     </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>What it looks like</h2>
+  <p class="lede">
+    The same run, three ways. Nothing here is a mock-up — the app is a real window, the
+    report is a real report, and the PDF came out of the app's export.
+  </p>
+  <figure class="shot wide">
+    <img src="shots/app.png" alt="The macOS app: a sidebar of kept reports and a field to type a domain into"
+         width="1600" height="1139" loading="lazy">
+    <figcaption>The macOS app. Type a domain, press return.</figcaption>
+  </figure>
+  <div class="shots">
+    <figure class="shot">
+      <img src="shots/report.jpg" alt="The HTML report, opening with the eight widest things to change"
+           width="1400" height="855" loading="lazy">
+      <figcaption>The HTML report opens with the work, not the findings.</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="shots/pdf.png" alt="The first page of an exported PDF report"
+           width="707" height="620" loading="lazy">
+      <figcaption>Exported as PDF, with every affected page.</figcaption>
+    </figure>
   </div>
 </section>
 

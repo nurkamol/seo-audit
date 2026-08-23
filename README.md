@@ -193,6 +193,8 @@ brew install --cask seo-audit
 ./mac/build.sh --run
 ```
 
+<p align="center"><img src="docs/shots/app.png" alt="The macOS app: a sidebar of kept reports, and a field to type a domain into" width="820"></p>
+
 SwiftUI throughout, Liquid Glass, and the report drawn natively: cause cards
 that expand into the pages they affect, filtering, search, and export as PDF,
 HTML, Markdown, CSV or JSON. Every finished run is kept, so a seven-minute

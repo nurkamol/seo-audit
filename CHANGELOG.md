@@ -6,6 +6,11 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The website and the README show what it looks like.** Three real captures,
+  not mock-ups: the app's window with the glass on it, an HTML report of
+  jekyllrb.com, and the first page of a PDF that came out of the app's export.
+  Three hundred kilobytes for all of them.
+
 - **The Mac app has settings.** `⌘,`, and only the flags that change what a run
   *does* — where reports are kept and whether to check for updates are already
   answered by the sidebar and the Versions sheet. **Speed** is the one that
