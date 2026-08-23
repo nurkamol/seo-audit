@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The settings window is on the website**, next to a sentence about the one
+  setting that earned it.
+
 ### Fixed
 - **Two rows in the new Settings read as the wrong thing.** The sitemap field's
   placeholder was written as the field's *title*, so "Found automatically"
