@@ -5,6 +5,33 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Findings are grouped by cause.** A real store produced **2,081 findings
+  across 347 URLs**, four checks accounting for 80% of them and 1,685 of them
+  under `/products/` — which is not 1,685 problems but one Shopify template
+  repeated 194 times. The report made the reader work that out, page after
+  page, and most readers stop instead.
+
+  The rule is one sentence: the same check, on pages of the same section, is
+  one piece of work. A section is the path a page's template lives under —
+  `/products/`, `/blogs/the-library/`, `/` — because that is how a generated
+  site is built. Nothing guesses at severity or invents a score; it groups,
+  counts and orders.
+
+  That store's 2,081 findings are 62 things to change, and every report format
+  now opens with the widest of them:
+
+  ```
+  ✗  No <h1>                              10 pages under /pages/
+  ✗  Structured data is not valid JSON     3 pages under /collections/
+  !  Heading level jumps from h1 to h3    225 pages under /products/ — 69% of the crawl
+  !  Title may be truncated in results    162 pages under /products/
+  ```
+
+  Terminal, Markdown and HTML share `byCause()` and `causeScope()` so the three
+  cannot drift. Under a handful of causes the section is not rendered at all —
+  the list below already reads as its own summary.
+
 ### Fixed
 - **A minute of slack on `schema-date-order`.** A real store produced twelve
   inversions and **eleven were exactly one second** — Shopify's theme writing

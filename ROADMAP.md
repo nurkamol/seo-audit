@@ -4,9 +4,50 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Empty. Everything this section has queued since 1.11.0 has shipped, and what
-would fill it next is a report on a real site — which is where four of the last
-eight releases came from anyway.
+Not more checks. There are about ninety, and the ninety-first adds a row to a
+report nobody can act on. A real store produced **2,081 findings across 347
+URLs, four checks accounting for 80% of them and 1,685 of them under
+`/products/`** — which is not 1,685 problems but one Shopify template repeated
+194 times. The work left is making the report say that.
+
+### 1. Order by reach, using what is already measured
+
+An error one click from the homepage with forty links into it matters more than
+the same error six clicks down that nothing points at. Click depth and the
+inlink graph have been in memory since 1.11.0 and neither is used for ordering.
+
+Severity × pages affected × depth is an *ordering*, not a score out of a
+hundred — the distinction the rejected list below turns on, and worth keeping
+sharp while implementing it.
+
+### 2. A report you can hand to a client
+
+A cover page, the causes as the opening spread, a print stylesheet, and the
+detail behind it. The HTML report is already one self-contained file that can
+be emailed, which is most of the way there.
+
+### 3. The Swift app
+
+A macOS front end, and the reason to want one is not a nicer window: a local
+run has no limits. Cloudflare bounds a Worker at 30s of CPU and 10,000
+subrequests; a 5,000-page site with `maxImageChecks` raised past a thousand
+fits on a desktop and nowhere else. Persistent history, saved sites and
+scheduled runs against a local baseline follow from the same place.
+
+Built as a **shell over the engine, never a second implementation of it**. The
+Worker rule applies twice over here: a check written twice is a check that
+drifts, and this project ships several a week. `--serve` — the same form and
+streaming report as the Worker, over `node:http`, no account and no limits — is
+the honest step first, and tells us whether the desktop framing is what is
+actually wanted before anyone writes Swift.
+
+### 4. Search Console, opt-in and last
+
+Impressions and clicks per URL, so findings sort by traffic at risk: "this
+broken canonical is on a page with 4,000 impressions a month" is the sentence
+commercial tools charge for. Reachable with `fetch` and a refresh token, so no
+dependency — but it is the only item here that needs auth, which is why it is
+last.
 
 ### Five things worth keeping in front of whatever comes next
 
@@ -65,6 +106,11 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Findings grouped by cause** (unreleased) — the same check on pages of one
+  section is one piece of work, because that is how a generated site is built.
+  A real store's 2,081 findings became 62 things to change, led by "heading
+  level jumps from h1 to h3, 225 pages under /products/ — 69% of the crawl".
+  Every report format leads with it.
 - **Four contradictions** (1.19.0) — an image both deferred and
   prioritised, a `Content-Language` header disagreeing with `<html lang>`,
   structured data modified before it was published or dated in the future, and

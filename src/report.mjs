@@ -1,6 +1,8 @@
 // Two renderings of the same findings: one for the terminal, one for a file
 // you can commit, diff between runs, or send to a client.
 
+import { byCause, causeScope } from './causes.mjs';
+
 const COLOR = process.env.NO_COLOR === undefined && process.stdout.isTTY;
 const c = (code, s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
 const red = (s) => c('31', s);
@@ -13,6 +15,17 @@ const MARK = { error: '✗', warn: '!', info: '·' };
 const PAINT = { error: red, warn: yellow, info: blue };
 
 /** Findings grouped by check, worst level first, biggest group first. */
+/** The top of every report: the work, not the findings.
+ *
+ *  A real store produced 2,081 findings, and the first thing anyone needs to
+ *  know is that they are 62 pieces of work and four of them are most of it.
+ *  Shown when there is something to summarise — under a handful of causes the
+ *  list below already reads as the summary. */
+export function worstCauses(findings, limit = 8) {
+  const causes = byCause(findings);
+  return causes.length > limit + 2 ? causes.slice(0, limit) : [];
+}
+
 export function group(findings) {
   const order = { error: 0, warn: 1, info: 2 };
   const byId = new Map();
@@ -53,6 +66,22 @@ export function terminal(findings, meta) {
     lines.push(`  ${c('32', '✓')} nothing to report`);
     lines.push('');
     return lines.join('\n');
+  }
+
+  const causes = worstCauses(findings);
+  if (causes.length) {
+    const total = byCause(findings).length;
+    lines.push(dim(`  ── Start here ${'─'.repeat(46)}`));
+    lines.push('');
+    lines.push(dim(`  ${findings.length} findings are ${total} things to change. The widest:`));
+    lines.push('');
+    for (const cause of causes) {
+      lines.push(
+        `  ${PAINT[cause.level](MARK[cause.level])} ${bold(cause.title)}` +
+          dim(`  ${causeScope(cause, meta.pages)}`),
+      );
+    }
+    lines.push('');
   }
 
   for (const { name, entries } of byCategory(findings)) {
@@ -99,6 +128,20 @@ export function markdown(findings, meta) {
     out.push('Nothing to report.');
     out.push('');
     return out.join('\n');
+  }
+
+  const causes = worstCauses(findings);
+  if (causes.length) {
+    out.push('## Start here');
+    out.push('');
+    out.push(`${findings.length} findings are **${byCause(findings).length} things to change**. The widest:`);
+    out.push('');
+    out.push('| | What to change | Where |');
+    out.push('|:-:|---|---|');
+    for (const cause of causes) {
+      out.push(`| ${MARK[cause.level]} | ${cause.title} | ${causeScope(cause, meta.pages)} |`);
+    }
+    out.push('');
   }
 
   out.push('## Summary');
@@ -589,6 +632,17 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
     letter-spacing: .02em; color: var(--fg); text-decoration: none;
   }
   .mark span { color: var(--faint); }
+  .causes { margin: 0 0 3rem; }
+  .causes .lede { color: var(--muted); margin: 0 0 1rem; font-size: .95rem; }
+  .causes ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+  .causes li {
+    display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap;
+    padding: .7rem .9rem; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .causes li b { font-weight: 600; }
+  .causes .where { color: var(--muted); font-size: .88rem; margin-left: auto; }
+  @media (max-width: 40rem) { .causes .where { margin-left: 0; width: 100%; } }
+
   .stamp {
     font: 500 12px/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     color: var(--faint); font-variant-numeric: tabular-nums;
@@ -757,6 +811,24 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
     ${meta.ignored ? `<li><b>${meta.ignored}</b> silenced by config</li>` : ''}
     ${meta.notIndexable ? `<li><b>${meta.notIndexable}</b> pages not indexable</li>` : ''}
   </ul>
+
+  ${(() => {
+    const causes = worstCauses(findings);
+    if (!causes.length) return '';
+    return `<section class="causes">
+    <h2 id="start-here"><span>Start here</span><span class="rule"></span><span class="tick">${byCause(findings).length}</span></h2>
+    <p class="lede">${findings.length} findings are ${byCause(findings).length} things to change. The widest:</p>
+    <ol>${causes
+      .map(
+        (cause) => `<li class="${cause.level}">
+        <span class="pill ${cause.level}">${LABEL[cause.level]}</span>
+        <b>${esc(cause.title)}</b>
+        <span class="where">${esc(causeScope(cause, meta.pages))}</span>
+      </li>`,
+      )
+      .join('')}</ol>
+  </section>`;
+  })()}
 
   <div class="tally">
     <div class="e${n.error ? '' : ' zero'}"><b>${n.error}</b><small>${n.error === 1 ? 'Error' : 'Errors'}</small></div>

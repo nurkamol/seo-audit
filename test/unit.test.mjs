@@ -5,6 +5,7 @@ import { attr, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
+import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
 import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
@@ -1311,6 +1312,88 @@ test('a page nothing links to is not reported for the words nobody used', () => 
   const found = ids(crossPageChecks(pages));
   assert.ok(!found.includes('anchor-generic'));
   assert.ok(found.includes('orphan-page'));
+});
+
+// --- causes ----------------------------------------------------------------
+
+test('a section is the template a page lives under', () => {
+  assert.equal(sectionOf('https://x.test/products/blue-sage'), '/products/');
+  assert.equal(sectionOf('https://x.test/blogs/the-library/a-post'), '/blogs/the-library/');
+  // A trailing slash is not a segment, so /about/ and /about are the same page
+  // in the same place — the one thing this must not get wrong.
+  assert.equal(sectionOf('https://x.test/about/'), '/');
+  assert.equal(sectionOf('https://x.test/about'), '/');
+  assert.equal(sectionOf('https://x.test/'), '/');
+  assert.equal(sectionOf('not a url'), '/');
+});
+
+test('the same check on pages of one section is one piece of work', () => {
+  // 1,685 findings under /products/ on a real store were one Shopify template
+  // repeated 194 times. Reporting them per check makes the reader derive that.
+  const mk = (id, url, level = 'warn') => ({ level, id, title: id, detail: 'd', url });
+  const findings = [
+    ...Array.from({ length: 5 }, (_, i) => mk('img-alt-duplicate', `https://x.test/products/p${i}`)),
+    ...Array.from({ length: 2 }, (_, i) => mk('img-alt-duplicate', `https://x.test/blogs/b${i}`)),
+    mk('h1-missing', 'https://x.test/pages/a', 'error'),
+  ];
+  const causes = byCause(findings);
+
+  assert.equal(causes.length, 3, 'two templates and one page, not eight findings');
+  // Worst first, then widest.
+  assert.equal(causes[0].id, 'h1-missing');
+  assert.equal(causes[1].section, '/products/');
+  assert.equal(causes[1].pages.length, 5);
+  assert.equal(causes[2].section, '/blogs/');
+});
+
+test('a cause is as serious as the worst thing in it', () => {
+  const findings = [
+    { level: 'warn', id: 'x', title: 'the warning', detail: 'd', url: 'https://x.test/a/1' },
+    { level: 'error', id: 'x', title: 'the error', detail: 'd', url: 'https://x.test/a/2' },
+  ];
+  const [cause] = byCause(findings);
+  assert.equal(cause.level, 'error');
+  assert.equal(cause.title, 'the error');
+  assert.equal(cause.count, 2);
+});
+
+test('the scope reads as English, and says when it is most of the site', () => {
+  const cause = (section, n) => ({
+    section,
+    pages: Array.from({ length: n }, (_, i) => `https://x.test${section}p${i}`),
+  });
+  assert.equal(causeScope(cause('/products/', 225), 325), '225 pages under /products/ — 69% of the crawl');
+  assert.equal(causeScope(cause('/products/', 10), 325), '10 pages under /products/');
+  assert.equal(causeScope(cause('/', 4), 325), '4 pages across the site');
+  assert.equal(causeScope(cause('/blogs/', 1), 325), 'on one page under /blogs/');
+  assert.equal(causeScope(cause('/', 1), 325), 'once');
+});
+
+test('one page tripping a check twice is one page, counted twice', () => {
+  const findings = [
+    { level: 'warn', id: 'x', title: 't', detail: 'd', url: 'https://x.test/a/1' },
+    { level: 'warn', id: 'x', title: 't', detail: 'd', url: 'https://x.test/a/1' },
+  ];
+  const [cause] = byCause(findings);
+  assert.equal(cause.pages.length, 1);
+  assert.equal(cause.count, 2);
+});
+
+test('every report format leads with the same causes', () => {
+  const findings = Array.from({ length: 30 }, (_, i) => ({
+    level: 'warn',
+    id: `check-${i % 12}`,
+    title: `Finding ${i % 12}`,
+    detail: 'd',
+    url: `https://x.test/products/p${i}`,
+  }));
+  const meta = { origin: 'https://x.test', pages: 30, date: '2026-08-23' };
+  assert.match(markdown(findings, meta), /## Start here/);
+  assert.match(html(findings, meta), /Start here/);
+
+  // Under a handful of causes the list below already reads as the summary.
+  const few = findings.slice(0, 2);
+  assert.ok(!markdown(few, meta).includes('## Start here'));
 });
 
 // --- categories -----------------------------------------------------------
