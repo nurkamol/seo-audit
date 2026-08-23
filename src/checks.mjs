@@ -126,6 +126,32 @@ const GENERIC_ANCHORS = new Set([
   'see more', 'details', 'go', 'open',
 ]);
 
+// Words whose job is to be the same words in different places. A footer says
+// "Contact" on every page of a site and means the same page each time; a
+// language switcher says "English" beside every article. These are navigation,
+// not description, and the check below is about description.
+const NAVIGATION_ANCHORS = new Set([
+  'home', 'next', 'previous', 'prev', 'back', 'top', 'menu', 'search',
+  'close', 'skip to content', 'skip to main content', 'toggle navigation',
+]);
+
+// The same job, phrased freely. smashingmagazine.com puts "Jump to table of
+// contents" on every ebook page, each one pointing at its own; the words
+// describe the movement, not the destination.
+const CONTROL_PHRASE = /^(jump|skip|go|back|return|scroll) to\b/;
+
+// A link whose text is a file format is labelling a download, not describing a
+// page. elementor.com's brand page offers each logo as "SVG" and "PNG", which
+// collides with every other logo on the same page and means nothing to anyone.
+const ASSET_FILE =
+  /\.(svg|png|jpe?g|gif|webp|avif|pdf|zip|rar|gz|tar|tgz|mp[34]|mov|docx?|xlsx?|pptx?|csv|txt|xml|json|md5|sha\d*|asc|sig|exe|dmg|iso)$/i;
+
+// Above this, a phrase is a label in a list rather than a description of a
+// page. wordpress.org's download page says "md5" beside 2,730 checksums; that
+// is a table, and reporting it as ambiguous anchor text would be reporting the
+// existence of a table. A real collision is two or three pages.
+const AMBIGUOUS_CEILING = 5;
+
 const anchorPhrase = (name) =>
   (name ?? '')
     .toLowerCase()
@@ -969,6 +995,72 @@ export function crossPageChecks(pages, opts = {}) {
         'description of a page that comes from somewhere other than the page itself, and this one has ' +
         'none — the words say what to do, not what is there.', p.url));
   }
+  // The mirror of the check above: one phrase pointing at two different pages.
+  // "Pricing" going to /pricing on some pages and /plans on others tells Google
+  // the two are the same thing, so they compete instead of one of them winning.
+  //
+  // Destinations are compared by path, not by URL. A link to /collections/all
+  // and one to /collections/all?sort_by=price are the same page described the
+  // same way, which is not this finding and would bury it.
+  //
+  // Both destinations have to be pages this crawl actually fetched. Two of the
+  // first real collisions found were not two pages at all: elementor.com's
+  // /about/privacy/ 301s to /terms/privacy/, and smashingmagazine.com's
+  // /categories/business 301s to /category/business. One page under two URLs
+  // linked by the same words is a stale link — `link-redirects` reports it —
+  // and calling it two competing pages would be false. A URL that answered 200
+  // in this crawl is known to be a page; nothing else is.
+  const crawled = new Set(live.map((p) => {
+    try {
+      const u = new URL(p.url);
+      return withoutSlash(u.origin + u.pathname);
+    } catch {
+      return withoutSlash(p.url);
+    }
+  }));
+
+  const destinations = new Map();
+  for (const p of live) {
+    for (const { href, name } of p.doc.links.anchorTexts ?? []) {
+      const phrase = anchorPhrase(name);
+      // Controls rather than descriptions: a page number, an arrow, "next".
+      // Their whole job is to be the same words in different places.
+      // A version number or a page number is not a description — "7.1"
+      // normalises to "7 1", which is why this is not just \d+.
+      if (!phrase || phrase.length < 3 || /^[\d\s]+$/.test(phrase)) continue;
+      if (GENERIC_ANCHORS.has(phrase)) continue;
+      if (NAVIGATION_ANCHORS.has(phrase) || CONTROL_PHRASE.test(phrase)) continue;
+      let path;
+      try {
+        const u = new URL(href);
+        if (ASSET_FILE.test(u.pathname)) continue;
+        path = withoutSlash(u.origin + u.pathname);
+      } catch {
+        continue;
+      }
+      if (!crawled.has(path)) continue;
+      const seen = destinations.get(phrase) ?? new Map();
+      if (!seen.has(path)) seen.set(path, { href, from: p.url });
+      destinations.set(phrase, seen);
+    }
+  }
+  const ambiguous = [...destinations].filter(
+    ([, targets]) => targets.size > 1 && targets.size <= AMBIGUOUS_CEILING,
+  );
+  for (const [phrase, targets] of ambiguous.slice(0, 10)) {
+    const shown = [...targets.values()].slice(0, 3).map((t) => t.href);
+    out.push(f('info', 'anchor-ambiguous', `"${phrase}" links to ${targets.size} different pages`,
+      `${shown.join(', ')}${targets.size > 3 ? `, and ${targets.size - 3} more` : ''}. The words on a link ` +
+        'are how Google is told what is on the other side, and these say the same thing about pages that ' +
+        'are not the same — so the pages compete for it rather than one of them winning.',
+      [...targets.values()][0].from));
+  }
+  if (ambiguous.length > 10) {
+    out.push(f('info', 'anchor-ambiguous-more', `${ambiguous.length - 10} more phrases link to several pages each`,
+      `${ambiguous.length} in all. The ten found first are listed above.`,
+      [...ambiguous[0][1].values()][0].from));
+  }
+
   if (generic.length > 10) {
     out.push(f('info', 'anchor-generic-more', `${generic.length - 10} more pages are linked only by generic anchors`,
       `${generic.length} of ${live.length} crawled pages have no inbound link that describes them.`,

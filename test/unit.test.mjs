@@ -1019,6 +1019,63 @@ test('a page linked only by "read more" is reported; one with a real link is not
   assert.ok(!ids(crossPageChecks([described, post])).includes('anchor-generic'));
 });
 
+test('one phrase pointing at two crawled pages is reported', () => {
+  // jekyllrb.com links its reference page and its tutorial chapter with the
+  // same words — /docs/collections/ and /docs/step-by-step/09-collections/ —
+  // and they compete for the same query. Eleven pairs like it on one site.
+  const pages = [
+    linksWith('https://x.test/', '<main><a href="/docs/collections/">Collections</a></main>'),
+    linksWith('https://x.test/tutorial/', '<main><a href="/docs/step-by-step/09-collections/">Collections</a></main>'),
+    linksWith('https://x.test/docs/collections/', '<main><p>reference</p></main>'),
+    linksWith('https://x.test/docs/step-by-step/09-collections/', '<main><p>tutorial</p></main>'),
+  ];
+  const found = crossPageChecks(pages).filter((f) => f.id === 'anchor-ambiguous');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].level, 'info');
+  assert.match(found[0].title, /"collections" links to 2 different pages/);
+});
+
+test('a destination the crawl never fetched is not called a page', () => {
+  // Two of the first real collisions were not two pages at all:
+  // elementor.com's /about/privacy/ 301s to /terms/privacy/, and
+  // smashingmagazine.com's /categories/business 301s to /category/business.
+  // One page under two URLs is a stale link, which link-redirects reports.
+  const pages = [
+    linksWith('https://x.test/', '<main><a href="/terms/privacy/">Privacy policy</a></main>'),
+    linksWith('https://x.test/about/', '<main><a href="/about/privacy/">Privacy policy</a></main>'),
+    linksWith('https://x.test/terms/privacy/', '<main><p>the policy</p></main>'),
+  ];
+  assert.ok(!ids(crossPageChecks(pages)).includes('anchor-ambiguous'));
+});
+
+test('labels, controls, file formats and page numbers are not descriptions', () => {
+  const crawledPair = [
+    linksWith('https://x.test/a/', '<main><p>a</p></main>'),
+    linksWith('https://x.test/b/', '<main><p>b</p></main>'),
+  ];
+  const withLinks = (text, extra = '') =>
+    ids(crossPageChecks([
+      linksWith('https://x.test/', `<main><a href="/a/">${text}</a><a href="/b/">${text}</a>${extra}</main>`),
+      ...crawledPair,
+    ]));
+
+  for (const text of ['Read more', 'Home', 'Next', 'Jump to table of contents', '7.1', '2']) {
+    assert.ok(!withLinks(text).includes('anchor-ambiguous'), `${text} should not count as a description`);
+  }
+  // And a real phrase still does.
+  assert.ok(withLinks('Pricing').includes('anchor-ambiguous'));
+});
+
+test('a phrase used across a whole listing is a table, not an ambiguity', () => {
+  // wordpress.org's download page says "md5" beside 2,730 checksums.
+  const many = Array.from({ length: 8 }, (_, i) => `/p${i}/`);
+  const pages = [
+    linksWith('https://x.test/', `<main>${many.map((h) => `<a href="${h}">checksum</a>`).join('')}</main>`),
+    ...many.map((h) => linksWith(`https://x.test${h}`, '<main><p>x</p></main>')),
+  ];
+  assert.ok(!ids(crossPageChecks(pages)).includes('anchor-ambiguous'));
+});
+
 test('a page nothing links to is not reported for the words nobody used', () => {
   // orphan-page already says this, and one page is not two problems.
   const pages = [

@@ -4,21 +4,8 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Three candidates, queued and not yet started. None of them needs anything this
-tool cannot already do, and two of the three need no requests at all. The last
-report that produced work here has been worked through.
-
-### The same anchor text on two destinations
-
-The mirror of `anchor-generic`, over the `anchorTexts` that 1.13.0 added.
-"Pricing" pointing at `/pricing` on some pages and `/plans` on others tells
-Google the two URLs are the same thing, and they compete instead of one of them
-winning. The data is already in memory; this costs nothing to run.
-
-`info`, and generic anchors have to be excluded or every "read more" on the
-site collides with every other. Expect it to need the same narrowing against
-real sites that `link-no-text` took three tries to reach — navigation labels
-will produce noise before the shape is right.
+Two candidates, queued and not yet started. Neither needs anything this tool
+cannot already do, and one of the two needs no requests at all.
 
 ### Favicon
 
@@ -93,6 +80,13 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **The same anchor text on two destinations** (unreleased) — `anchor-ambiguous`,
+  one phrase pointing at two pages. This section predicted it would be noisy
+  before it was right, and four sites each contributed a class of false
+  positive: file formats as link text, "jump to …" controls, a phrase used
+  2,730 times in a checksum table, and — the one that mattered — two URLs that
+  turned out to be one page behind a 301. Both destinations must now be pages
+  the crawl actually fetched.
 - **The image sweep counts files, not URLs** (1.17.0) — an image CDN
   serves one file at every size asked for, and each size was a separate entry
   against the cap. Measured before believing it, as this section asked: 767

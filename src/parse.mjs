@@ -14,7 +14,16 @@ const decode = (s) =>
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&nbsp;/g, ' ')
+    // The typographic entities a CMS emits into link text and headings. Left
+    // undecoded, "here's their page &raquo;" normalises to a phrase with the
+    // word "raquo" in it, which is nobody's anchor text.
+    .replace(/&(l|r)aquo;/g, (_, side) => (side === 'l' ? '«' : '»'))
+    .replace(/&(m|n)dash;/g, (_, kind) => (kind === 'm' ? '—' : '–'))
+    .replace(/&hellip;/g, '…')
+    .replace(/&(l|r)squo;/g, "'")
+    .replace(/&(l|r)dquo;/g, '"')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
 
 /** Attribute value from a tag string: attr(`<img alt="x">`, 'alt') → 'x'
  *

@@ -185,6 +185,7 @@ const CATEGORY_OF = {
   'deep-page': 'Links', 'deep-page-more': 'Links', 'no-path-from-home': 'Links',
   'click-depth-skipped': 'Links', 'orphan-check-skipped': 'Links', 'link-no-text': 'Links', 'link-no-text-more': 'Links',
   'anchor-generic': 'Links', 'anchor-generic-more': 'Links',
+  'anchor-ambiguous': 'Links', 'anchor-ambiguous-more': 'Links',
   'link-redirects': 'Links', 'link-sweep-capped': 'Links', 'internal-nofollow': 'Links',
   'missing-from-sitemap': 'Links', 'missing-from-sitemap-more': 'Links',
   'external-broken': 'Links', 'external-redirects': 'Links', 'external-sweep-capped': 'Links',

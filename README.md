@@ -510,6 +510,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Every page has *some* path from the homepage — one that hangs off an unreachable page is only found by handing Google the sitemap | warning |
 | Every destination has at least one link that names it — an icon or an `alt=""` thumbnail with no text, no `aria-label` and no `title` tells Google nothing and reads a URL aloud to a screen reader | warning |
 | No page is described only by "read more" — the words on a link are the one description of a page that does not come from the page itself | note |
+| No phrase describes two different pages — "Collections" pointing at both the reference page and the tutorial chapter makes them compete, and only destinations this crawl fetched are compared | note |
 
 ### Whole site
 

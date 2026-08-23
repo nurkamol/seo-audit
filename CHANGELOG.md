@@ -5,6 +5,45 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`anchor-ambiguous`** — one phrase pointing at two different pages. The
+  mirror of `anchor-generic`, over the anchor text 1.13.0 started keeping:
+  "Collections" linking to both `/docs/collections/` and
+  `/docs/step-by-step/09-collections/` tells Google the two are the same thing,
+  so they compete for the query instead of one of them winning. No requests —
+  the data is already in memory.
+
+  The roadmap predicted this would be noisy before it was right, and it was.
+  Four real sites narrowed it, each contributing a class of false positive:
+
+  - elementor.com offers each logo as "SVG" and "PNG", which collides with
+    every other logo on the page. A link whose text is a file format labels a
+    download; asset extensions are skipped.
+  - smashingmagazine.com puts "Jump to table of contents" on every ebook page,
+    each pointing at its own. The words describe the movement, not the
+    destination — `jump/skip/go/back/return/scroll to …` are skipped.
+  - wordpress.org's download page says "md5" beside **2,730** checksums. Above
+    a handful of destinations a phrase is a label in a list, not a description,
+    so a collision is reported only up to five. The same page contributed
+    "7 1" — a version number, which is why the digits check is not just `\d+`.
+  - **Both destinations must be pages this crawl actually fetched.** Two of the
+    first collisions found were not two pages at all: elementor.com's
+    `/about/privacy/` 301s to `/terms/privacy/`, and smashingmagazine.com's
+    `/categories/business` 301s to `/category/business`. One page under two
+    URLs linked by the same words is a stale link — `link-redirects` already
+    reports it — and calling it two competing pages would be false.
+
+  What survives is quiet on partial crawls and useful on whole ones: silent
+  across 30-page samples of elementor.com, smashingmagazine.com and
+  wordpress.org, and on a full 210-page crawl of jekyllrb.com it finds eleven
+  pairs where the reference page and the tutorial chapter carry the same words.
+
+### Fixed
+- **Typographic entities are decoded.** `&raquo;`, `&mdash;`, `&hellip;`,
+  curly quotes and numeric entities were left as-is, so "here's their page
+  &raquo;" normalised to a phrase with the word "raquo" in it. Found in anchor
+  text; it applies to every field `parse.mjs` decodes.
+
 ## [1.17.0] — 2026-08-23
 
 ### Changed
