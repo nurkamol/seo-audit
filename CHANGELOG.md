@@ -50,11 +50,20 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fetchable answer.
 
 ### Fixed
-- **`src/config.mjs` was a binary file to git.** `matchGlob` used a literal NUL
-  byte as a placeholder while translating `**`, which works at runtime and makes
-  the whole file register as binary — so `grep` found nothing in it and the glob
-  matcher that already existed was invisible to anybody looking for one. Written
-  as `\u0000` now. Behaviour is unchanged, checked against seven patterns.
+- **Three source files were binary files to git.** `src/config.mjs`,
+  `src/baseline.mjs` and `src/dupes.mjs` each held a literal NUL byte — used as
+  a glob placeholder and as a key separator. The *values* were right: a NUL
+  cannot occur in a URL, which is what makes it a good separator. Writing it as
+  a raw byte is what was wrong, because one control byte makes the whole file
+  binary, and then `grep` skips it and `git diff` refuses to show it. That is
+  how a glob matcher sat in `src/config.mjs` unnoticed while somebody went
+  looking for one to write.
+
+  All three are `\u0000` escapes now, with behaviour unchanged — the glob
+  checked against seven patterns, the diff key against a round trip. A test
+  walks every tracked source file and fails on any raw control byte, so this
+  cannot come back quietly. Writing the commit message for the fix hit the same
+  trap, which is about as good an argument for the test as there is.
 
 ## [1.25.0] — 2026-08-24
 

@@ -11,6 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -79,4 +80,32 @@ test('nothing is declared twice', () => {
   assert.equal(new Set(flags).size, flags.length, 'a flag appears twice in src/options.mjs');
   const queries = OPTIONS.map((o) => o.query).filter(Boolean);
   assert.equal(new Set(queries).size, queries.length, 'two flags claim the same query parameter');
+});
+
+test('no source file is a binary file to git', () => {
+  // Three files had a literal NUL byte in them, each used as a separator or a
+  // placeholder — correct values, written the wrong way. A raw control byte
+  // makes the whole file binary: `grep` skips it and `git diff` refuses to show
+  // it, which is how a glob matcher sat in src/config.mjs for months while
+  // somebody went looking for one.
+  //
+  // The value is fine. Write it as an escape.
+  const tracked = execSync('git ls-files', { cwd: root, encoding: 'utf8' })
+    .split('\n')
+    .filter((f) => /\.(mjs|js|swift|json|md|yml|html|css|sh)$/.test(f));
+
+  const offenders = [];
+  for (const file of tracked) {
+    const bytes = readFileSync(join(root, file));
+    for (const byte of bytes) {
+      // Everything below space except tab, newline and carriage return.
+      if (byte < 0x09 || (byte > 0x0d && byte < 0x20) || byte === 0x7f) {
+        offenders.push(file);
+        break;
+      }
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `${offenders.join(', ')} contains a raw control byte. Write it as an escape ` +
+    '(\\u0000) so the file stays text.');
 });
