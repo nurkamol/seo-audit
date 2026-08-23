@@ -7,3 +7,8 @@ reports/
 .dev.vars
 .nodeterm/
 build/
+
+# SwiftPM build artifacts. 177 MB of them reached the repository once,
+# which matters more than repo size: `npx github:nurkamol/seo-audit` clones
+# this, and the whole promise is that it is small enough to run that way.
+.build/

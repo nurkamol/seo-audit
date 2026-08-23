@@ -1,8 +1,0 @@
-Target dependency graph (4 targets)
-Target 'AllExcludingTests' in project 'Aggregate'
-➜ Explicit dependency on target 'seo-audit_SeoAuditTests' in project 'seo-audit'
-➜ Explicit dependency on target 'SeoAudit-product' in project 'seo-audit'
-➜ Explicit dependency on target 'SeoAudit' in project 'seo-audit'
-Target 'SeoAudit' in project 'seo-audit' (no dependencies)
-Target 'SeoAudit-product' in project 'seo-audit' (no dependencies)
-Target 'seo-audit_SeoAuditTests' in project 'seo-audit' (no dependencies)
