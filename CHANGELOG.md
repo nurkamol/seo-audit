@@ -5,26 +5,9 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
-- **Settings is a sidebar of panes, the way macOS lays out System Settings.** It
-  was one form, and seven sections had grown it to about two thousand points of
-  height — the sitemap field was below the fold on any laptop. Everything was
-  reachable and nothing was findable, and a scrollbar is a poor table of
-  contents.
-
-  Seven panes now, each one subject, with the coloured rounded-square icons the
-  platform uses: **Crawl**, **Coverage**, **Identify as**, **Performance**,
-  **Silenced**, **Reports**, **Updates**.
+## [1.28.0] — 2026-08-24
 
 ### Added
-- **A kept report can be exported from the sidebar.** Right-click any stored run
-  and every format is there — a report that has to be on screen before it can be
-  saved is a report you reopen just to save it. It is read from disk, so the
-  file written is the run that was right-clicked and not whatever happens to be
-  in front of you.
-
-- **A page in a report can be copied or opened.** Right-click any page under a
-  finding.
 
 - **Reports and Updates are settings now.** They were deliberately left out when
   Settings was built, on the grounds that the sidebar and the Versions sheet
@@ -36,11 +19,33 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   automatically** — which is a real preference, because it is one request to
   GitHub about which software you run.
 
+- **A kept report can be exported from the sidebar.** Right-click any stored run
+  and every format is there — a report that has to be on screen before it can be
+  saved is a report you reopen just to save it. It is read from disk, so the
+  file written is the run that was right-clicked and not whatever happens to be
+  in front of you.
+
+- **A page in a report can be copied or opened.** Right-click any page under a
+  finding.
+
 - **Setting your own user agent greys out the browser and system menus** rather
   than silently overriding them. The engine has always ignored them when a
   custom string is set; the window showed all three as live.
 
+### Changed
+
+- **Settings is a sidebar of panes, the way macOS lays out System Settings.** It
+  was one form, and seven sections had grown it to about two thousand points of
+  height — the sitemap field was below the fold on any laptop. Everything was
+  reachable and nothing was findable, and a scrollbar is a poor table of
+  contents.
+
+  Seven panes now, each one subject, with the coloured rounded-square icons the
+  platform uses: **Crawl**, **Coverage**, **Identify as**, **Performance**,
+  **Silenced**, **Reports**, **Updates**.
+
 ### Fixed
+
 - **Two settings fields stopped looking like fields.** A `TextField` in a
   grouped `Form` draws as right-aligned grey text with no box — which is exactly
   how that same Form draws a read-only value. So "Sitemap · Found
@@ -49,14 +54,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.textFieldStyle(.roundedBorder)` again, and a test fails on a settings text
   field that has no style.
 
-- **A timestamp truncated before the time it stated.** "Last checked" shared a
-  row with the Check now button, so the button took the width and the date read
-  "Aug 24, 2026 at 2:…". Separate rows.
-
-- **The pane header was centred while everything under it was not.** The icon
-  and title lined up with nothing else in the window, and the first thing the
-  eye does in a settings pane is run down the left edge. Icon beside the title,
-  both on the left, aligned with every row below.
+- **A cause card showed one page's detail as though it were the group's.** It
+  printed the first finding's line above the whole list, and details differ per
+  page — so "267 chars (limit ~160)" appeared above a page that was 202
+  characters long. The line is shown once only when every page in the group
+  carries the same one; when they differ, each page now shows its own, which is
+  what the HTML report and the PDF have always done.
 
 - **The Settings window had a toolbar-height empty band and a button that
   should not exist.** The band was two stacked views each carrying their own
@@ -74,12 +77,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   being able to name them. `Radius.pill`, `.control`, `.card` and `.surface`
   now, with a test that fails on a raw number so a fifth needs an argument.
 
-- **A cause card showed one page's detail as though it were the group's.** It
-  printed the first finding's line above the whole list, and details differ per
-  page — so "267 chars (limit ~160)" appeared above a page that was 202
-  characters long. The line is shown once only when every page in the group
-  carries the same one; when they differ, each page now shows its own, which is
-  what the HTML report and the PDF have always done.
+- **The pane header was centred while everything under it was not.** The icon
+  and title lined up with nothing else in the window, and the first thing the
+  eye does in a settings pane is run down the left edge. Icon beside the title,
+  both on the left, aligned with every row below.
+
+- **A timestamp truncated before the time it stated.** "Last checked" shared a
+  row with the Check now button, so the button took the width and the date read
+  "Aug 24, 2026 at 2:…". Separate rows.
 
 ## [1.27.0] — 2026-08-24
 
