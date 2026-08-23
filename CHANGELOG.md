@@ -5,11 +5,9 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.24.0] — 2026-08-24
+
 ### Added
-- **The website and the README show what it looks like.** Three real captures,
-  not mock-ups: the app's window with the glass on it, an HTML report of
-  jekyllrb.com, and the first page of a PDF that came out of the app's export.
-  Three hundred kilobytes for all of them.
 
 - **The Mac app has settings.** `⌘,`, and only the flags that change what a run
   *does* — where reports are kept and whether to check for updates are already
@@ -44,7 +42,25 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   without importing each other. That is what lets the Mac app's PDF group like
   the HTML report without a second copy of the table in Swift.
 
+- **The website and the README show what it looks like.** Three real captures,
+  not mock-ups: the app's window with the glass on it, an HTML report of
+  jekyllrb.com, and the first page of a PDF that came out of the app's export.
+  Three hundred kilobytes for all of them.
+
 ### Fixed
+
+- **An HTTP 429 is no longer read as "absent" or "dead".** Running the tool
+  twice against one host is enough to trip a store's rate limit, and the second
+  run reported *No sitemap found* about a site whose sitemap the first run had
+  just read, plus three `host-variant-dead` warnings — one of them against the
+  canonical host, which is the variant a crawl hammers hardest and so the one
+  most likely to be refused. 429 means "ask later". A rate-limited sitemap probe
+  is `sitemap-not-checked`, a rate-limited host variant is
+  `host-variant-not-checked` at note level, and a run where nothing was read at
+  all is `crawl-rate-limited` rather than `nothing-crawlable`. A 404 still
+  produces every one of the original findings, which is the half that matters.
+  robots.txt and llms.txt learned this in 1.15.0; these three had been missed.
+
 - **The PDF export was a summary sheet on one enormous page.** It printed the
   cause titles and their scope lines and nothing else — no detail, no URLs, no
   areas — and `write` emitted a *single* PDF page as tall as the whole report,
@@ -71,17 +87,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   quietly knowing less. Parsed with `XMLParser` from Foundation — Atom is XML,
   and this project does not take dependencies.
 
-- **An HTTP 429 is no longer read as "absent" or "dead".** Running the tool
-  twice against one host is enough to trip a store's rate limit, and the second
-  run reported *No sitemap found* about a site whose sitemap the first run had
-  just read, plus three `host-variant-dead` warnings — one of them against the
-  canonical host, which is the variant a crawl hammers hardest and so the one
-  most likely to be refused. 429 means "ask later". A rate-limited sitemap probe
-  is `sitemap-not-checked`, a rate-limited host variant is
-  `host-variant-not-checked` at note level, and a run where nothing was read at
-  all is `crawl-rate-limited` rather than `nothing-crawlable`. A 404 still
-  produces every one of the original findings, which is the half that matters.
-  robots.txt and llms.txt learned this in 1.15.0; these three had been missed.
 - **The app icon had a white frame around it.** `docs/icon@1024.png` had been
   flattened onto white — `hasAlpha: no` — so the transparent margin the squircle
   sits in came out opaque, and macOS drew the icon as a white rounded square
