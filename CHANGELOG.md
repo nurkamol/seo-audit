@@ -6,6 +6,34 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--serve`, and a macOS app around it.** `node bin/seo-audit.mjs --serve`
+  opens the same form the hosted version serves, on `127.0.0.1:4321` — no
+  account, no bill, and none of a Worker's limits.
+
+  It is not a second implementation. `worker/index.mjs` was written against
+  `Request` and `Response` in 1.12.0 precisely so that Node could answer with
+  it too, and `src/serve.mjs` is thirty lines of adapter between `node:http`
+  and the fetch API. The Worker's password gate is satisfied rather than
+  skipped — a random token is minted locally and presented on every request,
+  because a bypass inside the deployed code is a bypass that can reach
+  production one refactor later.
+
+  `mac/SeoAudit/main.swift` is a window around that: it starts the CLI with
+  `--serve` and points a `WKWebView` at it. A shell, never a port — no check is
+  written twice.
+
+  **Running it found a bug that reading it would not have.** The server
+  outlived the app, held port 4321, and the next launch failed. A child knows
+  it has a parent by stdin being a pipe, so `--serve` now exits when that pipe
+  closes, and the app hands it one. In a terminal stdin is a TTY and Ctrl-C is
+  still the way out.
+
+- **Printing is a first-class output.** ⌘P on the HTML report now produces
+  something worth sending: forced light colours rather than a browser's "print
+  backgrounds" setting, margins, no finding split across a page break, and the
+  causes taking the first page to themselves. Verified by rendering a real
+  report to PDF and looking at it.
+
 - **Causes are ordered by reach, not just by breadth.** The link graph has been
   built inside `crossPageChecks` and thrown away since 1.11.0, which meant the
   two checks that read it could disagree about the same site and nothing else

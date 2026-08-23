@@ -1315,6 +1315,67 @@ test('a page nothing links to is not reported for the words nobody used', () => 
   assert.ok(found.includes('orphan-page'));
 });
 
+// --- the local server ------------------------------------------------------
+
+test('--serve answers the same pages the Worker does, without a password', async () => {
+  // Not a second implementation: worker/index.mjs is written against Request
+  // and Response, which Node has, so the same file answers both. The password
+  // gate is satisfied rather than skipped — a bypass inside the deployed code
+  // is a bypass that can reach production one refactor later.
+  const { serve } = await import('../src/serve.mjs');
+  const local = await serve({ port: 0 });
+  try {
+    const form = await fetch(local.url);
+    assert.equal(form.status, 200, 'the form, not the unlock page');
+    const body = await form.text();
+    assert.match(body, /name="url"/);
+    assert.ok(!body.includes('AUDIT_TOKEN'), 'nothing should be asking for a password');
+
+    // And the deployment still asks not to be indexed.
+    assert.equal(await (await fetch(`${local.url}robots.txt`)).text(), 'User-agent: *\nDisallow: /\n');
+
+    // A host it will not crawl is refused here too.
+    const locked = await serve({ port: 0, allowedHosts: 'example.com' });
+    try {
+      const refused = await fetch(`${locked.url}run?url=https://elsewhere.test/`);
+      assert.equal(refused.status, 400);
+    } finally {
+      await locked.close();
+    }
+  } finally {
+    await local.close();
+  }
+});
+
+test('a server started by something, rather than by somebody, dies with it', async () => {
+  // The macOS shell spawns this and points a web view at it. The first time it
+  // was run for real the server outlived the window, held port 4321, and the
+  // next launch failed. stdin being a pipe is how a child knows it has a
+  // parent; the pipe closing is that parent going away.
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, ['bin/seo-audit.mjs', '--serve', '4398'], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      child.stdout.on('data', (chunk) => String(chunk).includes('serving at') && resolve());
+      child.once('error', reject);
+      setTimeout(() => reject(new Error('the server never announced itself')), 8000);
+    });
+    assert.equal((await fetch('http://127.0.0.1:4398/robots.txt')).status, 200);
+
+    const exited = new Promise((resolve) => child.once('exit', resolve));
+    child.stdin.end(); // the parent going away
+    const code = await Promise.race([
+      exited,
+      new Promise((resolve) => setTimeout(() => resolve('still running'), 5000)),
+    ]);
+    assert.equal(code, 0, 'the server should have exited when its stdin closed');
+  } finally {
+    if (child.exitCode === null) child.kill();
+  }
+});
+
 // --- presenting as something else ------------------------------------------
 
 test("Googlebot's user agents are the ones Google publishes", () => {

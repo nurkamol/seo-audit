@@ -51,6 +51,10 @@ const HELP = `
     --check-external   also check links pointing off the site. Off by default:
                        other people's servers rate-limit and bot-block, so only
                        a 404, a 410 or no answer at all is ever reported
+    --serve [port]     open the same form the hosted version serves, on this
+                       machine (default 4321). No account, no bill, and none of
+                       the limits a Worker has — the crawl is only bounded by
+                       what this computer will do
     --browser <name>   crawl as a real browser or a search crawler:
                        ${BROWSER_NAMES.join(', ')}.
                        Googlebot is what Google is served; a browser is what a
@@ -112,6 +116,11 @@ function parseArgs(argv) {
     else if (arg === '--redirects') opts.redirects = value();
     else if (arg === '--check-external') opts.checkExternal = true;
     else if (arg === '--user-agent') opts.userAgent = value();
+    else if (arg === '--serve') {
+      // The port is optional: --serve on its own, or --serve 8080.
+      const next = argv[i + 1];
+      opts.serve = next && /^\d+$/.test(next) ? Number(argv[++i]) : true;
+    }
     else if (arg === '--browser') opts.browser = value();
     else if (arg === '--os') opts.os = value();
     else if (arg === '--config') opts.config = value();
@@ -216,6 +225,28 @@ const live = (origin) =>
 // One site or twenty: the same options, resolved the same way. A site entry in
 // the config may carry its own overrides, which land on top of the shared ones.
 let sites = resolveSites(cli.targets ?? [], file);
+
+// The local UI, which is a different program from here on: no target, no
+// report file, and it runs until interrupted.
+if (opts.serve) {
+  const { serve } = await import('../src/serve.mjs');
+  const { url } = await serve({
+    port: opts.serve === true ? 4321 : opts.serve,
+    maxPages: opts.limit,
+    userAgent: opts.userAgent,
+  });
+  console.log(`\n  seo-audit is serving at ${url}\n  Nothing leaves this machine. Ctrl-C to stop.\n`);
+
+  // Started by something rather than by somebody: when stdin is a pipe, its
+  // closing is the parent going away, and a server that outlives the window
+  // that opened it holds the port against the next launch. A terminal gives a
+  // TTY instead, where Ctrl-C is the way out and this must not fire.
+  if (!process.stdin.isTTY) {
+    process.stdin.resume();
+    process.stdin.on('end', () => process.exit(0));
+    process.stdin.on('close', () => process.exit(0));
+  }
+} else {
 
 // Nothing to audit. If a person is there to ask, ask; otherwise this is a
 // script or a CI runner and the help text is the right answer.
@@ -362,3 +393,5 @@ const failed =
   (opts.failOn === 'warn' && n.error + n.warn > 0) ||
   (opts.failOn === 'new' && (comparison?.added.length ?? 0) > 0);
 process.exit(failed ? 1 : 0);
+
+}

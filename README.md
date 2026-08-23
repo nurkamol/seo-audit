@@ -148,6 +148,31 @@ were actually read, not a score: seven pages the site points at constantly are
 worth more than ten it mentions once, and that is an ordering rather than a
 number out of a hundred.
 
+### A window instead of a terminal
+
+```bash
+node bin/seo-audit.mjs --serve          # http://127.0.0.1:4321
+```
+
+The same form the hosted version serves, on this machine: no account, no bill,
+and none of a Worker's limits — the crawl is bounded by what this computer will
+do, which is the only place a five-thousand-page site with `maxImageChecks`
+past a thousand fits.
+
+It is not a second implementation. `worker/index.mjs` is written against
+`Request` and `Response`, which Node has too, so the same file answers both and
+`src/serve.mjs` is thirty lines of adapter. Bound to the loopback address,
+which is the whole of its security model.
+
+There is a macOS app around it in `mac/`, and it is a shell rather than a port:
+
+```bash
+swiftc -O -o build/SeoAudit mac/SeoAudit/main.swift && build/SeoAudit
+```
+
+It starts the CLI with `--serve` and points a web view at it. No check is
+written twice, because a check written twice is a check that drifts.
+
 ### Crawling as something else
 
 ```bash

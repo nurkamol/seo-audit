@@ -787,11 +787,26 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
     .tally { grid-template-columns: 1fr; }
     h1 { font-size: 1.4rem; }
   }
+  /* Printing is how this reaches somebody who did not run it: ⌘P, save as
+     PDF, send. The screen version is dark and scrolls forever; a page is
+     neither, so the colours are forced light rather than left to a browser's
+     "print backgrounds" setting, and nothing is allowed to break across a
+     page boundary in the middle of a finding. */
   @media print {
-    body { padding: 0; color: #000; background: #fff; }
-    .finding, .tally div, .scroll { break-inside: avoid; }
+    :root { --bg: #fff; --fg: #111827; --muted: #4b5563; --line: #d1d5db; --panel: #fff; }
+    body { padding: 0; color: #000; background: #fff; font-size: 11pt; }
+    @page { margin: 16mm 14mm; }
+    .finding, .tally div, .scroll, .causes li, tr { break-inside: avoid; }
+    h2 { break-after: avoid; }
     .bar { margin-bottom: 1.5rem; }
     footer { break-before: avoid; }
+    /* The causes are the point of the first page, so the detail starts on the
+       second one rather than trailing off the bottom of it. */
+    .causes { break-after: page; }
+    /* A link is useless on paper unless it says where it goes. Findings list
+       full URLs already; this is for the ones written as link text. */
+    .finding a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: #4b5563; word-break: break-all; }
+    .back, .js-only { display: none !important; }
   }
 </style>
 </head>
