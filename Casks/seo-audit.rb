@@ -7,8 +7,8 @@
 # a tag is pushed, so this file is never edited by hand and can never describe a
 # build that does not exist.
 cask "seo-audit" do
-  version "1.27.0"
-  sha256 "c88549b4c7710bfa967c5fed0b5bf3ab9d68c2d44f8ad86813c9ab953387e203"
+  version "1.28.0"
+  sha256 "db86ad45debaa1c897f9ffcfc15ceb35e80e40aaf7da5c74ce852e9821e990fb"
 
   # `verified` says the download really does come from this project's own
   # repository, which is what stops Homebrew warning that the URL and the
