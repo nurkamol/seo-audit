@@ -118,10 +118,10 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **Crawl as a browser or a crawler** (unreleased) — `--browser` and `--os`,
+- **Crawl as a browser or a crawler** (1.20.0) — `--browser` and `--os`,
   with Googlebot's strings quoted from Google's documentation and impossible
   combinations refused rather than approximated.
-- **Findings grouped by cause** (unreleased) — the same check on pages of one
+- **Findings grouped by cause** (1.20.0) — the same check on pages of one
   section is one piece of work, because that is how a generated site is built.
   A real store's 2,081 findings became 62 things to change, led by "heading
   level jumps from h1 to h3, 225 pages under /products/ — 69% of the crawl".

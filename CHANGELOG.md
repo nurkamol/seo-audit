@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.20.0] — 2026-08-23
+
 ### Added
 - **`--browser` and `--os`: crawl as a real browser, or as a search crawler.**
   `chrome`, `firefox`, `safari`, `edge`, `googlebot`, `googlebot-desktop` and
