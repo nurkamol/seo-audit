@@ -311,6 +311,24 @@ export async function audit(target, opts = {}) {
     }
   }
 
+  // Said once, at the end, because a run that took eight minutes should say
+  // why. It is not a finding about the site: it is this tool describing what it
+  // had to do to get through, and it is the only place the numbers above can be
+  // read as "slower than usual" rather than "something is wrong".
+  if (fetcher.rateLimited > 0) {
+    findings.push({
+      level: 'info',
+      id: 'rate-limit-slowed',
+      title: 'The crawl was slowed down to get through',
+      detail:
+        `The server answered HTTP 429 — asking for a slower crawl — ${fetcher.rateLimited} time(s), so ` +
+        `requests were paused and the concurrency came down to ${fetcher.concurrency}. Every page was ` +
+        'still read; this only explains the elapsed time. Pass a lower --concurrency to avoid the ' +
+        'pauses altogether.',
+      url: origin,
+    });
+  }
+
   if (truncated > 0) {
     findings.push({
       level: 'info',
@@ -333,6 +351,9 @@ export async function audit(target, opts = {}) {
   // it is a property of the page rather than of any one thing found on it.
   const notIndexable = new Set();
   for (const page of pages) {
+    // A page the server refused to hand over is not a page that refuses to be
+    // indexed. Its indexability is unknown, and "not indexable" is an answer.
+    if (page.res.status === 429) continue;
     if (!page.res.ok) {
       notIndexable.add(page.url);
       continue;

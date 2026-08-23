@@ -263,7 +263,7 @@ reason.
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
 | `--update-baseline` | — | Rewrite the baseline after comparing |
 | `--limit <n>` | 200 | Maximum pages to check |
-| `--concurrency <n>` | 6 | Parallel requests |
+| `--concurrency <n>` | 6 | Parallel requests. Comes down on its own if the server answers `429` |
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path. Without any sitemap, the crawl follows links instead |
 | `--redirects <file>` | — | Check a migration's redirect map against the live site (see below) |
 | `--check-external` | — | Also check links pointing off the site (see below) |
@@ -447,6 +447,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Check | Level |
 |---|---|
 | Page returns 200 and is not a redirect listed in the sitemap | error |
+| A page the server answers `429` to is reported as rate limited, never as a page that failed — the crawl waits, slows down and comes back first | note |
 | `noindex` on a page the sitemap advertises | error |
 | `X-Robots-Tag: noindex` — the same instruction as a header, invisible in the HTML | error |
 | `nofollow` on the page — Google follows none of its links, navigation included | warning |
@@ -498,6 +499,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Something in the `hreflang` set is an `x-default` | note |
 | Pages carry the schema types `expect` says they should | error |
 | No page is an orphan — in the sitemap but linked from nowhere | warning |
+| Orphans are only looked for when the crawl actually saw the site — a run cut short by `--limit`, or with pages that never loaded, says so instead of calling a fragment full of orphans | note |
 | Every page is within four clicks of the homepage, counted over the links actually in the HTML | note |
 | Every page has *some* path from the homepage — one that hangs off an unreachable page is only found by handing Google the sitemap | warning |
 | Every destination has at least one link that names it — an icon or an `alt=""` thumbnail with no text, no `aria-label` and no `title` tells Google nothing and reads a URL aloud to a screen reader | warning |

@@ -165,6 +165,7 @@ const CATEGORY_OF = {
   // Indexability
   noindex: 'Indexability', 'x-robots-noindex': 'Indexability', 'nofollow-page': 'Indexability',
   'page-status': 'Indexability', unreachable: 'Indexability', 'nothing-crawlable': 'Indexability',
+  'rate-limited': 'Indexability',
   'canonical-missing': 'Indexability', 'canonical-multiple': 'Indexability',
   'canonical-other': 'Indexability', 'canonical-dead': 'Indexability',
   'canonical-redirects': 'Indexability', 'soft-404': 'Indexability',
@@ -182,7 +183,7 @@ const CATEGORY_OF = {
   // Links
   'broken-link': 'Links', 'orphan-page': 'Links', 'no-editorial-links': 'Links',
   'deep-page': 'Links', 'deep-page-more': 'Links', 'no-path-from-home': 'Links',
-  'click-depth-skipped': 'Links', 'link-no-text': 'Links', 'link-no-text-more': 'Links',
+  'click-depth-skipped': 'Links', 'orphan-check-skipped': 'Links', 'link-no-text': 'Links', 'link-no-text-more': 'Links',
   'anchor-generic': 'Links', 'anchor-generic-more': 'Links',
   'link-redirects': 'Links', 'link-sweep-capped': 'Links', 'internal-nofollow': 'Links',
   'missing-from-sitemap': 'Links', 'missing-from-sitemap-more': 'Links',
@@ -218,6 +219,7 @@ const CATEGORY_OF = {
 
   // Sitemap & robots
   'no-sitemap': 'Sitemap & robots', truncated: 'Sitemap & robots',
+  'rate-limit-slowed': 'Sitemap & robots',
   'robots-missing': 'Sitemap & robots', 'robots-blocks-all': 'Sitemap & robots',
   'robots-no-sitemap': 'Sitemap & robots', 'robots-blocks-sitemap-url': 'Sitemap & robots',
   'sitemap-lastmod-missing': 'Sitemap & robots', 'sitemap-lastmod-identical': 'Sitemap & robots',

@@ -5,6 +5,47 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A rate limit is no longer reported as a broken page.** A Shopify store
+  answered HTTP 429 to **70 of its 200 crawled pages** at the default
+  concurrency, and every one came back as `page-status` — "Page did not return
+  200", at error level. The pages were fine. Requested eight seconds apart the
+  same URLs answered 200, on the tool's own user agent, so it was the crawl's
+  speed and nothing else.
+
+  `src/http.mjs` treated any status under 500 as a final answer, so a 429 was
+  never retried. Now it is: the run pauses globally, honours `Retry-After`
+  where it is sent — Shopify sends none, hence a default that doubles to a
+  ceiling of eight seconds — and **halves the concurrency and leaves it down**,
+  because retrying a rate limit at the speed that caused it just spends the
+  budget again. After twenty refusals it stops asking, so a host that means it
+  costs a slow finish rather than an hour.
+
+  A page that still answers 429 is reported as `rate-limited` at **info**: the
+  server described the crawl, not the page. It is also no longer counted as
+  "not indexable" — a page nobody could fetch has unknown indexability, and
+  "not indexable" is an answer.
+
+- **Orphans are not looked for across a crawl that did not see the site.** The
+  same report called **122 pages orphans** while, three findings further down,
+  declining to measure click depth because the link graph was a fragment. Both
+  read the same graph. One check refusing to answer while its neighbour answers
+  confidently from the same data is not a defensible position.
+
+  `orphan-page` now stands down when the crawl was truncated by `--limit`, or
+  when more than a tenth of the crawled pages did not load, and says so once as
+  `orphan-check-skipped`. Click depth shares the condition so the two cannot
+  drift apart.
+
+  Re-running that store with the pages it was missing: **70 errors became 0,
+  122 orphans became 5**, and 70 pages stopped being counted as not indexable.
+
+### Added
+- **`rate-limit-slowed`** — said once at the end of a run that was throttled,
+  with how many times the server asked and what the concurrency came down to.
+  Not a finding about the site: it is the only thing that lets an eight-minute
+  run read as "slower than usual" rather than "something is wrong".
+
 ## [1.14.0] — 2026-08-23
 
 ### Added

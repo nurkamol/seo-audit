@@ -11,6 +11,7 @@ import { siteChecks } from '../src/site.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
 import { parseRedirectMap, redirectChecks } from '../src/redirects.mjs';
 import { audit } from '../src/audit.mjs';
+import { Fetcher } from '../src/http.mjs';
 import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 
@@ -619,6 +620,111 @@ test('a long tail of deep pages is capped and counted', () => {
   assert.equal(found.filter((finding) => finding.id === 'deep-page').length, 20);
   const more = found.find((finding) => finding.id === 'deep-page-more');
   assert.match(more.title, /^5 more pages/);
+});
+
+// --- a graph worth reading -------------------------------------------------
+
+const linked = (path, targets = []) => linksWith(
+  `https://depth.test${path}`,
+  `<main>${targets.map((t) => `<a href="${t}">a link</a>`).join('')}</main>`,
+);
+
+test('orphans are not looked for across a crawl that stopped early', () => {
+  // The Shopify report that started this: 200 of 325 URLs crawled and 122
+  // pages called orphans, in the same report that declined to measure click
+  // depth for exactly this reason. Every page in a fragment looks unlinked.
+  const pages = [linked('/', ['/a/']), linked('/a/'), linked('/b/')];
+  const found = crossPageChecks(pages, { truncated: 125 });
+  assert.ok(!ids(found).includes('orphan-page'));
+  const skipped = found.find((f) => f.id === 'orphan-check-skipped');
+  assert.ok(skipped);
+  assert.equal(skipped.level, 'info');
+  assert.match(skipped.detail, /125 page\(s\) short/);
+});
+
+test('orphans are not looked for when the pages that would prove it did not load', () => {
+  // A page nobody could fetch contributes no outgoing links, so everything it
+  // linked to looks unlinked.
+  const pages = [
+    linked('/', ['/a/']),
+    linked('/a/'),
+    ...['/x/', '/y/', '/z/'].map((path) => ({
+      url: `https://depth.test${path}`,
+      res: { ok: false, status: 429, ms: 1, headers: new Headers() },
+      doc: null,
+    })),
+  ];
+  const found = crossPageChecks(pages);
+  assert.ok(!ids(found).includes('orphan-page'));
+  assert.match(found.find((f) => f.id === 'orphan-check-skipped').detail, /3 of 5 crawled pages did not load/);
+});
+
+test('a complete crawl still reports its orphans', () => {
+  // The half that matters: the guard must not swallow the check on the runs it
+  // was always right about.
+  const pages = [linked('/', ['/a/']), linked('/a/'), linked('/lonely/')];
+  const found = crossPageChecks(pages);
+  assert.ok(ids(found).includes('orphan-page'));
+  assert.ok(!ids(found).includes('orphan-check-skipped'));
+
+  // And one failed page in twenty is not enough to stand down over.
+  const mostly = [
+    linked('/', ['/a/']),
+    ...Array.from({ length: 18 }, (_, i) => linked(`/p${i}/`)),
+    { url: 'https://depth.test/gone/', res: { ok: false, status: 404, ms: 1, headers: new Headers() }, doc: null },
+  ];
+  assert.ok(ids(crossPageChecks(mostly)).includes('orphan-page'));
+});
+
+// --- rate limiting --------------------------------------------------------
+
+test('a 429 is waited out and retried, not reported', async () => {
+  // A Shopify store answered 429 to 70 of 200 pages at the default
+  // concurrency, and every one was reported as a page that did not load. The
+  // pages were fine; the crawl was too fast.
+  const site = await startFixtureSite({ rateLimit: { '/about/': 1 } });
+  try {
+    const fetcher = new Fetcher({ concurrency: 6 });
+    const res = await fetcher.get(`${site.origin}/about/`);
+    assert.equal(res.status, 200, 'the second attempt should have been let through');
+    assert.equal(fetcher.rateLimited, 1);
+    // The concurrency stays down: retrying a rate limit at the speed that
+    // caused it just spends the budget again.
+    assert.equal(fetcher.concurrency, 3);
+  } finally {
+    await site.stop();
+  }
+});
+
+test('a host that keeps refusing is reported as rate limited, never as a broken page', async () => {
+  const site = await startFixtureSite({ rateLimit: { '/about/': 99 } });
+  try {
+    const fetcher = new Fetcher({ concurrency: 4 });
+    const res = await fetcher.get(`${site.origin}/about/`, { retries: 0 });
+    assert.equal(res.status, 429);
+
+    const found = pageChecks({ url: `${site.origin}/about/`, res, doc: null });
+    assert.deepEqual(ids(found), ['rate-limited']);
+    assert.equal(found[0].level, 'info', 'the server described the crawl, not the page');
+  } finally {
+    await site.stop();
+  }
+});
+
+test('Retry-After is believed where it is sent', async () => {
+  // One second asked for, against a default backoff of two, so the elapsed
+  // time says which of them was used.
+  const site = await startFixtureSite({ rateLimit: { '/about/': 1 }, retryAfter: 1 });
+  try {
+    const started = Date.now();
+    const res = await new Fetcher({}).get(`${site.origin}/about/`);
+    const waited = Date.now() - started;
+    assert.equal(res.status, 200);
+    assert.ok(waited >= 900, `expected it to wait the second it was asked for, waited ${waited}ms`);
+    assert.ok(waited < 1900, `expected the header to be used rather than the default, waited ${waited}ms`);
+  } finally {
+    await site.stop();
+  }
 });
 
 // --- pagination -----------------------------------------------------------

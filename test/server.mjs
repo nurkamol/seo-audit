@@ -13,9 +13,28 @@ export async function startFixtureSite({
   withSitemap = true,
   disallow = null,
   homeRedirect = null,
+  // Paths that answer 429 the first N times they are asked for, so a test can
+  // prove the crawler slows down and comes back rather than reporting the site.
+  rateLimit = {},
+  // Seconds to ask for in Retry-After. Shopify sends none, which is the case
+  // the default backoff exists for.
+  retryAfter = null,
 } = {}) {
+  const seen = new Map();
   const server = createServer((req, res) => {
     const host = req.headers.host;
+    const limited = rateLimit[req.url];
+    if (limited !== undefined) {
+      const so_far = seen.get(req.url) ?? 0;
+      seen.set(req.url, so_far + 1);
+      if (so_far < limited) {
+        res.writeHead(429, {
+          'content-type': 'text/plain',
+          ...(retryAfter === null ? {} : { 'retry-after': String(retryAfter) }),
+        });
+        return res.end('slow down');
+      }
+    }
     const send = (body, type = 'text/html; charset=utf-8', status = 200) => {
       res.writeHead(status, { 'content-type': type });
       res.end(body);

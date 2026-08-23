@@ -222,6 +222,15 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     );
     return out;
   }
+  // A rate limit is the server describing the crawl, not the page. Reported at
+  // info and never as a page that failed, because those two look identical in
+  // a report and only one of them is the site's problem.
+  if (res.status === 429) {
+    out.push(f('info', 'rate-limited', 'Page was not checked — the server is rate limiting',
+      'HTTP 429, after retries and a slower crawl. Nothing on this page was read, so its absence from ' +
+        'the rest of this report means nothing either. Run again with a lower --concurrency.', url));
+    return out;
+  }
   if (!res.ok) {
     out.push(f('error', 'page-status', 'Page did not return 200',
       res.error ? `Request failed: ${res.error}` : `HTTP ${res.status}`, url));
@@ -750,18 +759,49 @@ export function crossPageChecks(pages, opts = {}) {
       `${urls.length} pages: ${urls.slice(0, 4).join(', ')}`, urls[0]));
   }
 
+  // Whether the link graph is worth reading at all. A page that was not
+  // fetched contributes no outgoing links, so everything it linked to looks
+  // unlinked; a crawl cut short by --limit does the same thing at scale. Both
+  // checks below stand down on it, because both answer questions about the
+  // whole graph from whatever fragment was collected.
+  //
+  // A Shopify store made the case: 200 of its 325 URLs crawled, 70 of those
+  // rate-limited away, and 122 pages reported as orphans in the same report
+  // that declined to measure click depth for exactly this reason. One check
+  // refusing to answer while its neighbour answers confidently from the same
+  // data is not a defensible position.
+  const unfetched = pages.length - live.length;
+  const partial =
+    opts.truncated > 0
+      ? `the crawl stopped ${opts.truncated} page(s) short of the whole site`
+      : unfetched > pages.length * 0.1
+        ? `${unfetched} of ${pages.length} crawled pages did not load`
+        : null;
+
+  const homeCrawled = live.find((p) => new URL(p.url).pathname.replace(/\/$/, '') === '');
+  const anchorUrl = homeCrawled?.url ?? live[0]?.url;
+
   // A page nothing links to is a page Google reaches only because the sitemap
   // mentions it — it inherits no internal authority and reads as an
   // afterthought. Home is exempt: it is linked from outside, not from within.
+  if (partial && anchorUrl) {
+    out.push(f('info', 'orphan-check-skipped', 'Orphan pages were not looked for',
+      `A page is an orphan when nothing on the site links to it, and ${partial} — so the links that ` +
+        'would prove otherwise may simply not have been read. Every page in a fragment of a site looks ' +
+        'unlinked. Raise --limit, or lower --concurrency if the pages were refused, and run it again.',
+      anchorUrl));
+  }
   const linkedTo = new Set();
   for (const p of live) {
     for (const href of p.doc.links.internal) linkedTo.add(href.split('#')[0].replace(/\/$/, ''));
   }
-  for (const p of live) {
-    const isHome = new URL(p.url).pathname.replace(/\/$/, '') === '';
-    if (!isHome && !linkedTo.has(p.url.replace(/\/$/, ''))) {
-      out.push(f('warn', 'orphan-page', 'Nothing links to this page',
-        'It is in the sitemap, but no other page links to it — so it collects no internal authority.', p.url));
+  if (!partial) {
+    for (const p of live) {
+      const isHome = new URL(p.url).pathname.replace(/\/$/, '') === '';
+      if (!isHome && !linkedTo.has(p.url.replace(/\/$/, ''))) {
+        out.push(f('warn', 'orphan-page', 'Nothing links to this page',
+          'It is in the sitemap, but no other page links to it — so it collects no internal authority.', p.url));
+      }
     }
   }
 
@@ -811,12 +851,12 @@ export function crossPageChecks(pages, opts = {}) {
     const stranded = live.filter((p) => !depth.has(key(p.url)));
     const unreadable = live.length >= 5 && stranded.length > live.length * 0.3;
 
-    if (opts.truncated > 0 || unreadable) {
+    if (partial || unreadable) {
       out.push(f('info', 'click-depth-skipped', 'Click depth was not measured',
-        opts.truncated > 0
-          ? `The crawl stopped ${opts.truncated} page(s) short of the whole site, so the links between ` +
-            'the pages that were fetched are a fragment of the real graph. A distance measured across ' +
-            'a fragment is not the distance, so it is not reported. Raise --limit to measure it.'
+        partial
+          ? `Measured from the homepage over the links between crawled pages, and ${partial}, so those ` +
+            'links are a fragment of the real graph. A distance measured across a fragment is not the ' +
+            'distance, so it is not reported. Raise --limit to measure it.'
           : `${stranded.length} of ${live.length} crawled pages have no chain of links from the homepage ` +
             'reaching them, which is what a JavaScript-built navigation looks like to something that ' +
             'reads HTML. Google renders and can follow those links, so the depths here would be wrong ' +
