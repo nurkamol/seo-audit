@@ -4,28 +4,9 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Five candidates, queued and not yet started. None of them needs anything this
-tool cannot already do. The first two came out of one report on one real store,
-which is the usual way things arrive here.
-
-### Site-level checks read the host that answers
-
-A defect, and the highest thing on this list. Audit `example.com` when the site
-lives at `www.example.com` and the crawl follows the redirect for pages —
-`discover()` uses `chain()` — while `origin` stays on the host that only ever
-answers 301. So robots.txt, llms.txt and every security header are read off a
-redirect.
-
-On the store that prompted this, that produced a flat "No robots.txt" for a
-site with a good one, declaring agent instructions and a UCP endpoint; an
-llms.txt reported missing at a host that does not serve the site; and a
-Referrer-Policy verdict taken from a 301's headers. Three findings, none of
-them true.
-
-RFC 9309 asks crawlers to follow at least five redirects for robots.txt, and
-Google does. The fix is to adopt the final host as the origin once the
-homepage's redirect chain settles — the host-variant check already knows how to
-follow it.
+Four candidates, queued and not yet started. None of them needs anything this
+tool cannot already do. The first came out of a report on one real store, which
+is the usual way things arrive here.
 
 ### The image sweep counts files, not URLs
 
@@ -116,6 +97,11 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Site-level checks read the host that answers** (unreleased) — auditing a
+  bare domain whose site lives at `www.` read robots.txt, llms.txt and the
+  security headers off the 301, which was three false findings on any such
+  site. The homepage's redirect chain is now followed first and the audit moves
+  to where it settles, saying so.
 - **A rate limit is not a broken page** (1.15.0) — HTTP 429 was reported as
   `page-status` at error level on 70 of one store's 200 crawled pages, which
   were all fine. The crawler now waits it out, believes `Retry-After`, halves

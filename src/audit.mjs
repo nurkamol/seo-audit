@@ -151,7 +151,40 @@ export async function audit(target, opts = {}) {
   const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6, userAgent: opts.userAgent });
 
   const url = new URL(target);
-  const origin = url.origin;
+  const findings = [];
+
+  // Which host actually serves the site. Everything once-per-domain —
+  // robots.txt, llms.txt, the security headers — is only meaningful on the
+  // host that answers, and a crawler reads them there: RFC 9309 asks for at
+  // least five redirects to be followed for robots.txt, and Google follows
+  // them.
+  //
+  // Audited from the bare domain of a site that lives at www, this used to
+  // read all three off a 301. A store with a good robots.txt — agent
+  // instructions, a UCP endpoint, the lot — was reported as having none, its
+  // llms.txt was looked for on a host that does not serve it, and its
+  // Referrer-Policy verdict came from a redirect's headers. Three findings,
+  // none of them true, on any site that lives at www.
+  let origin = url.origin;
+  const landing = await fetcher.chain(`${url.origin}/`);
+  if (landing.final.ok) {
+    const settled = new URL(landing.final.url).origin;
+    if (settled !== origin) {
+      findings.push({
+        level: 'info',
+        id: 'origin-redirected',
+        title: 'Audited the host this one redirects to',
+        detail:
+          `${origin}/ answers ${landing.hops[0]?.status ?? 301} and the chain ends at ${settled}/, so ` +
+          'that is where the pages, robots.txt, llms.txt and the response headers were read. Reading ' +
+          'them off the redirect instead is how a site with a perfectly good robots.txt gets reported ' +
+          'as having none.',
+        url: origin,
+      });
+      opts.onNote?.(`${origin} redirects to ${settled} — auditing there`);
+      origin = settled;
+    }
+  }
 
   // Give a rolling deploy time to reach every edge before judging it.
   if (opts.settle) {
@@ -166,7 +199,6 @@ export async function audit(target, opts = {}) {
     opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null),
   );
 
-  const findings = [];
   const limit = opts.limit ?? 200;
   const concurrency = opts.concurrency ?? 6;
   const onProgress = opts.onProgress;

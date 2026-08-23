@@ -116,6 +116,44 @@ test('both report formats render the run without throwing', () => {
   assert.ok(page.includes(site.origin));
 });
 
+test('a site that redirects to another host is audited on the host that answers', async () => {
+  // Auditing the bare domain of a site that lives at www used to read
+  // robots.txt, llms.txt and the security headers off the 301. A store with a
+  // good robots.txt was reported as having none.
+  const real = await startFixtureSite();
+  const front = await startFixtureSite({ withSitemap: false, homeRedirect: `${real.origin}/` });
+  try {
+    const { findings, meta } = await audit(front.origin, { concurrency: 2 });
+
+    assert.equal(meta.origin, real.origin, 'the audit should move to the host that answers');
+    const moved = findings.find((f) => f.id === 'origin-redirected');
+    assert.ok(moved, 'and say so');
+    assert.equal(moved.level, 'info');
+    assert.ok(moved.detail.includes(real.origin));
+
+    // The proof it matters: the real host has a robots.txt and a sitemap, so
+    // neither is reported missing even though the host that was asked for has
+    // neither.
+    assert.ok(!findings.some((f) => f.id === 'robots-missing'), 'robots.txt was read on the right host');
+    assert.ok(!findings.some((f) => f.id === 'no-sitemap'));
+    assert.ok(meta.pages > 1, 'and the pages came from the real host');
+  } finally {
+    await front.stop();
+    await real.stop();
+  }
+});
+
+test('a site that stays put is not reported as redirecting', async () => {
+  const site = await startFixtureSite();
+  try {
+    const { findings, meta } = await audit(site.origin, { concurrency: 2 });
+    assert.equal(meta.origin, site.origin);
+    assert.ok(!findings.some((f) => f.id === 'origin-redirected'));
+  } finally {
+    await site.stop();
+  }
+});
+
 test('a site with no sitemap is crawled by following links instead of refused', async () => {
   const bare = await startFixtureSite({ withSitemap: false });
   try {

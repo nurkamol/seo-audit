@@ -5,6 +5,30 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Site-level checks are read on the host that answers.** Auditing
+  `example.com` when the site lives at `www.example.com` left `origin` on the
+  host that only ever returns 301, while the crawl followed the redirect for
+  pages — `discover()` has always used `chain()`. So robots.txt, llms.txt and
+  every response header were read off a redirect.
+
+  On a real store that meant three findings, none of them true: a flat "No
+  robots.txt" for a site with a good one — agent instructions, a UCP endpoint,
+  the lot — an llms.txt reported missing on a host that does not serve it, and
+  a `Referrer-Policy` verdict taken from a 301's headers.
+
+  The homepage's redirect chain is now followed before anything else, and where
+  it settles on another host the audit moves there and says so as
+  `origin-redirected`. That is what a crawler does: RFC 9309 asks for at least
+  five redirects to be followed for robots.txt, and Google follows them.
+
+  Re-running that store from its bare domain: `robots-missing` and
+  `llms-missing` both went silent, and the one real finding of the three —
+  no `Referrer-Policy` — is now reported against `https://www.…` and read from
+  a response that actually exists. The host-variant check is unaffected: it
+  strips `www.` before building its variants, so it tests the same three
+  either way.
+
 ## [1.15.0] — 2026-08-23
 
 ### Fixed
