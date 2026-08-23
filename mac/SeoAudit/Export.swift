@@ -15,7 +15,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum ExportFormat: String, CaseIterable, Identifiable {
-    case pdf, html, markdown, csv, json
+    case pdf, html, markdown, csv, json, sitemap
 
     var id: String { rawValue }
 
@@ -26,6 +26,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .markdown: "Markdown"
         case .csv: "Spreadsheet (CSV)"
         case .json: "JSON"
+        case .sitemap: "Sitemap (XML)"
         }
     }
 
@@ -36,6 +37,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .markdown: "For committing, or pasting into a ticket."
         case .csv: "One row per finding. For sorting and filtering."
         case .json: "Everything, exactly as the engine produced it."
+        case .sitemap: "The sitemap this site should have had."
         }
     }
 
@@ -46,6 +48,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .markdown: "text.alignleft"
         case .csv: "tablecells"
         case .json: "curlybraces"
+        case .sitemap: "list.bullet.rectangle"
         }
     }
 
@@ -56,6 +59,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .markdown: UTType(filenameExtension: "md") ?? .plainText
         case .csv: .commaSeparatedText
         case .json: .json
+        case .sitemap: UTType(filenameExtension: "xml") ?? .xml
         }
     }
 
@@ -66,6 +70,7 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .markdown: "md"
         case .csv: "csv"
         case .json: "json"
+        case .sitemap: "xml"
         }
     }
 }
@@ -88,6 +93,11 @@ enum Export {
                 // re-encode would quietly drop any field the models do not know
                 // about yet.
                 try? (raw ?? Data()).write(to: destination)
+            case .sitemap:
+                // Already built by the engine and carried with the report; the
+                // menu item is disabled when it refused, so this is never a
+                // silent no-op.
+                if let xml = report.sitemap?.xml { try? Data(xml.utf8).write(to: destination) }
             case .html, .markdown, .csv:
                 Task { await render(format, report: report, engine: engine, to: destination) }
             }

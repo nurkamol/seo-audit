@@ -85,6 +85,9 @@ final class CrawlSettings: ObservableObject {
             URLQueryItem(name: "url", value: run.url),
             URLQueryItem(name: "limit", value: String(run.limit)),
             URLQueryItem(name: "format", value: "json"),
+            // Always: rebuilding it needs per-page data that is gone by the
+            // time the report arrives, and it costs one already-cached request.
+            URLQueryItem(name: "sitemap-out", value: "1"),
         ]
         if speed != .normal {
             items.append(.init(name: "concurrency", value: String(speed.connections)))

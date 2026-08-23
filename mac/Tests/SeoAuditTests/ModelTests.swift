@@ -191,6 +191,7 @@ struct ExportTests {
     func extensions() {
         #expect(ExportFormat.csv.fileExtension == "csv")
         #expect(ExportFormat.markdown.fileExtension == "md")
+        #expect(ExportFormat.sitemap.fileExtension == "xml")
         for format in ExportFormat.allCases {
             #expect(!format.label.isEmpty)
             #expect(!format.detail.isEmpty)
@@ -368,7 +369,10 @@ struct CrawlSettingsTests {
         let names = Set(items.map(\.name))
         // Sending concurrency=6 explicitly would move the default out of the
         // engine and into this app, where changing it later would not take.
-        #expect(names == ["url", "limit", "format"])
+        // `sitemap-out` is not a setting: rebuilding the sitemap needs per-page
+        // data that is gone by the time the report arrives, so it is always
+        // asked for and costs one already-cached request.
+        #expect(names == ["url", "limit", "format", "sitemap-out"])
         #expect(items.first { $0.name == "format" }?.value == "json")
     }
 
@@ -593,5 +597,46 @@ struct PreviewTests {
         settings.userAgent = "   "
         let fallback = settings.queryItems(for: Run(url: "https://a.test", limit: 10))
         #expect(fallback.contains { $0.name == "browser" }, "whitespace is not a user agent")
+    }
+}
+
+@Suite("The corrected sitemap, carried with the report")
+struct RebuiltSitemapTests {
+    @Test("a written one arrives with what it did")
+    func written() throws {
+        let payload = Data("""
+        {"xml":"<?xml version=\\"1.0\\"?>","urls":["https://a.test/one"],
+         "added":["https://a.test/one"],"refused":null}
+        """.utf8)
+        let sitemap = try JSONDecoder().decode(RebuiltSitemap.self, from: payload)
+        #expect(sitemap.xml != nil)
+        #expect(sitemap.added == ["https://a.test/one"])
+        #expect(sitemap.refused == nil)
+    }
+
+    @Test("a refusal carries its reason, which is the useful half")
+    func refused() throws {
+        let payload = Data("""
+        {"xml":null,"urls":[],"added":[],
+         "refused":"The crawl stopped at its limit with 185 URL(s) unread."}
+        """.utf8)
+        let sitemap = try JSONDecoder().decode(RebuiltSitemap.self, from: payload)
+        #expect(sitemap.xml == nil, "and the menu item is disabled on exactly this")
+        #expect(sitemap.refused?.contains("185") == true)
+    }
+
+    @Test("a report from before this existed still opens")
+    func absent() throws {
+        let url = try #require(Bundle.module.url(forResource: "payload", withExtension: "json"))
+        let report = try JSONDecoder().decode(Report.self, from: Data(contentsOf: url))
+        #expect(report.sitemap == nil)
+        #expect(!report.findings.isEmpty, "the rest of it decoded fine")
+    }
+
+    @MainActor
+    @Test("a run always asks for one")
+    func alwaysAsked() {
+        let items = CrawlSettings().queryItems(for: Run(url: "https://a.test", limit: 10))
+        #expect(items.contains { $0.name == "sitemap-out" && $0.value == "1" })
     }
 }

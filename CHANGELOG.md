@@ -26,6 +26,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   added `/docs/templates/`, `/help/` and `/docs/home/` — all three 200, all
   three HTML, none of them in the site's own sitemap.
 
+  The Mac app exports it too, as **Sitemap (XML)**. It is built by the engine
+  and travels with the report, because rebuilding it needs per-page data the app
+  is never sent. When the engine refuses, the menu item is disabled and shows
+  the reason where its description would be, rather than being absent or writing
+  a short file.
+
 - **`--dry-run`, and Preview in the window.** A full crawl is minutes of waiting
   and several hundred requests to somebody else's server, and there was no way
   to find out it was pointed at the wrong site until it had finished. This

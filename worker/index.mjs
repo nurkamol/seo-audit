@@ -415,10 +415,14 @@ export async function handle(request, env, ctx, deps = {}) {
     const origin = new URL(target.url).origin;
     const work = (async () => {
       try {
-        const { findings, meta } = await run(target.url, {
+        const { findings, meta, sitemap } = await run(target.url, {
           limit: pageLimit(url.searchParams.get('limit'), env),
           concurrency: crawlConcurrency(url.searchParams.get('concurrency'), env),
           checkExternal: url.searchParams.get('external') === '1',
+          // The corrected sitemap travels with the report, because rebuilding
+          // it needs per-page data a client is never sent. Costs one cached
+          // request; everything else it reads is already in memory.
+          writeSitemap: url.searchParams.get('sitemap-out') === '1',
           sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
           userAgent: agentFor(url.searchParams, env),
           // Switched off rather than left to fail — see NO_CERTIFICATE_CHECK.
@@ -437,6 +441,7 @@ export async function handle(request, env, ctx, deps = {}) {
             meta,
             findings: all,
             causes: causePayload(all, meta.pages),
+            ...(sitemap ? { sitemap } : {}),
           });
         } else {
           // The report replaces this page entirely, so it has to carry its own

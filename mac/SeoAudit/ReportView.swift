@@ -135,8 +135,14 @@ private struct Header: View {
                             export(format)
                         } label: {
                             Label(format.label, systemImage: format.symbol)
-                            Text(format.detail)
+                            // The sitemap says why it is unavailable rather
+                            // than being absent or writing an empty file: the
+                            // refusal is the useful half of that answer.
+                            Text(format == .sitemap
+                                 ? (report.sitemap?.refused ?? format.detail)
+                                 : format.detail)
                         }
+                        .disabled(format == .sitemap && report.sitemap?.xml == nil)
                     }
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.down")

@@ -69,10 +69,21 @@ struct Meta: Decodable, Hashable {
     let ignored: Int?
 }
 
+/// The corrected sitemap, when the engine was asked for one. `xml` is nil when
+/// it refused, and `refused` says why — which is the useful half.
+struct RebuiltSitemap: Decodable, Hashable {
+    let xml: String?
+    let urls: [String]
+    let added: [String]
+    let refused: String?
+}
+
 struct Report: Decodable, Hashable {
     let meta: Meta
     let findings: [Finding]
     let causes: [Cause]
+    /// Optional because a report saved before this existed still has to open.
+    let sitemap: RebuiltSitemap?
 
     var counts: (error: Int, warn: Int, info: Int) {
         (findings.filter { $0.level == .error }.count,

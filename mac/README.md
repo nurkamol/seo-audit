@@ -95,6 +95,17 @@ place to look.
 Anything left at its default is **not sent**. The engine's defaults stay written
 down in the engine, where changing one takes effect everywhere.
 
+## Exporting a corrected sitemap
+
+**Sitemap (XML)** in the Export menu is `--write-sitemap`. It is built by the
+engine and travels with the report, because rebuilding it needs per-page data
+the app is never sent otherwise — so it is always asked for, and costs one
+already-cached request.
+
+When the engine refuses — a crawl that stopped at its limit, pages unread
+because of rate limiting — the menu item is **disabled and shows the reason in
+place of its description**, rather than being absent or writing a short file.
+
 ## Preview, before spending the minutes
 
 **Preview** on the entry screen is the engine's `--dry-run`: it settles the
