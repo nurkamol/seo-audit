@@ -1431,6 +1431,31 @@ test('--serve 0 asks the operating system for a port', async () => {
   }
 });
 
+test('a server reading /dev/null is not a server whose parent has gone', async () => {
+  // The first version of the check above asked only whether stdin was a
+  // terminal. `--serve < /dev/null` is not one either, and reading it ends
+  // immediately — so the server shut down the instant it started, which is how
+  // the CI job that builds the macOS app failed on its first run.
+  const { spawn } = await import('node:child_process');
+  const { openSync } = await import('node:fs');
+  const devNull = openSync('/dev/null', 'r');
+  const child = spawn(process.execPath, ['bin/seo-audit.mjs', '--serve', '4393'], {
+    stdio: [devNull, 'pipe', 'pipe'],
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      child.stdout.on('data', (chunk) => String(chunk).includes('serving at') && resolve());
+      child.once('error', reject);
+      setTimeout(() => reject(new Error('never announced itself')), 8000);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    assert.equal(child.exitCode, null, 'it should still be running');
+    assert.equal((await fetch('http://127.0.0.1:4393/robots.txt')).status, 200);
+  } finally {
+    if (child.exitCode === null) child.kill();
+  }
+});
+
 test('a server started by something, rather than by somebody, dies with it', async () => {
   // The macOS shell spawns this and points a web view at it. The first time it
   // was run for real the server outlived the window, held port 4321, and the

@@ -26,18 +26,24 @@
     font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 54rem; margin: 0 auto; padding: 0 max(1.5rem, env(safe-area-inset-left)); }
+  /* The column, and the air around it. `clamp` rather than a fixed gutter so a
+     phone gets 1.25rem and a desktop gets a margin you can actually see. */
+  .wrap { max-width: 52rem; margin: 0 auto; padding: 0 clamp(1.25rem, 5vw, 3rem); }
+  body > * { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
   a { color: var(--brand); text-underline-offset: 2px; }
 
-  header { padding: 6rem 0 4rem; text-align: center; }
+  header { padding: 5.5rem 0 4rem; text-align: center; border-bottom: 1px solid var(--line); }
   header img { border-radius: 22px; display: block; margin: 0 auto; }
   h1 {
     font-size: clamp(2rem, 5.5vw, 2.9rem); line-height: 1.08;
     letter-spacing: -.025em; margin: 1.5rem 0 .75rem;
   }
   .tagline { font-size: clamp(1rem, 2.2vw, 1.16rem); color: var(--muted); margin: 0 auto 2.25rem; max-width: 33rem; }
-  .badges { display: flex; gap: .45rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.25rem; }
-  .badges img { height: 20px; }
+  .badges { display: flex; gap: .4rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.25rem; }
+  /* `width: auto` matters: with only a height set, a shields.io SVG keeps its
+     intrinsic width and the row spreads itself across the page. */
+  .badges a { display: inline-flex; }
+  .badges img { height: 20px; width: auto; display: block; }
   header pre { text-align: left; max-width: 40rem; margin: 0 auto; }
   header .quiet { margin-top: .9rem; }
 
@@ -49,7 +55,8 @@
   code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
   p code, li code, td code { background: var(--panel); padding: .1rem .35rem; border-radius: 4px; }
 
-  section { padding: 3.25rem 0; border-top: 1px solid var(--line); }
+  section { padding: 3.5rem 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: 0; }
   section > *:last-child { margin-bottom: 0; }
   h2 { font-size: clamp(1.25rem, 3vw, 1.5rem); letter-spacing: -.018em; margin: 0 0 .6rem; }
   .lede { color: var(--muted); margin: 0 0 1.6rem; max-width: 44rem; }

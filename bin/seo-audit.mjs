@@ -268,11 +268,28 @@ if (opts.serve !== undefined) {
   });
   console.log(`\n  seo-audit is serving at ${url}\n  Nothing leaves this machine. Ctrl-C to stop.\n`);
 
-  // Started by something rather than by somebody: when stdin is a pipe, its
+  // Started by something rather than by somebody: when stdin is a *pipe*, its
   // closing is the parent going away, and a server that outlives the window
-  // that opened it holds the port against the next launch. A terminal gives a
-  // TTY instead, where Ctrl-C is the way out and this must not fire.
-  if (!process.stdin.isTTY) {
+  // that opened it holds the port against the next launch.
+  //
+  // A pipe specifically, not merely "not a terminal". `--serve < /dev/null` is
+  // also not a TTY, and reading it ends at once — which shut the server down
+  // the instant it started, in the CI job added to catch exactly this kind of
+  // thing. A parent that wants to be noticed hands over a pipe.
+  const { fstatSync } = await import('node:fs');
+  const stdinIsPipe = (() => {
+    try {
+      const stdin = fstatSync(0);
+      // A named pipe or a socket: Node hands a child a socketpair rather than a
+      // FIFO, so checking only for one of them makes this fire in a terminal
+      // and not fire where it matters. /dev/null is a character device, which
+      // is neither.
+      return stdin.isFIFO() || stdin.isSocket();
+    } catch {
+      return false;
+    }
+  })();
+  if (stdinIsPipe) {
     process.stdin.resume();
     process.stdin.on('end', () => process.exit(0));
     process.stdin.on('close', () => process.exit(0));
