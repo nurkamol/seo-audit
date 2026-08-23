@@ -403,6 +403,7 @@ reason.
 | `--md <file>` | — | Write a Markdown report |
 | `--html <file>` | — | Write a self-contained HTML report — one file, no assets |
 | `--dry-run` | — | Say what would be crawled and stop. A handful of requests instead of hundreds |
+| `--write-sitemap <file>` | — | Write the sitemap this site should have had. Refuses on a crawl that did not see the whole site |
 | `--json <file>` | — | Write a JSON report — findings, the grouped `causes` with their scope lines, and `meta`. Also usable as a baseline, which carries the findings only |
 | `--csv <file>` | — | Write the findings as a spreadsheet, one row each |
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |

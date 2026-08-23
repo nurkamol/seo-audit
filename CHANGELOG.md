@@ -6,6 +6,26 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--write-sitemap`.** Every other output here describes a problem; this one
+  is the fix. The crawl already knows every URL it read, what each answered,
+  whether it says `noindex`, and where its canonical points — which is exactly
+  what decides whether a URL belongs in a sitemap. It writes the file, carries
+  `lastmod` forward from the old one rather than stamping today on every URL,
+  and **adds the pages that are linked but were missing** — the link sweep has
+  already established those answer 200 and are HTML.
+
+  The refusals matter more than the file. A sitemap that quietly drops real
+  pages is worse than one full of dead ones: the dead ones are a warning in
+  Search Console, the missing ones are pages that stop being crawled. So it
+  writes nothing at all when the crawl stopped at its limit, when pages went
+  unread because of rate limiting, or when more pages are linked-but-missing
+  than the report enumerates — and each refusal says which run would work
+  (`Run again with --limit 210`).
+
+  On jekyllrb.com it wrote 213 URLs, carried 202 `lastmod` values across, and
+  added `/docs/templates/`, `/help/` and `/docs/home/` — all three 200, all
+  three HTML, none of them in the site's own sitemap.
+
 - **`--dry-run`, and Preview in the window.** A full crawl is minutes of waiting
   and several hundred requests to somebody else's server, and there was no way
   to find out it was pointed at the wrong site until it had finished. This

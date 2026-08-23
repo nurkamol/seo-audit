@@ -11,6 +11,7 @@ import { searchConsole } from './console.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 import { sectionOf } from './causes.mjs';
+import { rebuild } from './sitemap.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -510,8 +511,27 @@ export async function audit(target, opts = {}) {
   // can silence a site-wide check as easily as a per-page one.
   const [kept, ignored] = applyIgnores(findings, opts.ignore);
 
+  // The sitemap this site should have had. Only when asked for, and built from
+  // `kept` rather than every finding, so a page silenced by an ignore rule is
+  // silenced here too.
+  let sitemap = null;
+  if (opts.writeSitemap) {
+    // robots.txt is already in the fetcher's cache — siteChecks read it — so
+    // this costs nothing, and a sitemap that lists a disallowed URL is a
+    // conflict the site does not need.
+    const robotsRes = await fetcher.get(new URL('/robots.txt', origin).toString());
+    const groups = robotsRes.ok ? parseRobots(robotsRes.body) : [];
+    sitemap = rebuild(pages, kept, {
+      entries,
+      truncated,
+      rateLimited: kept.filter((f) => f.id === 'rate-limited').length,
+      allowed: (url) => robotsVerdict(groups, new URL(url).pathname).allowed,
+    });
+  }
+
   return {
     findings: kept,
+    ...(sitemap ? { sitemap } : {}),
     meta: {
       ignored,
       origin,

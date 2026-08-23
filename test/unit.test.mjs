@@ -7,6 +7,7 @@ import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
 import { fingerprint, similarity, cluster } from '../src/dupes.mjs';
+import { rebuild, describe as describeSitemap } from '../src/sitemap.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
@@ -2694,6 +2695,89 @@ test('a report keeps the traffic a baseline drops', () => {
 test('parsing a non-report JSON file explains itself', () => {
   assert.throws(() => parseBaseline('{"hello":true}', 'x.json'), /no findings array/);
   assert.throws(() => parseBaseline('not json', 'x.json'), /not valid JSON/);
+});
+
+// --- the sitemap this site should have had ---------------------------------
+
+const sitemapPage = (url, { status = 200, robots = null, canonical = null, html = true } = {}) => ({
+  url,
+  res: { ok: status >= 200 && status < 300, status, ms: 1, headers: new Headers() },
+  doc: html
+    ? { robots, canonical: canonical ? [canonical] : [], title: 't', description: 'd' }
+    : null,
+});
+
+test('a rebuilt sitemap keeps what belongs in one and says what it dropped', () => {
+  const result = rebuild(
+    [
+      sitemapPage('https://x.test/keep/'),
+      sitemapPage('https://x.test/self/', { canonical: 'https://x.test/self/' }),
+      sitemapPage('https://x.test/gone/', { status: 404 }),
+      sitemapPage('https://x.test/hidden/', { robots: 'noindex, follow' }),
+      sitemapPage('https://x.test/copy/', { canonical: 'https://x.test/keep/' }),
+      sitemapPage('https://x.test/file.pdf', { html: false }),
+      sitemapPage('https://x.test/private/'),
+    ],
+    [{ id: 'missing-from-sitemap', url: 'https://x.test/orphaned/' }],
+    {
+      entries: [{ loc: 'https://x.test/keep/', lastmod: '2026-08-01' }],
+      allowed: (url) => !url.includes('/private/'),
+    },
+  );
+
+  assert.equal(result.refused, null);
+  assert.deepEqual(result.urls, [
+    'https://x.test/keep/',
+    'https://x.test/orphaned/',
+    'https://x.test/self/',
+  ]);
+  // A page that is linked, answers 200 and is HTML but is not in the sitemap is
+  // exactly what this is for.
+  assert.deepEqual(result.added, ['https://x.test/orphaned/']);
+
+  assert.deepEqual(result.excluded, {
+    status: 1, noindex: 1, 'canonical-elsewhere': 1, 'not-html': 1, 'robots-disallowed': 1,
+  });
+
+  // lastmod is carried over rather than invented — a build stamp on every URL
+  // is what crawlers learn to ignore.
+  assert.match(result.xml, /<loc>https:\/\/x\.test\/keep\/<\/loc>\s*<lastmod>2026-08-01<\/lastmod>/);
+  assert.ok(!/<lastmod>/.test(result.xml.split('/self/')[1].split('</url>')[0]));
+  assert.match(result.xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.match(result.xml, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+});
+
+test('a rebuilt sitemap refuses rather than quietly dropping real pages', () => {
+  const pages = [sitemapPage('https://x.test/a/')];
+
+  // The dangerous one. A file written from a crawl that stopped at its limit
+  // would take every unread page out of the site's sitemap.
+  const cut = rebuild(pages, [], { truncated: 185 });
+  assert.equal(cut.xml, null);
+  assert.match(cut.refused, /185 URL\(s\) unread/);
+  assert.match(cut.refused, /--limit 186/, 'and says which run would work');
+
+  // A page nobody could read is a page nobody can place.
+  const limited = rebuild(pages, [{ id: 'rate-limited', url: 'https://x.test/b/' }], { rateLimited: 1 });
+  assert.equal(limited.xml, null);
+  assert.match(limited.refused, /rate limiting/);
+
+  // The report counted more linked-but-missing pages than it listed, so the
+  // file could not contain all of them.
+  const capped = rebuild(pages, [{ id: 'missing-from-sitemap-more' }], {});
+  assert.equal(capped.xml, null);
+  assert.match(capped.refused, /could not include all of them/);
+
+  // Nothing to write is not an empty file.
+  const nothing = rebuild([sitemapPage('https://x.test/a/', { status: 500 })], [], {});
+  assert.equal(nothing.xml, null);
+  assert.match(nothing.refused, /nothing to write/);
+});
+
+test('a URL with characters XML cannot carry is escaped once', () => {
+  const result = rebuild([sitemapPage('https://x.test/a?x=1&y=2')], [], {});
+  assert.match(result.xml, /<loc>https:\/\/x\.test\/a\?x=1&amp;y=2<\/loc>/);
+  assert.ok(!result.xml.includes('&amp;amp;'), 'the ampersand is escaped once, not twice');
 });
 
 // --- the same page again ---------------------------------------------------

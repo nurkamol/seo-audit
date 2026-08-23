@@ -11,10 +11,9 @@ Four things chosen together, one shipped:
       `words` and thrown away.
 - [x] **Compare two kept runs in the macOS app** — a `/diff` endpoint, so the
       comparing stays in `src/baseline.mjs` where `--baseline` already does it.
-- [ ] **`--write-sitemap`** — the crawl knows every URL, its status, whether it
-      is indexable and where its canonical points. When it reports a sitemap
-      that is missing pages or listing dead ones, it can write the corrected
-      file rather than only describing it.
+- [x] **`--write-sitemap`** — and it refuses on any crawl that did not see the
+      whole site, because a sitemap missing real pages is worse than one listing
+      dead ones.
 - [ ] **Run `--search-console` against a live property** — see below; still the
       one thing here that has never been proven against the real API.
 

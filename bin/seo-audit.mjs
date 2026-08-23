@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { serialize, parse, diff } from '../src/baseline.mjs';
 import { parseRedirectMap } from '../src/redirects.mjs';
+import { describe } from '../src/sitemap.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 
@@ -26,6 +27,11 @@ const HELP = `
     --json <file>      write a JSON report (also usable as a baseline)
     --csv <file>       write the findings as a spreadsheet, one row each
     --quiet            print nothing; rely on the exit code and the files
+    --write-sitemap <file>
+                       write the sitemap this site should have had — every
+                       page that answered 200, is HTML, is indexable and is
+                       its own canonical. Refuses on a crawl that did not
+                       see the whole site, rather than writing a short one
     --dry-run          say what would be crawled and stop. A handful of
                        requests instead of hundreds, for checking the tool is
                        pointed at the right site before spending the minutes
@@ -119,6 +125,7 @@ function parseArgs(argv) {
     else if (arg === '--quiet' || arg === '-q') opts.quiet = true;
     else if (arg === '--verbose') opts.verbose = true;
     else if (arg === '--dry-run') opts.dryRun = true;
+    else if (arg === '--write-sitemap') opts.writeSitemap = value();
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
     else if (arg === '--json') opts.json = value();
@@ -402,11 +409,19 @@ if (!opts.quiet && opts.settle) {
   process.stderr.write(`  waiting up to ${opts.settle}s for the site to serve consistent HTML …\n`);
 }
 
-const { findings, meta } = await audit(target, {
+const { findings, meta, sitemap } = await audit(target, {
   ...opts,
   onNote: (m) => !opts.quiet && process.stderr.write(`  ${m}\n`),
   onProgress: live(target),
 });
+
+// --- the sitemap this site should have had -------------------------------
+// Written before the report, so a refusal is read rather than scrolled past at
+// the bottom of two hundred findings.
+if (opts.writeSitemap && sitemap) {
+  if (sitemap.xml) writeFileSync(opts.writeSitemap, sitemap.xml);
+  process.stderr.write('\n' + describe(sitemap, opts.writeSitemap));
+}
 
 // --- Compare against another deployment, if asked -----------------------
 let against = null;
