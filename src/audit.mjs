@@ -40,13 +40,15 @@ async function discover(origin, fetcher, explicit) {
     const { urls, sitemaps, entries } = parseSitemap(res.body);
     // Per-file, because the 50,000-URL and 50MB limits are per sitemap file
     // rather than per site — a flattened total would report the wrong thing.
-    const stat = (url, body, count) => ({ url, urls: count, bytes: Buffer.byteLength(body) });
+    // `locs` as well as the count, because a URL listed in two files of one
+    // index cannot be seen from a flattened total.
+    const stat = (url, body, locs) => ({ url, urls: locs.length, bytes: Buffer.byteLength(body), locs });
 
     if (urls.length) {
       return {
         urls,
         entries,
-        files: [stat(candidate, res.body, urls.length)],
+        files: [stat(candidate, res.body, urls)],
         source: candidate,
         tried,
       };
@@ -56,7 +58,7 @@ async function discover(origin, fetcher, explicit) {
       const sub = (await fetcher.chain(child)).final;
       if (!sub.ok) return { urls: [], entries: [], files: [] };
       const parsed = parseSitemap(sub.body);
-      return { ...parsed, files: [stat(child, sub.body, parsed.urls.length)] };
+      return { ...parsed, files: [stat(child, sub.body, parsed.urls)] };
     });
     const all = nested.flatMap((n) => n.urls);
     if (all.length) {

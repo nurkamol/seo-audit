@@ -205,6 +205,7 @@ export function parseHtml(rawHtml, pageUrl) {
       height: attr(tag, 'height'),
       srcset: attr(tag, 'srcset'),
       loading: attr(tag, 'loading'),
+      fetchpriority: attr(tag, 'fetchpriority'),
       role: attr(tag, 'role'),
       // Captured for the two things it can contradict, never for its absence:
       // an image with no title has nothing wrong with it.

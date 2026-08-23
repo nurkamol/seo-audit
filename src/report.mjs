@@ -204,6 +204,7 @@ const CATEGORY_OF = {
   'img-alt-duplicate': 'Images', 'img-alt-long': 'Images', 'img-dimensions': 'Images',
   'img-srcset': 'Images', 'broken-image': 'Images', 'image-sweep-capped': 'Images',
   'img-title-duplicates-alt': 'Images', 'img-title-on-decorative': 'Images',
+  'img-lazy-priority': 'Images',
 
   // Social
   'og-missing': 'Social', 'og-webp': 'Social', 'og-no-dimensions': 'Social',
@@ -212,12 +213,14 @@ const CATEGORY_OF = {
   // Structured data
   'jsonld-invalid': 'Structured data', 'jsonld-no-type': 'Structured data',
   'schema-expected': 'Structured data', 'schema-incomplete': 'Structured data',
+  'schema-date-order': 'Structured data', 'schema-date-future': 'Structured data',
   'schema-image-broken': 'Structured data',
 
   // Multilingual
   'hreflang-one-way': 'Multilingual', 'hreflang-no-self': 'Multilingual',
   'hreflang-lang-mismatch': 'Multilingual', 'hreflang-invalid': 'Multilingual',
   'hreflang-no-x-default': 'Multilingual', 'hreflang-dead': 'Multilingual',
+  'content-language-mismatch': 'Multilingual',
 
   // Sitemap & robots
   'no-sitemap': 'Sitemap & robots', truncated: 'Sitemap & robots',
@@ -226,6 +229,7 @@ const CATEGORY_OF = {
   'robots-no-sitemap': 'Sitemap & robots', 'robots-blocks-sitemap-url': 'Sitemap & robots',
   'sitemap-lastmod-missing': 'Sitemap & robots', 'sitemap-lastmod-identical': 'Sitemap & robots',
   'sitemap-lastmod-future': 'Sitemap & robots', 'llms-missing': 'Sitemap & robots',
+  'sitemap-duplicate-url': 'Sitemap & robots',
   'sitemap-not-indexable': 'Sitemap & robots', 'sitemap-too-many-urls': 'Sitemap & robots',
   'sitemap-too-large': 'Sitemap & robots',
 

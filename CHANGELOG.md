@@ -6,6 +6,46 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Four contradictions, each read off something already parsed.** None of them
+  needs a request, and each reports a page disagreeing with itself rather than
+  a judgement about it.
+
+  **`img-lazy-priority`** — `loading="lazy"` and `fetchpriority="high"` on one
+  image. The first says do not fetch this until it is nearly on screen; the
+  second says fetch it before everything else, and the first decides when.
+  `info`, not a warning, because a browser does apply the priority once a lazy
+  image finally enters the queue — what it cannot be is deliberate on the image
+  the page is judged on, which is the only image `fetchpriority` is usually put
+  on. `images[].loading` had been parsed and read by nothing since 1.0;
+  `fetchpriority` is new.
+
+  **`content-language-mismatch`** — the `Content-Language` header and
+  `<html lang>` disagreeing. Compared by primary subtag, so `en-GB` and `en`
+  are the same claim, and a header listing several languages agrees with itself
+  if the page's is one of them.
+
+  **`schema-date-order` and `schema-date-future`** — structured data saying a
+  page was modified before it was published, or carrying a date that has not
+  happened yet. Google reads both when deciding how fresh a page is. A day of
+  slack on the future, the same allowance the sitemap's `lastmod` check makes,
+  and a date this tool cannot parse is a date it has no opinion about.
+
+  **`sitemap-duplicate-url`** — the same URL listed twice, across two files of
+  an index or twice within one.
+
+  The last one needed narrowing against real sitemaps, and by shape rather than
+  by name. wordpress.org lists `/` in `sitemap-1.xml` and then forty more times
+  in `image-sitemap-1.xml` — 681 entries for 171 pages — because an image
+  sitemap is one entry per image, which is the format working exactly as
+  intended. But the namespace proves nothing: Yoast declares `xmlns:image` on
+  every file it writes, and css-tricks.com's `post-sitemap2.xml` carries image
+  elements while being an ordinary list of posts. So a file whose locs are
+  mostly repeats is not listing pages and is not compared. wordpress.org goes
+  silent; css-tricks.com keeps its real finding, one post listed in both
+  `post-sitemap2.xml` and `post-sitemap3.xml`.
+
+  The three page-level ones are silent across 49 pages of maisonetherique.com,
+  css-tricks.com, smashingmagazine.com, elementor.com and wordpress.org/news.
 - **`favicon-broken` and `favicon-missing`** — Google draws a favicon beside
   every result a site owns and shows a default globe where it finds none. It
   reads the declaration from the home page and accepts three `rel` values:

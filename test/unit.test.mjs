@@ -622,6 +622,92 @@ test('a long tail of deep pages is capped and counted', () => {
   assert.match(more.title, /^5 more pages/);
 });
 
+// --- four contradictions ---------------------------------------------------
+
+const withHead = (head, body = '<main><h1>x</h1></main>', extra = {}) =>
+  ids(pageChecks(page(
+    `<html lang="en"><head><title>A title long enough to pass</title>` +
+    `<meta name="description" content="${'d'.repeat(80)}">` +
+    `<meta name="viewport" content="width=device-width">${head}</head><body>${body}</body></html>`,
+    'https://x.test/p/',
+    extra,
+  )));
+
+test('an image told to wait and to hurry is reported', () => {
+  const lazy = '<main><img src="/a.png" alt="a" loading="lazy" fetchpriority="high"></main>';
+  assert.ok(withHead('', lazy).includes('img-lazy-priority'));
+
+  // Either one alone is ordinary.
+  assert.ok(!withHead('', '<main><img src="/a.png" alt="a" loading="lazy"></main>').includes('img-lazy-priority'));
+  assert.ok(!withHead('', '<main><img src="/a.png" alt="a" fetchpriority="high"></main>').includes('img-lazy-priority'));
+  assert.ok(!withHead('', '<main><img src="/a.png" alt="a" loading="eager" fetchpriority="high"></main>').includes('img-lazy-priority'));
+});
+
+test('a Content-Language header that contradicts <html lang> is reported', () => {
+  const headers = (value) => ({ res: { ok: true, status: 200, ms: 1, headers: new Headers({ 'content-language': value }) } });
+
+  assert.ok(withHead('', '<main><h1>x</h1></main>', headers('fr')).includes('content-language-mismatch'));
+
+  // A header listing several languages agrees with itself if the page's is one
+  // of them, and en-GB and en are the same claim.
+  assert.ok(!withHead('', '<main><h1>x</h1></main>', headers('en, fr')).includes('content-language-mismatch'));
+  assert.ok(!withHead('', '<main><h1>x</h1></main>', headers('en-GB')).includes('content-language-mismatch'));
+  assert.ok(!withHead('', '<main><h1>x</h1></main>', headers('')).includes('content-language-mismatch'));
+});
+
+test('structured data that contradicts itself about dates is reported', () => {
+  const ld = (data) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+  const article = (extra) => ({ '@type': 'Article', headline: 'h', ...extra });
+
+  assert.ok(withHead(ld(article({ datePublished: '2026-05-01', dateModified: '2026-01-01' })))
+    .includes('schema-date-order'));
+  assert.ok(withHead(ld(article({ datePublished: '2099-01-01' })))
+    .includes('schema-date-future'));
+
+  // The ordinary case, and the same day, say nothing.
+  assert.ok(!withHead(ld(article({ datePublished: '2026-01-01', dateModified: '2026-05-01' })))
+    .some((id) => id.startsWith('schema-date')));
+  assert.ok(!withHead(ld(article({ datePublished: '2026-05-01', dateModified: '2026-05-01' })))
+    .some((id) => id.startsWith('schema-date')));
+  // A date this tool cannot parse is not a date this tool has an opinion about.
+  assert.ok(!withHead(ld(article({ datePublished: 'last Tuesday' })))
+    .some((id) => id.startsWith('schema-date')));
+});
+
+test('a URL listed twice in a sitemap is reported, wherever the second one is', () => {
+  const file = (url, locs) => ({ url, urls: locs.length, bytes: 100, locs });
+  const dupes = (files) =>
+    sitemapChecks([], 'https://x.test/sitemap.xml', Date.parse('2026-06-01'), files)
+      .filter((finding) => finding.id === 'sitemap-duplicate-url');
+
+  const across = dupes([
+    file('https://x.test/posts.xml', ['https://x.test/p/']),
+    file('https://x.test/categories.xml', ['https://x.test/p/']),
+  ]);
+  assert.equal(across.length, 1);
+  assert.equal(across[0].level, 'info');
+  assert.match(across[0].detail, /posts.xml and https:\/\/x.test\/categories.xml/);
+
+  // Within one file, in a file that is otherwise a normal list of pages.
+  assert.match(
+    dupes([file('https://x.test/a.xml', ['/a/', '/b/', '/p/', '/c/', '/p/', '/d/'].map((u) => `https://x.test${u}`))])[0].detail,
+    /twice in one file/,
+  );
+
+  // An image sitemap is one entry per image, so its page URLs repeat by
+  // design. wordpress.org's has 681 entries for 171 pages, and reporting that
+  // would be reporting the format. Recognised by shape, because Yoast declares
+  // xmlns:image on every file it writes and css-tricks.com's ordinary post
+  // sitemaps carry image elements too.
+  const perImage = Array.from({ length: 12 }, (_, i) => `https://x.test/gallery/${i % 3}/`);
+  assert.equal(dupes([file('https://x.test/image-sitemap.xml', perImage)]).length, 0);
+
+  assert.equal(dupes([
+    file('https://x.test/a.xml', ['https://x.test/p/']),
+    file('https://x.test/b.xml', ['https://x.test/q/']),
+  ]).length, 0);
+});
+
 // --- favicon ---------------------------------------------------------------
 
 const homeDeclaring = (origin, head) => [{

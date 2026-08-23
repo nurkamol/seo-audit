@@ -477,8 +477,10 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `hreflang` codes are well formed — `en_US` with an underscore is the usual slip | error |
 | `hreflang` lists the page itself, not only its translations | warning |
 | `<html lang>` agrees with what the page's own `hreflang` calls it | warning |
+| `<html lang>` agrees with the `Content-Language` header, compared by primary subtag — a header listing several languages agrees if the page's is one of them | warning |
 | JSON-LD parses and carries a `@type` (or a `@graph`) | error / warning |
 | Types Google can render carry the properties it requires — an `Article` with no `headline` gets no rich result | warning |
+| The dates do not contradict themselves — a page modified before it was published, or dated next Tuesday, is not a freshness signal | warning |
 | Images named in structured data actually load | warning |
 | Every `<img>` has an `alt` attribute (empty is correct for decorative) | error |
 | `alt` isn't a filename — `alt="DSC_0042.jpg"` is what a CMS fills in for you | warning |
@@ -489,6 +491,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `title` isn't attached to an image declared decorative — the markup contradicts itself | note |
 | Every `<img>` has `width` and `height` — otherwise the page reflows | warning |
 | Images offer a `srcset` rather than one size for every screen | note |
+| No image is both `loading="lazy"` and `fetchpriority="high"` — told to wait and told to hurry, and lazy decides when | note |
 | Word count above ~300 — Japanese, Chinese and Thai are counted by character, since they don't space words | warning |
 | At least one link inside the content, not just navigation | note |
 | No `http://` **subresources** on an HTTPS page — a hyperlink to one is not mixed content | error |
@@ -522,6 +525,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Each sitemap file is within the protocol's 50,000 URLs and 50MB | error |
 | The sitemap declares `lastmod` at all | note |
 | `lastmod` differs between pages — one date on every URL is a build stamp, and crawlers learn to ignore it | note |
+| No URL is listed twice — across two files of an index, or twice in one. Image and video sitemaps are skipped, since one entry per image is the format working | note |
 | No `lastmod` is in the future | warning |
 | A favicon Google can use — the home page declares one that loads, or `/favicon.ico` is there | warning / note |
 | `llms.txt` exists | note |

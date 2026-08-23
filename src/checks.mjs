@@ -354,6 +354,22 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       `${doc.h1.length} found: ${doc.h1.slice(0, 3).map((h) => `"${h}"`).join(', ')}`, url));
   }
   if (!doc.lang) out.push(f('warn', 'lang-missing', 'No lang attribute on <html>', 'Screen readers and Google both use it.', url));
+  else {
+    // Two declarations of the same fact, disagreeing. The header is a list, so
+    // a page in English served as `en, fr` agrees with itself; only a header
+    // that does not mention the page's language at all is a contradiction.
+    // Compared by primary subtag, because en-GB and en are the same claim.
+    const header = res.headers?.get?.('content-language') ?? '';
+    const declared = header
+      .split(',')
+      .map((tag) => primaryLanguage(tag.trim()))
+      .filter(Boolean);
+    if (declared.length && !declared.includes(primaryLanguage(doc.lang))) {
+      out.push(f('warn', 'content-language-mismatch', 'The Content-Language header and <html lang> disagree',
+        `The header says "${header.trim()}" and the page says lang="${doc.lang}". One of them is wrong, ` +
+          'and which one a consumer believes is not something the page gets to decide.', url));
+    }
+  }
   if (!doc.viewport) out.push(f('error', 'viewport-missing', 'No viewport meta', 'The page will not render correctly on phones.', url));
   else {
     // The tag is there, so nothing reports it — but what it *says* is read by
@@ -488,6 +504,45 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
       if (missing.length) shortfalls.push(`${type} is missing ${missing.join(' and ')}`);
     }
   }
+  // Dates that contradict themselves. Structured data is where Google reads
+  // when a page was written and when it last changed, and it shows the result
+  // in the listing — so a page modified before it was published, or updated
+  // next Tuesday, is a claim about freshness that cannot be true.
+  //
+  // A day of slack on the future, the same allowance the sitemap's lastmod
+  // check makes: a build stamping "now" on a machine with a skewed clock is
+  // not the problem being described.
+  const dated = schemaNodes(doc.jsonld).filter((n) => present(n.datePublished) || present(n.dateModified));
+  const when = (value) => {
+    const at = Date.parse(Array.isArray(value) ? value[0] : value);
+    return Number.isFinite(at) ? at : null;
+  };
+  const backwards = dated.filter((n) => {
+    const published = when(n.datePublished);
+    const modified = when(n.dateModified);
+    return published !== null && modified !== null && published > modified;
+  });
+  if (backwards.length) {
+    const node = backwards[0];
+    out.push(f('warn', 'schema-date-order', 'Structured data says the page was modified before it was published',
+      `${node['@type']}: datePublished ${node.datePublished}, dateModified ${node.dateModified}. One of ` +
+        'the two is wrong, and Google reads both when deciding how fresh this page is.', url));
+  }
+  const ahead = dated.filter((n) =>
+    [n.datePublished, n.dateModified].some((value) => {
+      const at = when(value);
+      return at !== null && at > (limits.now ?? Date.now()) + DAY;
+    }));
+  if (ahead.length) {
+    const node = ahead[0];
+    out.push(f('warn', 'schema-date-future', 'Structured data carries a date that has not happened yet',
+      `${node['@type']}: ${[['datePublished', node.datePublished], ['dateModified', node.dateModified]]
+        .filter(([, v]) => when(v) !== null && when(v) > (limits.now ?? Date.now()) + DAY)
+        .map(([k, v]) => `${k} ${v}`)
+        .join(', ')}. A date in the future is not a freshness signal a crawler can use, and it is usually ` +
+        'a timezone or a scheduling bug in the generator.', url));
+  }
+
   if (shortfalls.length) {
     out.push(f('warn', 'schema-incomplete', 'Structured data is missing a property Google requires',
       `${[...new Set(shortfalls)].join('; ')}. The markup is valid and the type is right, so nothing ` +
@@ -563,6 +618,25 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     out.push(f('info', 'img-title-on-decorative', `${titledDecorative.length} decorative image(s) carry a title`,
       `First: "${titledDecorative[0].title}" on ${titledDecorative[0].src}. The markup declares the image ` +
         'decorative and then attaches a tooltip to it — one of the two is wrong.', url));
+  }
+
+  // Told to wait and told to hurry. `fetchpriority="high"` says this image
+  // matters enough to fetch before the others; `loading="lazy"` says do not
+  // fetch it until it is nearly on screen, and that one decides when. The
+  // priority has almost nothing left to act on.
+  //
+  // `info`, not a warning, because it is defensible: a browser does apply the
+  // priority once a lazy image finally enters the queue. What it cannot be is
+  // deliberate on the image that matters most, which is the only image
+  // fetchpriority is usually put on.
+  const hurriedAndDeferred = doc.images.filter(
+    (i) => /^lazy$/i.test(i.loading ?? '') && /^high$/i.test(i.fetchpriority ?? ''),
+  );
+  if (hurriedAndDeferred.length) {
+    out.push(f('info', 'img-lazy-priority', `${hurriedAndDeferred.length} image(s) are both deferred and prioritised`,
+      `First: ${hurriedAndDeferred[0].src}. loading="lazy" and fetchpriority="high" on one element ask ` +
+        'for opposite things, and lazy decides when the request happens. If this is the image the page ' +
+        'is judged on, drop the lazy; if it is not, drop the priority.', url));
   }
 
   const longAlt = described.filter((i) => i.alt.length > ALT_MAX);
@@ -723,6 +797,47 @@ export function sitemapChecks(entries, source, now = Date.now(), files = []) {
         `${file.url} — the protocol allows 50MB uncompressed per file. Split it, or serve it gzipped.`,
         file.url));
     }
+  }
+
+  // The same URL listed twice. Within one file it is a generator emitting a
+  // page from two rules; across the files of an index it is two rules that do
+  // not know about each other — a blog sitemap and a category sitemap both
+  // claiming the same post. Google will pick one and move on, so this costs
+  // crawl budget and clarity rather than rankings, which is why it is a note.
+  //
+  // An image or video sitemap is skipped, and recognised by its shape rather
+  // than by its name or its namespace. Yoast declares xmlns:image on every
+  // file it writes, so the namespace proves nothing: css-tricks.com's
+  // post-sitemap2.xml carries image elements and is a perfectly ordinary list
+  // of posts. What an extension sitemap actually looks like is one entry per
+  // image — wordpress.org's image-sitemap-1.xml has 681 entries for 28 pages,
+  // repeating `/` more than forty times. A file whose locs are mostly repeats
+  // is not listing pages, so it is not compared.
+  const listsPages = (file) => {
+    const locs = file.locs ?? [];
+    return locs.length < 2 || new Set(locs).size > locs.length / 2;
+  };
+
+  const where = new Map();
+  for (const file of files.filter(listsPages)) {
+    for (const loc of file.locs ?? []) {
+      const seen = where.get(loc) ?? new Set();
+      seen.add(file.url);
+      where.set(loc, seen);
+    }
+  }
+  const listedTwice = [...where].filter(([loc, inFiles]) => {
+    const total = files
+      .filter(listsPages)
+      .reduce((n, file) => n + (file.locs ?? []).filter((l) => l === loc).length, 0);
+    return total > 1 || inFiles.size > 1;
+  });
+  if (listedTwice.length) {
+    const [loc, inFiles] = listedTwice[0];
+    out.push(f('info', 'sitemap-duplicate-url', `${listedTwice.length} URL(s) are listed more than once`,
+      `First: ${loc}${inFiles.size > 1 ? `, in ${[...inFiles].join(' and ')}` : ' — twice in one file'}. ` +
+        'A sitemap is a list of the pages you want indexed, and listing one twice says nothing extra ' +
+        'while making the file harder to trust.', source ?? loc));
   }
 
   if (!entries.length) return out;

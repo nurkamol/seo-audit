@@ -4,21 +4,11 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-One candidate left, and it needs no requests at all.
+Empty. Everything this section has queued since 1.11.0 has shipped, and what
+would fill it next is a report on a real site — which is where four of the last
+eight releases came from anyway.
 
-### Four contradictions, none of them expensive
-
-Each is a fact read off something already parsed, in the voice the rest of the
-check table uses:
-
-- `loading="lazy"` and `fetchpriority="high"` on one image — markup telling the
-  browser both to defer it and to rush it. `images[].loading` is parsed today
-  and read by nothing; `fetchpriority` is two lines of parser away.
-- A `Content-Language` header disagreeing with `<html lang>`.
-- Schema `datePublished` after `dateModified`, or either one in the future.
-- The same URL listed in two files of one sitemap index.
-
-### Five things worth keeping in front of all of them
+### Five things worth keeping in front of whatever comes next
 
 **The room left is not in fetching more, it is in reading what has already been
 fetched.** Click depth cost no requests — the link graph had been in memory
@@ -75,6 +65,13 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Four contradictions** (unreleased) — an image both deferred and
+  prioritised, a `Content-Language` header disagreeing with `<html lang>`,
+  structured data modified before it was published or dated in the future, and
+  a URL listed twice in one sitemap. The last needed narrowing by shape:
+  wordpress.org's image sitemap repeats `/` forty times because that is the
+  format, while css-tricks.com's post sitemaps carry image elements and are
+  ordinary lists, so the namespace could not be the discriminator.
 - **Favicon** (unreleased) — a declared icon that is not there, or no
   declaration and nothing at `/favicon.ico`. Kept to those two because a site
   serving one from a path it never declared is working as intended. The real
