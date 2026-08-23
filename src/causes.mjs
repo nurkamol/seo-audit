@@ -12,6 +12,8 @@
 // generated site is actually built, one template per shape of URL. Nothing here
 // guesses at severity or invents a score; it groups, counts, and orders.
 
+import { categoryOf } from './areas.mjs';
+
 /** The template a URL belongs to: everything up to its last segment.
  *
  *  /products/blue-sage        → /products/
@@ -157,5 +159,9 @@ export function causePayload(findings, totalPages) {
     count: cause.count,
     pages: cause.pages,
     scope: causeScope(cause, totalPages),
+    // Which part of the site fixes this. The HTML report groups by it, so a
+    // client drawing its own report groups by the same thing rather than
+    // carrying a second copy of that table in another language.
+    area: categoryOf(cause.id),
   }));
 }

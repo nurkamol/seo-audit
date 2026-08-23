@@ -3,9 +3,12 @@
 // The app owns none of these formats. It holds the findings it was streamed and
 // asks the engine to write them — the same `html()`, `markdown()` and `csv()`
 // the CLI uses, so a report exported here and one written by
-// `seo-audit --csv` are the same file. PDF is the exception, and it is the
-// exception because it is a drawing of what is on screen rather than a format
-// the engine has.
+// `seo-audit --csv` are the same file.
+//
+// PDF is the exception, because the engine has no PDF writer and this app has
+// no web view to print one with. It is drawn natively — but only *drawn*: the
+// grouping, the areas and the scope lines all arrive from the engine, so it is
+// a second rendering of one report rather than a second opinion about it.
 
 import SwiftUI
 import AppKit

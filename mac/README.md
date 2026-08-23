@@ -124,8 +124,8 @@ for anyone without Xcode.
 swift test
 ```
 
-Twenty, over the models, the URL normalising, version ordering, the library, the
-releases feed and the version cache. The one that matters decodes a **real engine payload** captured from a
+Twenty-two, over the models, the URL normalising, version ordering, the library,
+the releases feed, the version cache and the PDF writer. The one that matters decodes a **real engine payload** captured from a
 live run and kept as a fixture, because the way this app breaks is the engine
 changing its output and nothing noticing until a window is opened. CI captures
 a fresh payload on every change and checks the app still decodes every field it
@@ -146,6 +146,7 @@ team to delete tests.
 | `Stages.swift` | asking for a site, and watching it crawl |
 | `ReportView.swift` | the report: cause cards, filters, pages |
 | `Library.swift` | reports kept on disk, and the sidebar that lists them |
+| `PDF.swift` | the report on paper — A4 pages, the engine's areas, every affected page |
 | `Updates.swift` | releases, versions, and the command that moves between them |
 | `AtomReleases.swift` | the releases feed, for when the API has had enough |
 | `VersionsSheet.swift` | every release and what changed in it |

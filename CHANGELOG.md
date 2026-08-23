@@ -16,7 +16,25 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   impressions move on their own, and a baseline whose git diff churns is one
   nobody reads.
 
+  Each cause also carries its `area` — the same table the HTML report groups by,
+  moved to `src/areas.mjs` so `report.mjs` and `causes.mjs` can both read it
+  without importing each other. That is what lets the Mac app's PDF group like
+  the HTML report without a second copy of the table in Swift.
+
 ### Fixed
+- **The PDF export was a summary sheet on one enormous page.** It printed the
+  cause titles and their scope lines and nothing else — no detail, no URLs, no
+  areas — and `write` emitted a *single* PDF page as tall as the whole report,
+  which looked fine on the two-finding site it was tried against and would have
+  been one unreadable strip for anything real. It now carries what the HTML
+  report carries: the meta line, the counts, the work grouped by the area that
+  fixes it, and under each piece of work every page it affects with what was
+  written about that page. Paginated into A4 by measuring each block and packing
+  pages, so nothing is cut mid-sentence, and pages are numbered. Still drawn
+  natively rather than by printing HTML — there is no web view in this app — but
+  only *drawn*: the areas now arrive from the engine on every cause, so the
+  grouping is the engine's, not a second copy of that table in Swift.
+
 - **The Versions sheet no longer goes blank when GitHub says no.**
   `api.github.com` allows sixty anonymous requests an hour per address, shared
   with every other tool on the machine that talks to GitHub, so a 403 there is

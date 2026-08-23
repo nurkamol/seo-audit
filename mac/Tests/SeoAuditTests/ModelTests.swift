@@ -45,6 +45,25 @@ struct PayloadTests {
         #expect(report.findings.contains { $0.reach != nil })
     }
 
+    @Test("every cause says which area fixes it, and the areas group")
+    func areas() throws {
+        let report = try JSONDecoder().decode(Report.self, from: fixture())
+        // The engine decides this. If the app ever had to work it out from the
+        // check id, that table would exist twice and drift.
+        for cause in report.causes {
+            #expect(!(cause.area ?? "").isEmpty, "\(cause.id) arrived with no area")
+        }
+        let grouped = report.byArea
+        #expect(grouped.count > 1, "a real report spans more than one area")
+        #expect(grouped.flatMap(\.causes).count == report.causes.count, "no cause is lost in grouping")
+        // Grouping must not reorder within an area — the engine put the worst
+        // first and the PDF prints them in that order.
+        for area in grouped {
+            let indices = area.causes.compactMap { c in report.causes.firstIndex { $0.identity == c.identity } }
+            #expect(indices == indices.sorted())
+        }
+    }
+
     @Test("a cause's pages are findings the report can actually show")
     func causesResolve() throws {
         let report = try JSONDecoder().decode(Report.self, from: fixture())
@@ -276,4 +295,52 @@ struct UpdatesCacheTests {
         #expect(updates.releases.isEmpty)
         #expect(!updates.listIsPartial, "nothing to show is not a partial list")
     }
+}
+
+@Suite("The PDF export")
+struct PDFTests {
+    @MainActor
+    @Test("a real report becomes a paginated PDF that carries the findings")
+    func writes() throws {
+        let url = try #require(Bundle.module.url(forResource: "payload", withExtension: "json"))
+        let report = try JSONDecoder().decode(Report.self, from: Data(contentsOf: url))
+
+        let out = ProcessInfo.processInfo.environment["SEO_AUDIT_PDF_OUT"].map(URL.init(fileURLWithPath:))
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("seo-audit-\(UUID().uuidString).pdf")
+        defer {
+            // Kept when a path was asked for, so the export can be looked at.
+            if ProcessInfo.processInfo.environment["SEO_AUDIT_PDF_OUT"] == nil {
+                try? FileManager.default.removeItem(at: out)
+            }
+        }
+
+        PDF.write(report: report, host: "https://jekyllrb.com", to: out)
+
+        let document = try #require(PDFishDocument(url: out))
+        // The bug this replaced: one page as tall as the whole report.
+        #expect(document.pageCount >= 1)
+        #expect(document.height <= 900, "every page is A4, not one strip the height of the report")
+
+        let text = document.text
+        #expect(text.contains("jekyllrb.com"))
+        #expect(text.contains("Things to change"))
+        // The detail and the pages, which the summary-only version dropped.
+        let cause = try #require(report.causes.first)
+        #expect(text.contains(cause.title))
+        if let finding = report.findings(for: cause).first, let page = finding.url {
+            #expect(text.contains(page) || text.contains(String(page.suffix(20))))
+        }
+    }
+}
+
+/// Enough of PDFKit to check the export, kept here so the app itself does not
+/// link a framework it has no other use for.
+import PDFKit
+struct PDFishDocument {
+    let inner: PDFDocument
+    init?(url: URL) { guard let d = PDFDocument(url: url) else { return nil }; inner = d }
+    var pageCount: Int { inner.pageCount }
+    var height: CGFloat { inner.page(at: 0)?.bounds(for: .mediaBox).height ?? 0 }
+    var text: String { inner.string ?? "" }
 }

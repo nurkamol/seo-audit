@@ -2664,7 +2664,7 @@ test('a report carries the grouping and a baseline does not', () => {
   assert.equal(report.causes.length, 1, 'two findings of one check under one section are one cause');
   assert.deepEqual(
     Object.keys(report.causes[0]).sort(),
-    ['count', 'id', 'level', 'pages', 'scope', 'section', 'title'],
+    ['area', 'count', 'id', 'level', 'pages', 'scope', 'section', 'title'],
     'the same shape the Worker sends, because it is the same function',
   );
   assert.equal(report.causes[0].scope, causeScope(byCause(findings)[0], meta.pages));

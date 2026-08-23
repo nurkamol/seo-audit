@@ -51,6 +51,10 @@ struct Cause: Decodable, Identifiable, Hashable {
     let count: Int
     let pages: [String]
     let scope: String
+    /// Which part of the site fixes this, decided by the engine so that this
+    /// app never carries a second copy of that table. Optional because a report
+    /// saved before the engine sent it still has to open.
+    let area: String?
 
     var identity: String { "\(id)|\(section)" }
 }
@@ -78,6 +82,20 @@ struct Report: Decodable, Hashable {
 
     func findings(for cause: Cause) -> [Finding] {
         findings.filter { $0.id == cause.id && cause.pages.contains($0.url ?? "") }
+    }
+
+    /// The causes under the area that fixes them, in the engine's order — the
+    /// same grouping the HTML report prints, so an exported PDF and an exported
+    /// HTML of one run say the same thing.
+    var byArea: [(name: String, causes: [Cause])] {
+        var order: [String] = []
+        var buckets: [String: [Cause]] = [:]
+        for cause in causes {
+            let name = cause.area ?? "Other"
+            if buckets[name] == nil { order.append(name) }
+            buckets[name, default: []].append(cause)
+        }
+        return order.map { ($0, buckets[$0] ?? []) }
     }
 }
 
