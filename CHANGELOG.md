@@ -49,6 +49,10 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.textFieldStyle(.roundedBorder)` again, and a test fails on a settings text
   field that has no style.
 
+- **A timestamp truncated before the time it stated.** "Last checked" shared a
+  row with the Check now button, so the button took the width and the date read
+  "Aug 24, 2026 at 2:…". Separate rows.
+
 - **The pane header was centred while everything under it was not.** The icon
   and title lined up with nothing else in the window, and the first thing the
   eye does in a settings pane is run down the left edge. Icon beside the title,

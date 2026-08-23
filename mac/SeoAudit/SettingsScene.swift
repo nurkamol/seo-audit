@@ -412,12 +412,17 @@ private struct UpdatesPane: View {
             Section {
                 Toggle("Check automatically", isOn: Binding(get: { updates.automatic },
                                                            set: { updates.automatic = $0 }))
+                // The date and the button on separate rows. Together, the
+                // button took the width and the date truncated to "Aug 24, 2026
+                // at 2:…" — a timestamp cut off before the time it states.
                 LabeledContent("Last checked") {
-                    HStack(spacing: 10) {
+                    Text(updates.lastChecked.map {
+                        $0.formatted(date: .abbreviated, time: .shortened)
+                    } ?? "Never")
+                }
+                LabeledContent("Check for a new version") {
+                    HStack(spacing: 8) {
                         if updates.checking { ProgressView().controlSize(.small) }
-                        Text(updates.lastChecked.map {
-                            $0.formatted(date: .abbreviated, time: .shortened)
-                        } ?? "Never")
                         Button("Check now") { Task { await updates.check() } }
                             .disabled(updates.checking)
                     }
