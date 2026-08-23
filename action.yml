@@ -56,6 +56,19 @@ inputs:
       serves a fresh deploy unevenly for a minute or two, and auditing during
       the rollout produces a snapshot that is wrong in a confusing way.
     required: false
+  browser:
+    description: >
+      Crawl as a real browser or a search crawler instead of as this tool:
+      chrome, firefox, safari, edge, googlebot, googlebot-desktop, bingbot.
+      Googlebot is what Google is served, which is not always what a person
+      gets; a browser is what a host blocking crawlers will answer at all.
+    required: false
+  os:
+    description: >
+      The system that browser is running on — macos, windows, linux, android,
+      ios. Defaults to the runner's. Ignored for the crawlers, whose user agent
+      names no machine.
+    required: false
   report:
     description: Where to write the HTML report
     required: false
@@ -112,6 +125,8 @@ runs:
         INPUT_VERBOSE: ${{ inputs.verbose }}
         INPUT_CHECK_EXTERNAL: ${{ inputs.check-external }}
         INPUT_SETTLE: ${{ inputs.settle }}
+        INPUT_BROWSER: ${{ inputs.browser }}
+        INPUT_OS: ${{ inputs.os }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT: ${{ inputs.report }}
         INPUT_JSON: ${{ inputs.json }}
@@ -125,6 +140,8 @@ runs:
         [ -n "$INPUT_VERBOSE" ]  && args+=(--verbose)
         [ -n "$INPUT_CHECK_EXTERNAL" ] && args+=(--check-external)
         [ -n "$INPUT_SETTLE" ]   && args+=(--settle "$INPUT_SETTLE")
+        [ -n "$INPUT_BROWSER" ]  && args+=(--browser "$INPUT_BROWSER")
+        [ -n "$INPUT_OS" ]       && args+=(--os "$INPUT_OS")
 
         node "$SEO_AUDIT_BIN" "${args[@]}"
         status=$?

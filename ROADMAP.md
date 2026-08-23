@@ -41,7 +41,19 @@ streaming report as the Worker, over `node:http`, no account and no limits — i
 the honest step first, and tells us whether the desktop framing is what is
 actually wanted before anyone writes Swift.
 
-### 4. Search Console, opt-in and last
+### 4. Fetch as two agents and diff them
+
+`--browser` made this cheap. A site that serves one page to Googlebot and
+another to a browser is either cloaking or misconfiguring its bot protection,
+and both are invisible to every audit that fetches once. The diff machinery
+already exists for `--against`, which compares two deployments; this compares
+two readers of one deployment.
+
+Worth measuring before building: three real sites served byte-identical HTML to
+the default agent, to Chrome and to Googlebot, so the interesting case may be
+rarer than it sounds.
+
+### 5. Search Console, opt-in and last
 
 Impressions and clicks per URL, so findings sort by traffic at risk: "this
 broken canonical is on a page with 4,000 impressions a month" is the sentence
@@ -106,6 +118,9 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Crawl as a browser or a crawler** (unreleased) — `--browser` and `--os`,
+  with Googlebot's strings quoted from Google's documentation and impossible
+  combinations refused rather than approximated.
 - **Findings grouped by cause** (unreleased) — the same check on pages of one
   section is one piece of work, because that is how a generated site is built.
   A real store's 2,081 findings became 62 things to change, led by "heading

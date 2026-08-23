@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { serialize, parse, diff } from '../src/baseline.mjs';
 import { parseRedirectMap } from '../src/redirects.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
+import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 
 const HELP = `
   seo-audit — crawl a site's sitemap and check every page
@@ -50,6 +51,12 @@ const HELP = `
     --check-external   also check links pointing off the site. Off by default:
                        other people's servers rate-limit and bot-block, so only
                        a 404, a 410 or no answer at all is ever reported
+    --browser <name>   crawl as a real browser or a search crawler:
+                       ${BROWSER_NAMES.join(', ')}.
+                       Googlebot is what Google is served; a browser is what a
+                       host blocking crawlers will answer
+    --os <name>        the system that browser is running on, default this one:
+                       ${OS_NAMES.join(', ')}
     --user-agent <ua>  identify as something else. Some hosts stall clients
                        that do not look like a browser
 
@@ -105,6 +112,8 @@ function parseArgs(argv) {
     else if (arg === '--redirects') opts.redirects = value();
     else if (arg === '--check-external') opts.checkExternal = true;
     else if (arg === '--user-agent') opts.userAgent = value();
+    else if (arg === '--browser') opts.browser = value();
+    else if (arg === '--os') opts.os = value();
     else if (arg === '--config') opts.config = value();
     else if (arg === '--ignore') opts.ignore = value().split(',').map((s) => s.trim()).filter(Boolean);
     else if (arg === '--fail-on') opts.failOn = value();
@@ -157,6 +166,25 @@ const opts = {
   psi: cli.psi ?? (psiFromConfig.length ? psiFromConfig : undefined),
   failOn: cli.failOn ?? file.failOn ?? 'error',
 };
+
+// A browser or a crawler to present as, resolved once and refused loudly. An
+// impossible pair describes a machine that does not exist, and the whole point
+// of the flag is to be believed by a server.
+if (opts.browser) {
+  const { ua, error, ignoredOs } = userAgentFor(opts.browser, opts.os ?? thisPlatform());
+  if (error) {
+    console.error(`  ${error}`);
+    process.exit(2);
+  }
+  if (ignoredOs) {
+    console.error(`  --os is ignored for ${opts.browser}: a crawler's user agent names no machine.`);
+  }
+  // An explicit --user-agent is a literal string and outranks a preset.
+  opts.userAgent = opts.userAgent ?? ua;
+} else if (opts.os) {
+  console.error('  --os needs --browser: it says which system the browser is running on.');
+  process.exit(2);
+}
 
 if (opts.failOn === 'new' && !opts.baseline) {
   console.error('  --fail-on new needs --baseline <file> to compare against.');

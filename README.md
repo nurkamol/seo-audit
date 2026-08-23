@@ -130,6 +130,36 @@ canonical points somewhere else — are marked `not indexable`. The same thin
 page is a problem when Google will index it and noise when it won't, and that
 distinction is often more useful than the severity.
 
+### Crawling as something else
+
+```bash
+# What Google is served, which is not always what a person gets
+node bin/seo-audit.mjs https://example.com --browser googlebot
+
+# What a host that blocks crawlers will answer at all
+node bin/seo-audit.mjs https://example.com --browser chrome --os windows
+```
+
+Three reasons this matters, and none of them is dressing up. A site that
+answers a browser and blocks everything else is common, and the report from a
+blocked crawl is a report about the block. Some sites serve different HTML to a
+crawler than to a person, and fetching as Googlebot is the only way to see it.
+And Google indexes what its **smartphone** crawler sees — `--browser googlebot`
+is that one, `googlebot-desktop` is the other.
+
+`--os` says which system the browser is running on and defaults to yours.
+A combination that does not exist is refused rather than approximated:
+
+```
+$ … --browser safari --os windows
+  safari does not run on windows. It runs on: macos, ios.
+```
+
+The strings are a snapshot and will age — browser versions move every few weeks
+and nothing here can know that. They are close enough for a server deciding
+whether to answer, and `--user-agent` still takes a literal string for anything
+that has to be exact. It outranks `--browser` when both are given.
+
 ### Checking outbound links
 
 Off by default, and that's a judgement rather than an omission:
@@ -267,7 +297,9 @@ reason.
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path. Without any sitemap, the crawl follows links instead |
 | `--redirects <file>` | — | Check a migration's redirect map against the live site (see below) |
 | `--check-external` | — | Also check links pointing off the site (see below) |
-| `--user-agent <ua>` | `seo-audit …` | Identify as something else |
+| `--browser <name>` | — | Crawl as `chrome`, `firefox`, `safari`, `edge`, `googlebot`, `googlebot-desktop` or `bingbot` |
+| `--os <name>` | this one | The system that browser runs on: `macos`, `windows`, `linux`, `android`, `ios` |
+| `--user-agent <ua>` | `seo-audit …` | Identify as something else. A literal string, and it outranks `--browser` |
 | `--config <file>` | `seo-audit.config.json` | Per-site configuration |
 | `--ignore <ids>` | — | Comma-separated check ids to silence for this run |
 | `--psi <urls>` | — | Measure these pages with PageSpeed Insights. A path glob names a section (see below) |

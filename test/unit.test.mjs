@@ -6,6 +6,7 @@ import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSit
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
+import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks } from '../src/site.mjs';
@@ -1312,6 +1313,57 @@ test('a page nothing links to is not reported for the words nobody used', () => 
   const found = ids(crossPageChecks(pages));
   assert.ok(!found.includes('anchor-generic'));
   assert.ok(found.includes('orphan-page'));
+});
+
+// --- presenting as something else ------------------------------------------
+
+test("Googlebot's user agents are the ones Google publishes", () => {
+  // Quoted from Google's crawler documentation. Google prints the Chrome
+  // version as the placeholder W.X.Y.Z; a concrete one is substituted, since
+  // the real crawler sends one.
+  const smartphone = userAgentFor('googlebot').ua;
+  assert.match(smartphone, /^Mozilla\/5\.0 \(Linux; Android 6\.0\.1; Nexus 5X Build\/MMB29P\)/);
+  assert.match(smartphone, /Mobile Safari\/537\.36 \(compatible; Googlebot\/2\.1; \+http:\/\/www\.google\.com\/bot\.html\)$/);
+
+  const desktop = userAgentFor('googlebot-desktop').ua;
+  assert.match(desktop, /compatible; Googlebot\/2\.1; \+http:\/\/www\.google\.com\/bot\.html\)/);
+  assert.ok(!desktop.includes('Mobile'), 'the desktop crawler is not a phone');
+
+  assert.match(userAgentFor('bingbot').ua, /compatible; bingbot\/2\.0/);
+});
+
+test('a browser names the system it is running on', () => {
+  assert.match(userAgentFor('chrome', 'macos').ua, /Macintosh; Intel Mac OS X 10_15_7/);
+  assert.match(userAgentFor('chrome', 'windows').ua, /Windows NT 10\.0; Win64; x64/);
+  assert.match(userAgentFor('chrome', 'linux').ua, /X11; Linux x86_64/);
+  assert.match(userAgentFor('chrome', 'android').ua, /Mobile Safari/);
+  assert.match(userAgentFor('firefox', 'linux').ua, /Gecko\/20100101 Firefox/);
+  assert.match(userAgentFor('edge', 'windows').ua, /Edg\//);
+  // Chrome on iOS is not Chrome: it is Safari's engine wearing a badge.
+  assert.match(userAgentFor('chrome', 'ios').ua, /CriOS/);
+});
+
+test('a combination that does not exist is refused, not approximated', () => {
+  // The whole point of the flag is to be believed by a server, and a user agent
+  // for Safari on Windows describes a machine nobody has.
+  assert.match(userAgentFor('safari', 'windows').error, /does not run on windows/);
+  assert.match(userAgentFor('safari', 'linux').error, /does not run on linux/);
+  assert.match(userAgentFor('netscape', 'macos').error, /Unknown browser/);
+  assert.match(userAgentFor('chrome', 'beos').error, /Unknown system/);
+  for (const name of BROWSER_NAMES) assert.ok(userAgentFor(name, 'macos').ua, `${name} should work on macOS`);
+});
+
+test('a crawler names no machine, so --os has nothing to say to it', () => {
+  const asked = userAgentFor('googlebot', 'windows');
+  assert.equal(asked.ua, userAgentFor('googlebot', 'macos').ua);
+  assert.ok(asked.ignoredOs, 'and it says so rather than pretending the flag worked');
+});
+
+test('the default system is the one this is running on', () => {
+  assert.equal(thisPlatform('darwin'), 'macos');
+  assert.equal(thisPlatform('win32'), 'windows');
+  assert.equal(thisPlatform('freebsd'), 'linux');
+  assert.ok(OS_NAMES.includes(thisPlatform()));
 });
 
 // --- causes ----------------------------------------------------------------

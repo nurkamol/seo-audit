@@ -6,6 +6,31 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--browser` and `--os`: crawl as a real browser, or as a search crawler.**
+  `chrome`, `firefox`, `safari`, `edge`, `googlebot`, `googlebot-desktop` and
+  `bingbot`, on `macos`, `windows`, `linux`, `android` or `ios` — defaulting to
+  the system it is running on.
+
+  Three reasons, and none of them is dressing up. A site that answers a browser
+  and blocks everything else is common, and the report from a blocked crawl is
+  a report about the block. Some sites serve different HTML to a crawler than
+  to a person, and fetching as Googlebot is the only way to see what Google is
+  given. And Google indexes what its *smartphone* crawler sees, which on a site
+  serving something different to phones is the page that matters.
+
+  Googlebot's two user agents are quoted from Google's own crawler
+  documentation; Google prints the Chrome version there as the placeholder
+  `W.X.Y.Z`, so a concrete one is substituted because the real crawler sends
+  one.
+
+  **A combination that does not exist is refused rather than approximated** —
+  `--browser safari --os windows` describes a machine nobody has, and the whole
+  point of the flag is to be believed by a server. `--os` alongside a crawler
+  says so and carries on, since a crawler's user agent names no machine.
+
+  The strings are a snapshot and will age. `--user-agent` still takes a literal
+  string and outranks `--browser` when both are given.
+
 - **Findings are grouped by cause.** A real store produced **2,081 findings
   across 347 URLs**, four checks accounting for 80% of them and 1,685 of them
   under `/products/` — which is not 1,685 problems but one Shopify template
