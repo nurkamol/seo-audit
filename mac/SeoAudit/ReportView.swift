@@ -5,6 +5,7 @@
 // presentation, and presentation is the one thing a native app should own.
 
 import SwiftUI
+import AppKit
 
 struct ReportView: View {
     let report: Report
@@ -250,6 +251,13 @@ private struct CauseCard: View {
     var silence: () -> Void = {}
     var toggle: () -> Void
 
+    /// The detail, when every page in this group carries the same one. `nil`
+    /// when they differ, and then each page shows its own.
+    private var shared: String? {
+        guard let first = findings.first?.detail else { return nil }
+        return findings.allSatisfy { $0.detail == first } ? first : nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: toggle) {
@@ -276,15 +284,19 @@ private struct CauseCard: View {
 
             if open {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let first = findings.first {
-                        Text(first.detail)
+                    // Only when it really is the group's detail. This used to
+                    // print the first finding's line above every page, so a
+                    // check whose detail carries a number — "267 chars (limit
+                    // ~160)" — presented one page's number as the group's.
+                    if let shared {
+                        Text(shared)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
                     Divider().opacity(0.4)
                     ForEach(findings.prefix(50)) { finding in
-                        PageRow(finding: finding)
+                        PageRow(finding: finding, detail: shared == nil ? finding.detail : nil)
                     }
                     if findings.count > 50 {
                         Text("and \(findings.count - 50) more")
@@ -316,8 +328,11 @@ private struct CauseCard: View {
 
 private struct PageRow: View {
     let finding: Finding
+    /// This page's own detail, when it differs from the rest of the group.
+    var detail: String?
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
         HStack(spacing: 8) {
             Text(path)
                 .font(.system(.caption, design: .monospaced))
@@ -342,6 +357,25 @@ private struct PageRow: View {
                 Link(destination: link) { Image(systemName: "arrow.up.right") }
                     .font(.caption2)
                     .buttonStyle(.plain)
+            }
+        }
+        if let detail {
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        }
+        .contextMenu {
+            if let url = finding.url {
+                Button("Copy URL") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url, forType: .string)
+                }
+                Button("Open in browser") {
+                    if let link = URL(string: url) { NSWorkspace.shared.open(link) }
+                }
             }
         }
     }

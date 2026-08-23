@@ -90,16 +90,23 @@ struct SettingsScene: View {
             }
             .navigationSplitViewColumnWidth(196)
         } detail: {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Header(pane: pane ?? .crawl)
-                    body(of: pane ?? .crawl)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(22)
+            VStack(alignment: .leading, spacing: 0) {
+                Header(pane: pane ?? .crawl)
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+                // Form, not a hand-built stack. It is what puts the labels in
+                // one right-aligned column and the controls at one x, which is
+                // the thing that makes System Settings readable and the thing a
+                // VStack of LabeledContent does not do.
+                body(of: pane ?? .crawl)
+                    .formStyle(.grouped)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 760, height: 520)
+        // A Settings window has no business hiding its own sidebar: it is the
+        // only way to get to six of the seven panes.
+        .toolbar(removing: .sidebarToggle)
+        .frame(width: 720, height: 480)
     }
 
     @ViewBuilder
@@ -125,9 +132,7 @@ struct SettingsScene: View {
                     Text(pane.title).font(.system(.title2, design: .rounded).weight(.semibold))
                 }
                 Text(pane.blurb).font(.callout).foregroundStyle(.secondary)
-                Divider().padding(.top, 4)
             }
-            .padding(.bottom, 18)
         }
     }
 }
@@ -151,47 +156,30 @@ private struct PaneIcon: View {
 }
 
 // MARK: - The panes
-
-/// A row of controls with the sentence that explains them underneath, which is
-/// the shape every pane here is made of.
-private struct Setting<Control: View>: View {
-    let title: String
-    let note: String
-    @ViewBuilder var control: () -> Control
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            LabeledContent(title) { control() }
-            Text(note)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.bottom, 18)
-    }
-}
+//
+// Each is a `Form` with `Section`s: the label column, the control column and
+// the explanation underneath all come from the platform, which is why they line
+// up with each other and with every other settings window on the machine.
 
 private struct CrawlPane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Setting(title: "Speed", note: settings.speed.detail) {
-                Picker("", selection: $settings.speed) {
+        Form {
+            Section {
+                Picker("Speed", selection: $settings.speed) {
                     ForEach(CrawlSettings.Speed.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 260)
+            } footer: {
+                Text(settings.speed.detail).footnote()
             }
 
-            Setting(title: "Sitemap",
-                    note: "Only used when a sitemap is somewhere the usual names do not find it. "
-                        + "It has to be on the site being audited.") {
-                TextField("Sitemap URL", text: $settings.sitemap, prompt: Text("Found automatically"))
-                    .textFieldStyle(.roundedBorder)
-                    .labelsHidden()
-                    .frame(width: 300)
+            Section {
+                TextField("Sitemap", text: $settings.sitemap, prompt: Text("Found automatically"))
+            } footer: {
+                Text("Only used when a sitemap is somewhere the usual names do not find it. It has "
+                     + "to be on the site being audited.").footnote()
             }
         }
     }
@@ -201,21 +189,23 @@ private struct CoveragePane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Setting(title: "Pages per run",
-                    note: "A crawl that stops at its limit says so in the report, with the number "
-                        + "it did not reach.") {
-                HStack(spacing: 6) {
-                    Text("\(settings.limit)").monospacedDigit()
-                    Stepper("Pages per run", value: $settings.limit, in: 1...5000, step: 50)
-                        .labelsHidden()
+        Form {
+            Section {
+                Stepper(value: $settings.limit, in: 1...5000, step: 50) {
+                    LabeledContent("Pages per run") {
+                        Text("\(settings.limit)").monospacedDigit()
+                    }
                 }
+            } footer: {
+                Text("A crawl that stops at its limit says so in the report, with the number it did "
+                     + "not reach.").footnote()
             }
 
-            Setting(title: "Outbound links",
-                    note: "Follows links to other sites to see whether they still resolve. Slower, "
-                        + "and only a 404, 410 or no answer is reported.") {
-                Toggle("", isOn: $settings.checkExternal).labelsHidden()
+            Section {
+                Toggle("Check outbound links", isOn: $settings.checkExternal)
+            } footer: {
+                Text("Follows links to other sites to see whether they still resolve. Slower, and "
+                     + "only a 404, 410 or no answer is reported.").footnote()
             }
         }
     }
@@ -230,39 +220,34 @@ private struct IdentityPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Setting(title: "Browser",
-                    note: "Some sites answer a crawler differently from a browser.") {
-                Picker("", selection: $settings.browser) {
+        Form {
+            Section {
+                Picker("Browser", selection: $settings.browser) {
                     Text("This machine").tag("")
                     ForEach(settings.browsers, id: \.self) { Text($0).tag($0) }
                 }
-                .labelsHidden()
-                .frame(width: 200)
-                .disabled(overridden)
-            }
-
-            Setting(title: "System",
-                    note: "A combination that cannot exist — Safari on Windows — is refused by the "
-                        + "engine, and the run goes ahead as itself.") {
-                Picker("", selection: $settings.system) {
+                Picker("System", selection: $settings.system) {
                     Text("This machine").tag("")
                     ForEach(settings.systems, id: \.self) { Text($0).tag($0) }
                 }
-                .labelsHidden()
-                .frame(width: 200)
-                .disabled(overridden)
+            } footer: {
+                Text("Some sites answer a crawler differently from a browser. A combination that "
+                     + "cannot exist — Safari on Windows — is refused by the engine, and the run "
+                     + "goes ahead as itself.").footnote()
             }
+            // Greyed rather than silently losing: the engine ignores both menus
+            // when a string of your own is set, and a control that does nothing
+            // should look like one.
+            .disabled(overridden)
 
-            Setting(title: "Or your own",
-                    note: overridden
-                        ? "In use. The two menus above are ignored while this is set."
-                        : "For an agent a host is known to treat differently, or a name of your own "
-                          + "so your crawls are identifiable in somebody's logs.") {
-                TextField("User agent", text: $settings.userAgent, prompt: Text("A string of your own"))
-                    .textFieldStyle(.roundedBorder)
-                    .labelsHidden()
-                    .frame(width: 300)
+            Section {
+                TextField("Or your own", text: $settings.userAgent,
+                          prompt: Text("A string of your own"))
+            } footer: {
+                Text(overridden
+                     ? "In use. The two menus above are ignored while this is set."
+                     : "For an agent a host is known to treat differently, or a name of your own so "
+                       + "your crawls are identifiable in somebody's logs.").footnote()
             }
         }
         .task { await settings.loadAgents(from: engine.base) }
@@ -273,43 +258,36 @@ private struct PerformancePane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Setting(title: "Measure",
-                    note: "Google measures it, over its own network, in a real browser. This app "
-                        + "never estimates performance — a plausible wrong number is worse than no "
-                        + "number. Each page takes a few seconds, which is why it is sampled.") {
-                Picker("", selection: $settings.performance) {
+        Form {
+            Section {
+                Picker("Measure", selection: $settings.performance) {
                     ForEach(CrawlSettings.Performance.allCases) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 260)
-            }
 
-            if settings.performance == .sample {
-                Setting(title: "Pages", note: "Spread across the site, not the first few.") {
-                    HStack(spacing: 6) {
-                        Text("\(settings.performanceSample)").monospacedDigit()
-                        Stepper("Pages", value: $settings.performanceSample, in: 1...10)
-                            .labelsHidden()
+                if settings.performance == .sample {
+                    Stepper(value: $settings.performanceSample, in: 1...10) {
+                        LabeledContent("Pages") {
+                            Text("\(settings.performanceSample)").monospacedDigit()
+                        }
                     }
                 }
-            }
-
-            if settings.performance != .off {
-                Setting(title: "As a desktop browser",
-                        note: "Mobile otherwise, which is what Google indexes with.") {
-                    Toggle("", isOn: $settings.performanceOnDesktop).labelsHidden()
+                if settings.performance != .off {
+                    Toggle("Measure as a desktop browser", isOn: $settings.performanceOnDesktop)
                 }
+            } footer: {
+                Text("Google measures it, over its own network, in a real browser. This app never "
+                     + "estimates performance — a plausible wrong number is worse than no number. "
+                     + "Each page takes a few seconds, which is why it is sampled.").footnote()
             }
 
-            Label("A PageSpeed API key is optional and raises the quota. The engine reads "
-                  + "PSI_API_KEY, or ~/.config/seo-audit/.env — the same two places the command "
-                  + "line looks, so a key already set is already working. This app never holds one.",
-                  systemImage: "key")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            Section {
+                Label("A PageSpeed API key is optional and raises the quota. The engine reads "
+                      + "PSI_API_KEY, or ~/.config/seo-audit/.env — the same two places the command "
+                      + "line looks, so a key already set is already working. This app never holds "
+                      + "one.", systemImage: "key")
+                    .footnote()
+            }
         }
     }
 }
@@ -318,35 +296,35 @@ private struct SilencedPane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        Form {
             if settings.ignored.isEmpty {
-                ContentUnavailableView("Nothing is silenced",
-                                       systemImage: "bell",
-                                       description: Text("Right-click a finding in a report to leave "
-                                                         + "its check out of future runs."))
-                    .frame(height: 190)
-            } else {
-                ForEach(settings.ignored, id: \.self) { id in
-                    HStack {
-                        Text(id).font(.system(.callout, design: .monospaced))
-                        Spacer(minLength: 0)
-                        Button("Stop silencing") { withAnimation(.snappy) { settings.unsilence(id) } }
-                            .controlSize(.small)
-                    }
-                    Divider()
+                Section {
+                    Text("Nothing is silenced. Right-click a finding in a report to leave its check "
+                         + "out of future runs on this machine.")
+                        .footnote()
                 }
-                Text("A report still says how many findings were silenced. A check somebody "
-                     + "quietened must never read the same as one that passed.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Section {
+                    ForEach(settings.ignored, id: \.self) { id in
+                        LabeledContent {
+                            Button("Stop silencing") {
+                                withAnimation(.snappy) { settings.unsilence(id) }
+                            }
+                        } label: {
+                            Text(id).font(.system(.body, design: .monospaced))
+                        }
+                    }
+                } footer: {
+                    Text("A report still says how many findings were silenced. A check somebody "
+                         + "quietened must never read the same as one that passed.").footnote()
+                }
             }
 
-            Text("Per-machine on purpose. A decision a whole team shares belongs in the config file "
-                 + "the repository commits, where everybody's runs read it.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            Section {
+                Text("Per-machine on purpose. A decision a whole team shares belongs in the config "
+                     + "file the repository commits, where everybody's runs read it.")
+                    .footnote()
+            }
         }
     }
 }
@@ -360,29 +338,32 @@ private struct ReportsPane: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Setting(title: "Kept",
-                    note: "Every finished run is written as the exact JSON the engine produced, so "
-                        + "a report saved by one version still opens in the next — and `jq` works "
-                        + "on it. The forty most recent are kept.") {
-                Text(library.reports.isEmpty
-                     ? "None yet"
-                     : "\(library.reports.count) report\(library.reports.count == 1 ? "" : "s") · \(size)")
-                    .foregroundStyle(.secondary)
-            }
-
-            Setting(title: "Location",
-                    note: library.location.path(percentEncoded: false)) {
-                Button("Reveal in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([library.location])
+        Form {
+            Section {
+                LabeledContent("Kept") {
+                    Text(library.reports.isEmpty
+                         ? "None yet"
+                         : "\(library.reports.count) · \(size)")
                 }
+                LabeledContent("Location") {
+                    Button("Reveal in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([library.location])
+                    }
+                }
+            } footer: {
+                Text("Every finished run is written as the exact JSON the engine produced, so a "
+                     + "report saved by one version still opens in the next — and `jq` works on it. "
+                     + "The forty most recent are kept.").footnote()
             }
 
-            Setting(title: "Delete all",
-                    note: "Removes every kept report from this machine. The sites are not touched, "
-                        + "and nothing is sent anywhere — these files never left it.") {
-                Button("Delete…", role: .destructive) { confirming = true }
-                    .disabled(library.reports.isEmpty)
+            Section {
+                LabeledContent("Delete all") {
+                    Button("Delete…", role: .destructive) { confirming = true }
+                        .disabled(library.reports.isEmpty)
+                }
+            } footer: {
+                Text("Removes every kept report from this machine. The sites are not touched, and "
+                     + "nothing is sent anywhere — these files never left it.").footnote()
             }
         }
         .confirmationDialog("Delete every kept report?", isPresented: $confirming) {
@@ -401,45 +382,47 @@ private struct UpdatesPane: View {
     @ObservedObject var updates: Updates
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Setting(title: "Version",
-                    note: updates.available == nil
-                        ? "This is the newest release this app knows about."
-                        : "A newer release is out. Open Versions from the sidebar to read what "
-                          + "changed and move to it.") {
-                Text(updates.current.description)
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-
-            Setting(title: "Check automatically",
-                    note: "Once a day at most. Off is a real preference: it is one request to "
-                        + "GitHub about which software you run.") {
-                Toggle("", isOn: Binding(get: { updates.automatic },
-                                         set: { updates.automatic = $0 })).labelsHidden()
-            }
-
-            Setting(title: "Last checked",
-                    note: "The list is kept, so the Versions sheet is never empty after one "
-                        + "successful check — GitHub refusing an hour later is not a reason to "
-                        + "forget what it said.") {
-                HStack(spacing: 10) {
-                    Text(updates.lastChecked.map {
-                        $0.formatted(date: .abbreviated, time: .shortened)
-                    } ?? "Never")
-                        .foregroundStyle(.secondary)
-                    Button("Check now") { Task { await updates.check() } }
-                        .disabled(updates.checking)
-                    if updates.checking { ProgressView().controlSize(.small) }
+        Form {
+            Section {
+                LabeledContent("Version") {
+                    Text(updates.current.description).font(.system(.body, design: .monospaced))
                 }
+            } footer: {
+                Text(updates.available == nil
+                     ? "This is the newest release this app knows about."
+                     : "A newer release is out. Open Versions from the sidebar to read what changed "
+                       + "and move to it.").footnote()
             }
 
-            if let problem = updates.problem {
-                Label(problem, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Section {
+                Toggle("Check automatically", isOn: Binding(get: { updates.automatic },
+                                                           set: { updates.automatic = $0 }))
+                LabeledContent("Last checked") {
+                    HStack(spacing: 10) {
+                        if updates.checking { ProgressView().controlSize(.small) }
+                        Text(updates.lastChecked.map {
+                            $0.formatted(date: .abbreviated, time: .shortened)
+                        } ?? "Never")
+                        Button("Check now") { Task { await updates.check() } }
+                            .disabled(updates.checking)
+                    }
+                }
+            } footer: {
+                Text("Once a day at most, and off is a real preference: it is one request to GitHub "
+                     + "about which software you run. The list is kept, so the Versions sheet is "
+                     + "never empty after one successful check."
+                     + (updates.problem.map { " \($0)" } ?? "")).footnote()
             }
         }
+    }
+}
+
+/// The grey explanatory line under a group. One modifier so every footer in
+/// every pane is the same size and colour.
+private extension View {
+    func footnote() -> some View {
+        self.font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

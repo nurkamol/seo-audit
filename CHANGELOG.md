@@ -17,6 +17,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Silenced**, **Reports**, **Updates**.
 
 ### Added
+- **A kept report can be exported from the sidebar.** Right-click any stored run
+  and every format is there — a report that has to be on screen before it can be
+  saved is a report you reopen just to save it. It is read from disk, so the
+  file written is the run that was right-clicked and not whatever happens to be
+  in front of you.
+
+- **A page in a report can be copied or opened.** Right-click any page under a
+  finding.
+
 - **Reports and Updates are settings now.** They were deliberately left out when
   Settings was built, on the grounds that the sidebar and the Versions sheet
   already answered them. With a sidebar of panes that reasoning stops holding —
@@ -30,6 +39,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Setting your own user agent greys out the browser and system menus** rather
   than silently overriding them. The engine has always ignored them when a
   custom string is set; the window showed all three as live.
+
+### Fixed
+- **A cause card showed one page's detail as though it were the group's.** It
+  printed the first finding's line above the whole list, and details differ per
+  page — so "267 chars (limit ~160)" appeared above a page that was 202
+  characters long. The line is shown once only when every page in the group
+  carries the same one; when they differ, each page now shows its own, which is
+  what the HTML report and the PDF have always done.
 
 ## [1.27.0] — 2026-08-24
 

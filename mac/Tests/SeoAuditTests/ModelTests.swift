@@ -715,3 +715,34 @@ struct SilenceAndPerformanceTests {
         }
     }
 }
+
+@Suite("What a cause card can say about a group")
+struct SharedDetailTests {
+    private func finding(_ url: String, _ detail: String) -> Finding {
+        let json = """
+        {"level":"warn","id":"desc-long","title":"Meta description will be cut off",
+         "detail":"\(detail)","url":"\(url)"}
+        """
+        return try! JSONDecoder().decode(Finding.self, from: Data(json.utf8))
+    }
+
+    @Test("one detail for the whole group is shown once")
+    func shared() {
+        let group = [finding("https://a.test/one", "Missing entirely."),
+                     finding("https://a.test/two", "Missing entirely.")]
+        let first = group.first!.detail
+        #expect(group.allSatisfy { $0.detail == first }, "identical, so it describes the group")
+    }
+
+    @Test("details that differ are not one page's number standing for everybody's")
+    func differing() {
+        // The bug this replaced: the card printed the first finding's line above
+        // every page, so "267 chars (limit ~160)" appeared over a page that was
+        // 202 characters long.
+        let group = [finding("https://a.test/one", "267 chars (limit ~160)"),
+                     finding("https://a.test/two", "202 chars (limit ~160)")]
+        let first = group.first!.detail
+        #expect(!group.allSatisfy { $0.detail == first }, "so each page shows its own")
+        #expect(Set(group.map(\.detail)).count == 2)
+    }
+}

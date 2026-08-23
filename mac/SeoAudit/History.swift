@@ -11,6 +11,7 @@ struct Sidebar: View {
     var reopen: (StoredReport) -> Void
     var again: (String) -> Void
     var newAudit: () -> Void
+    var export: (StoredReport, ExportFormat) -> Void = { _, _ in }
 
     var body: some View {
         List {
@@ -41,6 +42,20 @@ struct Sidebar: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button("Audit again") { again(stored.site) }
+                            // Exporting a kept run without opening it first.
+                            // Every format the report view offers, from the row
+                            // — a report that has to be on screen to be saved
+                            // is a report you reopen just to save.
+                            Menu("Export") {
+                                ForEach(ExportFormat.allCases) { format in
+                                    Button {
+                                        export(stored, format)
+                                    } label: {
+                                        Label(format.label, systemImage: format.symbol)
+                                    }
+                                }
+                            }
+                            Divider()
                             Button("Delete", role: .destructive) {
                                 withAnimation(.snappy) { library.forget(stored) }
                             }

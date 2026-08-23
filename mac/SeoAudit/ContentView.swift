@@ -115,6 +115,12 @@ struct ContentView: View {
                 start()
             } newAudit: {
                 startOver()
+            } export: { stored, format in
+                // Reopened from disk rather than from whatever is on screen, so
+                // the file written is the run that was right-clicked.
+                guard let (report, raw) = library.reopen(stored) else { return }
+                Export.save(format, report: report, host: stored.host,
+                            engine: engine.base, raw: raw)
             }
             .navigationSplitViewColumnWidth(min: 214, ideal: 244, max: 320)
             .onReceive(NotificationCenter.default.publisher(for: .newAudit)) { _ in startOver() }
