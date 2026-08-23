@@ -811,3 +811,52 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
 </html>
 `;
 }
+
+/** What a `--dry-run` found, for the terminal.
+ *
+ *  Deliberately not a report: it has no findings in it, and printing it in the
+ *  report's shape would suggest a crawl happened. */
+export function dryRunReport(plan) {
+  const out = [''];
+  out.push(`  ${bold(plan.origin)}`);
+  if (plan.redirected) {
+    out.push(dim(`  ${plan.redirected.from}/ redirects here, so this is the host that would be read`));
+  }
+
+  if (!plan.reachable) {
+    out.push('', `  ${red('Nothing answered.')} ${plan.rateLimited
+      ? 'Every request came back HTTP 429 — wait, then try a lower --concurrency.'
+      : 'The host did not return a single response.'}`);
+    out.push('');
+    return out.join('\n');
+  }
+
+  if (plan.sitemap) {
+    out.push(dim(`  sitemap  ${plan.sitemap}`));
+  } else {
+    out.push('', `  ${yellow('No sitemap found.')} The crawl would follow links from the home page`);
+    out.push(dim(`  instead, up to --limit ${plan.limit}. Tried: ${plan.tried.join(', ')}`));
+    out.push('');
+    return out.join('\n');
+  }
+
+  out.push('');
+  out.push(`  ${bold(String(plan.listed))} URLs listed, ${bold(String(plan.wouldCheck))} would be checked`
+    + (plan.skippedByLimit
+      ? `, ${yellow(`${plan.skippedByLimit} past --limit ${plan.limit}`)}`
+      : ''));
+
+  if (plan.sections.length > 1) {
+    out.push('');
+    const width = Math.max(...plan.sections.map((s) => s.path.length));
+    for (const section of plan.sections) {
+      out.push(`    ${section.path.padEnd(width)}  ${dim(String(section.count))}`);
+    }
+  }
+
+  out.push('');
+  out.push(dim(`  first few: ${plan.sample.slice(0, 3).join(', ')}`));
+  out.push(dim(`  ${plan.requests} requests, ${(plan.ms / 1000).toFixed(1)}s — no page was fetched`));
+  out.push('');
+  return out.join('\n');
+}

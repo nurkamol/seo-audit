@@ -10,7 +10,7 @@
 // rest of the project keeps.
 //
 // See docs/hosting.md for what it costs and what it is allowed to reach.
-import { audit } from '../src/audit.mjs';
+import { audit, preview } from '../src/audit.mjs';
 import { html as htmlReport, markdown as markdownReport, csv as csvReport } from '../src/report.mjs';
 import { causePayload } from '../src/causes.mjs';
 import { diff } from '../src/baseline.mjs';
@@ -126,6 +126,13 @@ export function sitemapOverride(requested, target) {
  *  unknown name falls back to the deployment's own setting rather than being
  *  invented. */
 export function agentFor(params, env) {
+  // A string of somebody's own, which the presets cannot cover — an internal
+  // crawler's name, or the exact agent a host is known to treat differently.
+  // Bounded and stripped of control characters, because this ends up in a
+  // request header: a newline in here would be header injection.
+  const custom = (params.get('userAgent') ?? '').replace(/[\r\n\u0000-\u001f\u007f]/g, '').trim();
+  if (custom) return custom.slice(0, 256);
+
   const browser = params.get('browser');
   const system = params.get('os');
   if (!browser || !BROWSER_NAMES.includes(browser)) return env.USER_AGENT;
@@ -306,6 +313,22 @@ export async function handle(request, env, ctx, deps = {}) {
 
   // The findings, handed back and rendered. The native app holds the JSON it
   // was streamed and asks for a format when somebody exports; re-rendering here
+  // What a run would do, without doing it. A handful of requests instead of
+  // hundreds, so somebody can find out whether the tool is pointed at the right
+  // site before spending the minutes — and, on the hosted version, before
+  // spending somebody's Workers budget.
+  if (url.pathname === '/preview') {
+    const target = targetFor(url.searchParams.get('url'), env);
+    if (target.error) return new Response(target.error, { status: 400 });
+    const plan = await preview(target.url, {
+      limit: pageLimit(url.searchParams.get('limit'), env),
+      concurrency: crawlConcurrency(url.searchParams.get('concurrency'), env),
+      sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
+      userAgent: agentFor(url.searchParams, env),
+    });
+    return new Response(JSON.stringify(plan), { headers: { 'content-type': 'application/json' } });
+  }
+
   // Two runs of the same site, and what moved between them. `diff()` lives in
   // src/baseline.mjs and is what `--baseline` has always used; sending the two
   // sets here rather than comparing them in the client means there is one

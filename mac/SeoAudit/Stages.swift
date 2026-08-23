@@ -30,6 +30,10 @@ struct AskStage: View {
     @Binding var limit: Int
     var stage: Namespace.ID
     var begin: () -> Void
+    var preview: () -> Void = {}
+    /// What the last preview found, or nil before one has been asked for.
+    var plan: Preview?
+    var previewing = false
 
     @FocusState private var focused: Bool
     @State private var appeared = false
@@ -67,6 +71,19 @@ struct AskStage: View {
                         }
                         .fixedSize()
                         Spacer(minLength: 0)
+                        // A few requests instead of a few hundred: how big is
+                        // this site, and is this even the right one. A full
+                        // crawl is minutes of waiting and a lot of somebody
+                        // else's bandwidth to find that out the other way.
+                        Button(action: preview) {
+                            if previewing {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("Preview", systemImage: "binoculars")
+                            }
+                        }
+                        .buttonStyle(.glass)
+                        .disabled(Run.normalise(site) == nil || previewing)
                         Button(action: begin) {
                             Label("Audit", systemImage: "arrow.right")
                                 .font(.headline)
@@ -77,6 +94,8 @@ struct AskStage: View {
                         .keyboardShortcut(.defaultAction)
                         .disabled(Run.normalise(site) == nil)
                     }
+
+                    if let plan { PreviewSummary(plan: plan, limit: limit) }
                 }
                 .frame(maxWidth: 520)
                 .padding(26)
@@ -136,5 +155,87 @@ struct CrawlStage: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 28))
         .glassEffectID("stage", in: stage)
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
+}
+
+/// What a run would do, without doing it. The engine's `preview()`, which the
+/// command line reaches with `--dry-run`.
+struct Preview: Decodable {
+    let origin: String
+    let reachable: Bool
+    let rateLimited: Bool
+    let sitemap: String?
+    let listed: Int
+    let wouldCheck: Int?
+    let skippedByLimit: Int
+    let requests: Int
+    let ms: Int
+    let sections: [Section]
+
+    struct Section: Decodable, Identifiable {
+        let path: String
+        let count: Int
+        var id: String { path }
+    }
+
+    @MainActor
+    static func of(_ run: Run, settings: CrawlSettings, engine: URL?) async -> Preview? {
+        guard let engine else { return nil }
+        var components = URLComponents(url: engine.appending(path: "preview"), resolvingAgainstBaseURL: false)!
+        // The same settings the run would use, minus the ones a preview has no
+        // opinion about — otherwise it would describe a different crawl.
+        components.queryItems = settings.queryItems(for: run).filter { $0.name != "format" && $0.name != "external" }
+        guard let url = components.url,
+              let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200
+        else { return nil }
+        return try? JSONDecoder().decode(Preview.self, from: data)
+    }
+}
+
+private struct PreviewSummary: View {
+    let plan: Preview
+    let limit: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            if !plan.reachable {
+                Label(plan.rateLimited
+                      ? "Every request came back 429. Wait, or set the speed to Gentle."
+                      : "Nothing answered at \(plan.origin).",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+            } else if plan.sitemap == nil {
+                Label("No sitemap. Links would be followed from the home page instead, up to \(limit) pages.",
+                      systemImage: "questionmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(plan.listed)").font(.title3.weight(.semibold))
+                    Text("URLs listed ·").foregroundStyle(.secondary)
+                    Text("\(plan.wouldCheck ?? limit)").font(.title3.weight(.semibold))
+                    Text("would be checked").foregroundStyle(.secondary)
+                }
+                .font(.callout)
+                if plan.skippedByLimit > 0 {
+                    Text("\(plan.skippedByLimit) past the limit of \(limit). Raise it to check them all.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if plan.sections.count > 1 {
+                    Text(plan.sections.prefix(4).map { "\($0.path) \($0.count)" }.joined(separator: "   "))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            Text("\(plan.requests) requests, \(String(format: "%.1f", Double(plan.ms) / 1000))s — no page was fetched.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity.combined(with: .offset(y: -6)))
     }
 }

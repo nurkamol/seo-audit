@@ -89,10 +89,23 @@ place to look.
 | **Pages per run** | The default `--limit`. A crawl that stops at it says so, with the number it did not reach |
 | **Check outbound links** | `--check-external`. Slower, and only a 404, 410 or no answer is reported |
 | **Identify as** | The browser and OS presets from `src/agents.mjs`, fetched from the engine's `/agents` rather than listed again in Swift. A combination that cannot exist is refused by the engine and the run goes ahead as itself |
+| **User agent** | `--user-agent`. A string of your own, which wins over the two menus above. Bounded and stripped of control characters, because it ends up in a request header |
 | **Sitemap** | `--sitemap`, for one somewhere the usual names miss. Validated against the host being audited — otherwise the hosted version would be a fetcher for anything the machine it runs on can reach |
 
 Anything left at its default is **not sent**. The engine's defaults stay written
 down in the engine, where changing one takes effect everywhere.
+
+## Preview, before spending the minutes
+
+**Preview** on the entry screen is the engine's `--dry-run`: it settles the
+host, reads robots.txt and the sitemap, and says how many URLs are listed, how
+many the page limit would check, and where the weight of the site is. Three
+requests and a second, rather than minutes and several hundred requests to
+somebody else's server to find out it was pointed at the wrong site.
+
+It describes the crawl that would actually happen rather than an ideal one. A
+site with no sitemap comes back saying links would be followed and that a count
+is not knowable in advance, instead of a made-up number.
 
 ## Updates, and why the app will not replace itself
 
@@ -142,9 +155,10 @@ for anyone without Xcode.
 swift test
 ```
 
-Thirty-two, over the models, the URL normalising, version ordering, the library,
-the releases feed, the version cache, the PDF writer, what the settings send,
-that the app keeps everything in one folder, and which runs a comparison offers. The one that matters decodes a **real engine payload** captured from a
+Thirty-five, over the models, the URL normalising, version ordering, the
+library, the releases feed, the version cache, the PDF writer, what the settings
+send, that the app keeps everything in one folder, which runs a comparison
+offers, and what a preview reports. The one that matters decodes a **real engine payload** captured from a
 live run and kept as a fixture, because the way this app breaks is the engine
 changing its output and nothing noticing until a window is opened. CI captures
 a fresh payload on every change and checks the app still decodes every field it

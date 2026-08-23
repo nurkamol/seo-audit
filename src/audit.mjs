@@ -10,6 +10,7 @@ import { compareAgents } from './compare.mjs';
 import { searchConsole } from './console.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
+import { sectionOf } from './causes.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -521,5 +522,68 @@ export async function audit(target, opts = {}) {
       date: new Date().toISOString().slice(0, 10),
       sitemap: source,
     },
+  };
+}
+
+/** What a run would do, without doing it.
+ *
+ *  A full crawl of a large site is minutes of somebody's time and hundreds of
+ *  requests to somebody else's server, and until now there was no way to find
+ *  out whether it was pointed at the right place until it had finished. This
+ *  costs a handful of requests: the landing page to settle the host, robots.txt,
+ *  and whichever sitemap answers.
+ *
+ *  It reports what the crawl would actually do rather than what would be ideal.
+ *  Robots rules are only consulted when there is no sitemap and links are being
+ *  followed, so this does not claim otherwise — a preview that describes a
+ *  different crawl from the one that runs is worse than no preview. */
+export async function preview(target, opts = {}) {
+  const started = Date.now();
+  const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6, userAgent: opts.userAgent });
+  const asked = new URL(target);
+
+  let origin = asked.origin;
+  let redirected = null;
+  const landing = await fetcher.chain(`${asked.origin}/`);
+  if (landing.final.ok) {
+    const settled = new URL(landing.final.url).origin;
+    if (settled !== origin) {
+      redirected = { from: origin, to: settled };
+      origin = settled;
+    }
+  }
+
+  const { urls, source, tried, rateLimited } = await discover(
+    origin,
+    fetcher,
+    opts.sitemap ?? (asked.pathname.match(/\.xml$/i) ? target : null),
+  );
+
+  const limit = opts.limit ?? 200;
+  const sections = new Map();
+  for (const url of urls) {
+    const section = sectionOf(url);
+    sections.set(section, (sections.get(section) ?? 0) + 1);
+  }
+
+  return {
+    origin,
+    redirected,
+    reachable: fetcher.reachable,
+    rateLimited: Boolean(rateLimited),
+    sitemap: source,
+    tried,
+    listed: urls.length,
+    // Without a sitemap the crawl follows links and cannot know in advance how
+    // many pages it will find. Saying "up to the limit" is the honest answer.
+    wouldCheck: urls.length ? Math.min(urls.length, limit) : null,
+    skippedByLimit: urls.length > limit ? urls.length - limit : 0,
+    limit,
+    // The biggest parts of the site, which is what decides whether the limit is
+    // in the right place.
+    sections: [...sections].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([path, count]) => ({ path, count })),
+    sample: urls.slice(0, 10),
+    requests: fetcher.count,
+    ms: Date.now() - started,
   };
 }

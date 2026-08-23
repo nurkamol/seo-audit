@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { audit } from '../src/audit.mjs';
-import { terminal, markdown, html, csv, diffReport, counts, portfolio, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
+import { audit, preview } from '../src/audit.mjs';
+import { terminal, markdown, html, csv, diffReport, dryRunReport, counts, portfolio, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
 import { loadConfig, resolveSites, optionsForSite } from '../src/config.mjs';
 import { readFileSync as read } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,9 @@ const HELP = `
     --json <file>      write a JSON report (also usable as a baseline)
     --csv <file>       write the findings as a spreadsheet, one row each
     --quiet            print nothing; rely on the exit code and the files
+    --dry-run          say what would be crawled and stop. A handful of
+                       requests instead of hundreds, for checking the tool is
+                       pointed at the right site before spending the minutes
     --verbose          print each request as it happens, to stderr. A long
                        crawl is otherwise silent from start to finish, and a
                        slow site looks exactly like a hung one
@@ -115,6 +118,7 @@ function parseArgs(argv) {
     else if (arg === '--settle') opts.settle = Number(value());
     else if (arg === '--quiet' || arg === '-q') opts.quiet = true;
     else if (arg === '--verbose') opts.verbose = true;
+    else if (arg === '--dry-run') opts.dryRun = true;
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
     else if (arg === '--json') opts.json = value();
@@ -380,6 +384,15 @@ if (sites.length > 1) {
 }
 
 const target = sites[0].url;
+
+// --- say what would happen, and stop --------------------------------------
+// Before spending minutes and a few hundred requests on somebody else's
+// server, find out whether this is pointed at the right site.
+if (opts.dryRun) {
+  const plan = await preview(target, opts);
+  process.stdout.write(dryRunReport(plan));
+  process.exit(plan.reachable && plan.listed ? 0 : 1);
+}
 
 if (!opts.quiet) {
   process.stderr.write(`  crawling ${target} …${file.source ? ` (${file.source})` : ''}\n`);

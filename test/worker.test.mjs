@@ -173,6 +173,38 @@ test('a user agent is chosen from the presets, never invented', () => {
   assert.equal(agentFor(q('browser=safari&os=windows'), { USER_AGENT: 'configured' }), 'configured');
 });
 
+test('a user agent of your own wins, and cannot inject a header', () => {
+  const q = (s) => new URLSearchParams(s);
+  assert.equal(agentFor(q('userAgent=MyBot%2F1.0&browser=chrome'), {}), 'MyBot/1.0',
+    'a string of your own beats the presets');
+
+  // This ends up in a request header. A newline in it would end the header and
+  // start another one.
+  const injected = agentFor(q(`userAgent=${encodeURIComponent('Evil\r\nX-Admin: 1')}`), {});
+  assert.ok(!/[\r\n]/.test(injected), 'no line break survives');
+  assert.equal(injected, 'EvilX-Admin: 1');
+
+  // Bounded, because a header is not a place to put a novel.
+  assert.equal(agentFor(q(`userAgent=${'a'.repeat(500)}`), {}).length, 256);
+
+  // Whitespace is not a user agent, and falls back to the preset.
+  assert.match(agentFor(q('userAgent=%20%20&browser=googlebot'), {}), /Googlebot/);
+});
+
+test('a preview says what a run would do without doing it', async () => {
+  // A full crawl is minutes and a few hundred requests to somebody else's
+  // server. This is the way to find out it is pointed at the wrong site first.
+  const res = await handle(get('/preview?url=https://example.com&limit=25', { token: SECRET }), env());
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/json');
+
+  const refused = await handle(get('/preview?url=https://elsewhere.test/', { token: SECRET }),
+    env({ ALLOWED_HOSTS: 'example.com' }));
+  assert.equal(refused.status, 400, 'a preview is bounded by the same allow-list as a crawl');
+
+  assert.equal((await handle(get('/preview?url=https://example.com'), env())).status, 401);
+});
+
 test('two runs are compared by the engine, not by whatever asked', async () => {
   // diff() is what --baseline has always used. The macOS app posts here rather
   // than comparing in Swift, so "did this get better" has one answer.

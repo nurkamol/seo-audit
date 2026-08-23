@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startFixtureSite } from './server.mjs';
-import { audit } from '../src/audit.mjs';
+import { audit, preview } from '../src/audit.mjs';
 import { markdown, html } from '../src/report.mjs';
 
 let site;
@@ -175,6 +175,39 @@ test('a site with no sitemap is crawled by following links instead of refused', 
 
     // Nothing is "missing from the sitemap" when there is no sitemap.
     assert.ok(!ids.includes('missing-from-sitemap'));
+  } finally {
+    await bare.stop();
+  }
+});
+
+test('a preview describes the crawl that would happen, and fetches no page', async () => {
+  const site = await startFixtureSite();
+  try {
+    const plan = await preview(site.origin, { concurrency: 1, limit: 2 });
+
+    assert.ok(plan.reachable);
+    assert.match(plan.sitemap, /sitemap\.xml$/);
+    assert.equal(plan.listed, 4, 'the fixture sitemap lists four URLs');
+    assert.equal(plan.wouldCheck, 2, 'and --limit 2 would check two of them');
+    assert.equal(plan.skippedByLimit, 2);
+    // The whole point: a handful of requests, not one per page.
+    assert.ok(plan.requests <= 4, `expected a handful of requests, made ${plan.requests}`);
+    assert.equal(plan.sample.length, 4);
+  } finally {
+    await site.stop();
+  }
+});
+
+test('a preview of a site with no sitemap says it cannot know how many', async () => {
+  // Following links cannot say in advance how many pages it will find, and
+  // guessing a number would be worse than saying so.
+  const bare = await startFixtureSite({ withSitemap: false });
+  try {
+    const plan = await preview(bare.origin, { concurrency: 1 });
+    assert.equal(plan.sitemap, null);
+    assert.equal(plan.listed, 0);
+    assert.equal(plan.wouldCheck, null, 'null rather than a made-up count');
+    assert.ok(plan.reachable, 'the site answers; it just has no sitemap');
   } finally {
     await bare.stop();
   }

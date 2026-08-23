@@ -541,3 +541,57 @@ struct ComparisonTests {
         #expect(try JSONDecoder().decode(Comparison.self, from: payload).isUnchanged)
     }
 }
+
+@Suite("Before spending the minutes")
+struct PreviewTests {
+    @Test("what the engine sends back decodes")
+    func decodes() throws {
+        let payload = Data("""
+        {"origin":"https://a.test","reachable":true,"rateLimited":false,
+         "sitemap":"https://a.test/sitemap.xml","listed":210,"wouldCheck":25,
+         "skippedByLimit":185,"limit":25,"requests":3,"ms":1300,
+         "sections":[{"path":"/docs/","count":35},{"path":"/news/","count":18}],
+         "sample":["https://a.test/one"]}
+        """.utf8)
+        let plan = try JSONDecoder().decode(Preview.self, from: payload)
+        #expect(plan.listed == 210)
+        #expect(plan.wouldCheck == 25)
+        #expect(plan.skippedByLimit == 185)
+        #expect(plan.sections.first?.path == "/docs/")
+        #expect(plan.requests == 3, "a handful, which is the whole point")
+    }
+
+    @Test("a site with no sitemap comes back without a made-up count")
+    func noSitemap() throws {
+        let payload = Data("""
+        {"origin":"https://a.test","reachable":true,"rateLimited":false,"sitemap":null,
+         "listed":0,"wouldCheck":null,"skippedByLimit":0,"limit":200,"requests":3,"ms":900,
+         "sections":[],"sample":[]}
+        """.utf8)
+        let plan = try JSONDecoder().decode(Preview.self, from: payload)
+        #expect(plan.sitemap == nil)
+        #expect(plan.wouldCheck == nil, "following links cannot know in advance")
+        #expect(plan.reachable)
+    }
+
+    @MainActor
+    @Test("a user agent of your own replaces the presets rather than joining them")
+    func ownAgent() {
+        let settings = CrawlSettings()
+        settings.browser = "chrome"
+        settings.system = "macos"
+        settings.userAgent = "  MyBot/1.0  "
+        defer { settings.browser = ""; settings.system = ""; settings.userAgent = "" }
+
+        let items = settings.queryItems(for: Run(url: "https://a.test", limit: 10))
+        let byName = Dictionary(items.map { ($0.name, $0.value) }, uniquingKeysWith: { a, _ in a })
+        #expect(byName["userAgent"] == "MyBot/1.0", "trimmed")
+        // Sending all three would leave the engine to guess which was meant.
+        #expect(byName["browser"] == nil)
+        #expect(byName["os"] == nil)
+
+        settings.userAgent = "   "
+        let fallback = settings.queryItems(for: Run(url: "https://a.test", limit: 10))
+        #expect(fallback.contains { $0.name == "browser" }, "whitespace is not a user agent")
+    }
+}

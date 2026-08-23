@@ -90,6 +90,8 @@ struct ContentView: View {
     @State private var site = ""
     @State private var showingVersions = false
     @State private var comparing: Pair?
+    @State private var plan: Preview?
+    @State private var previewing = false
 
     /// The two runs a comparison sheet is about. Identifiable so `.sheet(item:)`
     /// can carry them, which is what makes the sheet impossible to open with
@@ -167,7 +169,9 @@ struct ContentView: View {
             } else if let run = session.running {
                 CrawlStage(host: run.host, lines: session.lines, stage: stage) { session.clear() }
             } else {
-                AskStage(site: $site, limit: $settings.limit, stage: stage, begin: start)
+                AskStage(site: $site, limit: $settings.limit, stage: stage, begin: start,
+                         preview: runPreview, plan: plan, previewing: previewing)
+                    .onChange(of: site) { _, _ in plan = nil }
             }
         }
     }
@@ -179,6 +183,20 @@ struct ContentView: View {
             session.clear()
         }
         site = ""
+        plan = nil
+    }
+
+    /// A few requests instead of a few hundred, answering "is this the right
+    /// site and how big is it" before the minutes are spent.
+    private func runPreview() {
+        guard let url = Run.normalise(site) else { return }
+        previewing = true
+        Task {
+            let found = await Preview.of(Run(url: url, limit: settings.limit),
+                                         settings: settings, engine: engine.base)
+            withAnimation(.snappy) { plan = found }
+            previewing = false
+        }
     }
 
     private func start() {

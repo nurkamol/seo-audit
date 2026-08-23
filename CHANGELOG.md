@@ -6,6 +6,26 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--dry-run`, and Preview in the window.** A full crawl is minutes of waiting
+  and several hundred requests to somebody else's server, and there was no way
+  to find out it was pointed at the wrong site until it had finished. This
+  settles the host, reads robots.txt and the sitemap, and stops: how many URLs
+  are listed, how many the limit would check, how many it would cut, and where
+  the weight of the site is. **Three requests and about a second** on a
+  210-URL site.
+
+  It describes the crawl that would actually happen rather than an ideal one.
+  Robots rules are consulted only when there is no sitemap and links are being
+  followed, so it does not claim otherwise; a site with no sitemap comes back
+  saying a count is not knowable in advance rather than inventing one.
+
+- **A user agent of your own, in the Mac app.** The browser and OS presets
+  cover the common cases; this is for the agent a host is known to treat
+  differently, or a name that makes your crawls identifiable in somebody's
+  logs. It wins over the two menus rather than joining them, and it is bounded
+  and stripped of control characters — it ends up in a request header, and a
+  newline in it would end that header and start another.
+
 - **Compare two runs of a site, in the window.** The app has kept every finished
   run since 1.23.0 and compared none of them, so it could not answer the
   question that makes somebody open a tool a second time: did the fix work. A

@@ -53,6 +53,9 @@ final class CrawlSettings: ObservableObject {
     @AppStorage("seo-audit.crawl.browser") var browser = ""
     @AppStorage("seo-audit.crawl.os") var system = ""
     @AppStorage("seo-audit.crawl.sitemap") var sitemap = ""
+    /// A string of your own, when none of the presets is the thing a host
+    /// treats differently. Wins over the two menus above when it is set.
+    @AppStorage("seo-audit.crawl.userAgent") var userAgent = ""
 
     /// The list of presets comes from the engine, so adding one to
     /// `src/agents.mjs` adds it to this menu and nothing here needs editing.
@@ -87,8 +90,13 @@ final class CrawlSettings: ObservableObject {
             items.append(.init(name: "concurrency", value: String(speed.connections)))
         }
         if checkExternal { items.append(.init(name: "external", value: "1")) }
-        if !browser.isEmpty { items.append(.init(name: "browser", value: browser)) }
-        if !system.isEmpty { items.append(.init(name: "os", value: system)) }
+        let ownAgent = userAgent.trimmingCharacters(in: .whitespaces)
+        if !ownAgent.isEmpty {
+            items.append(.init(name: "userAgent", value: ownAgent))
+        } else {
+            if !browser.isEmpty { items.append(.init(name: "browser", value: browser)) }
+            if !system.isEmpty { items.append(.init(name: "os", value: system)) }
+        }
         let trimmed = sitemap.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { items.append(.init(name: "sitemap", value: trimmed)) }
         return items
@@ -153,6 +161,17 @@ struct SettingsScene: View {
                 }
                 Text("Some sites answer a crawler differently from a browser. A combination that cannot "
                      + "exist — Safari on Windows — is refused by the engine and the run goes ahead as itself.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                TextField("User agent", text: $settings.userAgent,
+                          prompt: Text("Or a string of your own"))
+                    .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
+                Text("Overrides the two menus above when it is set. For an agent a host is known to "
+                     + "treat differently, or a name of your own so your crawls are identifiable in "
+                     + "somebody's logs.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
