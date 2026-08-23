@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-08-23
+
 ### Added
 - **`anchor-ambiguous`** — one phrase pointing at two different pages. The
   mirror of `anchor-generic`, over the anchor text 1.13.0 started keeping:

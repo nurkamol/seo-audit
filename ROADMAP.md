@@ -37,15 +37,20 @@ viewport string has been parsed and kept since the first commit and was only
 ever tested for existing. The anchor-text pair and the contradictions above are
 the same shape, and so was pagination, which left this list in 1.14.0.
 
-**A check is narrowed by real sites, not by argument.** The candidate that
-followed from that lesson was anchor text, and 1.13.0 shipped it. It needed the
-parser change this section predicted, and then three real sites in a row
-produced a false positive before the check found its final shape: a decorative
-icon, a thumbnail beside the headline that already names it, and one page
-linking to another both with and without a trailing slash. What survived is
-quiet across some 12,000 anchors on eight sites and fires on five certificate
-PDFs nobody can read. That ratio is the point, not a disappointment. Budget for
-it happening again.
+**A check is narrowed by real sites, not by argument.** Twice now the estimate
+has been three or four false positives before a check settles, and twice that
+was right. `link-no-text` in 1.13.0 took a decorative icon, a thumbnail beside
+the headline that already names it, and a trailing slash. `anchor-ambiguous` in
+1.18.0 took file formats as link text, "jump to …" controls, a phrase used
+2,730 times in a checksum table, and two URLs that turned out to be one page
+behind a 301.
+
+Both ended quiet: one fires on five certificate PDFs nobody can read, the other
+on eleven pairs where a reference page and a tutorial chapter carry the same
+words. That ratio is the point, not a disappointment. Budget for it happening
+again, and budget for the last narrowing being the one that matters — in both
+cases it was the one found by checking a finding against the live site rather
+than by reading the code.
 
 **A false positive can come from the crawl rather than from a check.** Three
 fixes in a row now, none of them in a check: 1.15.0's `page-status` was reading
@@ -80,7 +85,7 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **The same anchor text on two destinations** (unreleased) — `anchor-ambiguous`,
+- **The same anchor text on two destinations** (1.18.0) — `anchor-ambiguous`,
   one phrase pointing at two pages. This section predicted it would be noisy
   before it was right, and four sites each contributed a class of false
   positive: file formats as link text, "jump to …" controls, a phrase used
