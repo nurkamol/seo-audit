@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-08-23
+
 ### Changed
 - **The image sweep counts files, not URLs.** An image CDN serves one file at
   every size asked for — `photo.avif?v=17&width=150`, `&width=300`, `&width=750`

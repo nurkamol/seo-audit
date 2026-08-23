@@ -41,7 +41,7 @@ check table uses:
 - Schema `datePublished` after `dateModified`, or either one in the future.
 - The same URL listed in two files of one sitemap index.
 
-### Four things worth keeping in front of all of them
+### Five things worth keeping in front of all of them
 
 **The room left is not in fetching more, it is in reading what has already been
 fetched.** Click depth cost no requests — the link graph had been in memory
@@ -69,6 +69,14 @@ gives no sign — 70 pages reported as failing look exactly like 70 pages
 failing. When a finding count is implausible, suspect the crawl before the
 checks.
 
+**One report on one real site was worth three releases.** 1.15.0 through 1.17.0
+came out of a single run against a single store — four fixes, and three of them
+defects rather than missing checks: a rate limit read as a broken page, a
+fragment read as a site, a 301's headers read as a site's headers, and an image
+counted once per size it is served at. None of them was visible from the
+fixture suite, all of them had been shipping for versions, and every one was
+found by looking at a report someone actually cared about. Ask for those.
+
 **There are two runtimes now**, a standing cost taken on in 1.12.0. A check
 that reaches for a Node built-in works in the CLI and disappears in the Worker,
 and a report quietly shorter than the CLI's is the same failure as a false
@@ -85,7 +93,7 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **The image sweep counts files, not URLs** (unreleased) — an image CDN
+- **The image sweep counts files, not URLs** (1.17.0) — an image CDN
   serves one file at every size asked for, and each size was a separate entry
   against the cap. Measured before believing it, as this section asked: 767
   distinct URLs became 488 distinct files across 45 pages of a real store. A
