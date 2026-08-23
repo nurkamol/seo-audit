@@ -132,3 +132,18 @@ test('the app is built from the four named radii, not from eight numbers', () =>
     `${offenders.join(', ')} — use Radius.pill, .control, .card or .surface. ` +
     'A fifth radius should need an argument.');
 });
+
+test('every settings text field looks like one', () => {
+  // A TextField in a grouped Form draws as right-aligned grey text with no box,
+  // which is exactly how that Form draws a read-only value. "Sitemap · Found
+  // automatically" then reads as a fact about the site rather than as an empty
+  // field somebody can type in. `.roundedBorder` is what tells them apart.
+  const source = readFileSync(join(root, 'mac/SeoAudit/SettingsScene.swift'), 'utf8');
+  const fields = [...source.matchAll(/TextField\((?:[^()]|\([^()]*\))*\)([\s\S]{0,220})/g)];
+  assert.ok(fields.length > 0, 'expected some text fields to check');
+
+  const bare = fields.filter(([, after]) => !after.includes('.textFieldStyle('));
+  assert.equal(bare.length, 0,
+    `${bare.length} settings text field(s) have no .textFieldStyle — in a grouped Form they ` +
+    'render as static grey text and stop looking editable.');
+});

@@ -103,18 +103,23 @@ struct SettingsScene: View {
             // toolbar between the title bar and the first control.
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        PaneIcon(symbol: showing.symbol, tint: showing.tint, size: 44)
-                        Text(showing.title)
-                            .font(.system(.title2, design: .rounded).weight(.semibold))
-                        Text(showing.blurb)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .top, spacing: 14) {
+                        PaneIcon(symbol: showing.symbol, tint: showing.tint, size: 38)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(showing.title)
+                                .font(.system(.title3, design: .rounded).weight(.semibold))
+                            Text(showing.blurb)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, 10)
+                    // Left, like every row beneath it. Centred, the icon and
+                    // title lined up with nothing else in the pane, and the
+                    // first thing the eye does in a settings window is run down
+                    // the left edge.
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
                 }
 
                 body(of: showing)
@@ -178,7 +183,13 @@ private struct CrawlPane: View {
             }
 
             Section {
+                // `.roundedBorder`, or a grouped Form draws this as right-aligned
+                // grey text with no box — indistinguishable from a read-only
+                // value. "Sitemap · Found automatically" then reads as a fact
+                // about the site rather than as an empty field you can type in.
                 TextField("Sitemap", text: $settings.sitemap, prompt: Text("Found automatically"))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 260)
             } footer: {
                 Text("Only used when a sitemap is somewhere the usual names do not find it. It has "
                      + "to be on the site being audited.").footnote()
@@ -245,6 +256,8 @@ private struct IdentityPane: View {
             Section {
                 TextField("Or your own", text: $settings.userAgent,
                           prompt: Text("A string of your own"))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 260)
             } footer: {
                 Text(overridden
                      ? "In use. The two menus above are ignored while this is set."

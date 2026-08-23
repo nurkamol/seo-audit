@@ -41,6 +41,19 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   custom string is set; the window showed all three as live.
 
 ### Fixed
+- **Two settings fields stopped looking like fields.** A `TextField` in a
+  grouped `Form` draws as right-aligned grey text with no box — which is exactly
+  how that same Form draws a read-only value. So "Sitemap · Found
+  automatically" and "Or your own · A string of your own" read as facts rather
+  than as empty inputs, and nobody would guess they could type there. Both carry
+  `.textFieldStyle(.roundedBorder)` again, and a test fails on a settings text
+  field that has no style.
+
+- **The pane header was centred while everything under it was not.** The icon
+  and title lined up with nothing else in the window, and the first thing the
+  eye does in a settings pane is run down the left edge. Icon beside the title,
+  both on the left, aligned with every row below.
+
 - **The Settings window had a toolbar-height empty band and a button that
   should not exist.** The band was two stacked views each carrying their own
   insets; the header lives inside the Form now, so the platform's spacing is the
