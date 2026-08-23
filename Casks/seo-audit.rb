@@ -7,8 +7,8 @@
 # a tag is pushed, so this file is never edited by hand and can never describe a
 # build that does not exist.
 cask "seo-audit" do
-  version "1.21.0"
-  sha256 :no_check
+  version "1.22.0"
+  sha256 "9fb8a136a4486e176886c7659bd3e6ee3ee1d9b341cb3730067e71932996252a"
 
   url "https://github.com/nurkamol/seo-audit/releases/download/v#{version}/seo-audit-#{version}-macos.zip"
   name "seo-audit"
