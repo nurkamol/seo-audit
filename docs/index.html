@@ -86,6 +86,23 @@
   td:first-child { white-space: nowrap; }
   th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
 
+  /* The one thing on the page aimed at somebody who does not want a terminal,
+     so it is the one thing that gets a border and a button. */
+  .callout {
+    margin: 2.75rem auto 0; max-width: 40rem; text-align: left;
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 1.4rem 1.5rem; background: var(--panel);
+  }
+  .callout h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+  .callout p { margin: 0 0 .9rem; color: var(--muted); font-size: .94rem; }
+  .callout .row { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; }
+  .button {
+    display: inline-block; text-decoration: none; font-size: .9rem; font-weight: 500;
+    padding: .5rem .95rem; border-radius: 8px;
+    background: var(--brand); color: #fff; border: 1px solid transparent;
+  }
+  .quiet-button { background: transparent; color: var(--muted); border-color: var(--line); }
+
   .quiet { color: var(--muted); font-size: .9rem; }
   footer { padding: 3rem 0 4.5rem; color: var(--muted); font-size: .9rem; text-align: center; border-top: 1px solid var(--line); }
 
@@ -114,6 +131,19 @@
   </div>
   <pre><code>npx github:nurkamol/seo-audit@v1 https://example.com</code></pre>
   <p class="quiet">Nothing to install. Node 18 or newer, and no dependencies at all.</p>
+
+  <aside class="callout">
+    <h2>Not a terminal person? There is a window.</h2>
+    <p>
+      <b>SEO Audit</b> for macOS is the same tool with a window instead of a prompt: type a
+      domain, press return, and read the report as cards you can expand, filter and search.
+      No flags to learn, and nothing leaves your machine.
+    </p>
+    <p class="row">
+      <a class="button" href="https://github.com/nurkamol/seo-audit/releases/latest">Download for macOS</a>
+      <a class="button quiet-button" href="#mac">or install with Homebrew</a>
+    </p>
+  </aside>
 </header>
 
 <section class="wrap">
@@ -184,12 +214,14 @@
   </div>
 </section>
 
-<section class="wrap">
+<section class="wrap" id="mac">
   <h2>The macOS app</h2>
   <p class="lede">
-    SwiftUI and Liquid Glass, with the report drawn natively — cause cards that expand into
-    the pages they affect, filtering, search, and export as PDF, HTML, Markdown, CSV or JSON.
-    It is a window over the same engine, never a second one.
+    For anyone who would rather not open a terminal. SwiftUI and Liquid Glass, with the
+    report drawn natively — cause cards that expand into the pages they affect, filtering,
+    search, and export as PDF, HTML, Markdown, CSV or JSON. Every finished run is kept, so a
+    seven-minute crawl survives closing the window. It is a window over the same engine,
+    never a second one.
   </p>
   <pre><code>brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
 brew trust nurkamol/seo-audit

@@ -66,14 +66,22 @@ cp -R "$here/bin" "$here/src" "$here/worker" "$here/package.json" "$app/Contents
 
 # --- the icon --------------------------------------------------------------
 # Drawn from the same mark the reports carry, at every size macOS asks for.
+#
+# Rasterised from the SVG rather than from a checked-in PNG, because `sips`
+# reads SVG and keeps the alpha channel, and the PNG did not have one: it had
+# been flattened onto white, so the transparent margin around the squircle came
+# out opaque and macOS drew a white frame around the icon. The SVG is the
+# source of record now and there is no second copy to go stale.
 iconset="$out/icon.iconset"
 rm -rf "$iconset"; mkdir -p "$iconset"
-sips -s format png --resampleHeightWidth 1024 1024 "$here/docs/icon@1024.png" \
-  --out "$iconset/icon_512x512@2x.png" >/dev/null 2>&1 || true
+master="$out/icon-master.png"
+sips -s format png -Z 1024 "$here/docs/icon.svg" --out "$master" >/dev/null
+cp "$master" "$iconset/icon_512x512@2x.png"
 for size in 16 32 128 256 512; do
-  sips -s format png -z $size $size "$here/docs/icon@1024.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
-  sips -s format png -z $((size*2)) $((size*2)) "$here/docs/icon@1024.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+  sips -s format png -z $size $size "$master" --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  sips -s format png -z $((size*2)) $((size*2)) "$master" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
+rm -f "$master"
 # sips writes honest but heavy PNGs — a flat glyph came out at 700 KB. pngquant
 # takes the same image to a tenth of that with no visible difference, and is
 # skipped rather than required, because a build that needs a package manager to

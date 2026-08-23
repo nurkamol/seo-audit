@@ -5,6 +5,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The app icon had a white frame around it.** `docs/icon@1024.png` had been
+  flattened onto white — `hasAlpha: no` — so the transparent margin the squircle
+  sits in came out opaque, and macOS drew the icon as a white rounded square
+  with the orange mark inside it. The build rasterises `docs/icon.svg` instead:
+  `sips` reads SVG and keeps the alpha channel, it ships with macOS so this
+  costs no dependency, and the flattened PNG is gone rather than left to go
+  stale beside the drawing it was made from.
+
 ## [1.23.0] — 2026-08-23
 
 ### Added

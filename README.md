@@ -35,6 +35,25 @@ npx github:nurkamol/seo-audit@v1 https://example.com
 
 <p align="center"><img src="docs/terminal.svg" alt="Example output" width="820"></p>
 
+> ### Not a terminal person? There is a window.
+>
+> **SEO Audit** for macOS is the same tool with a window instead of a prompt:
+> type a domain, press return, watch it crawl, and read the report as cards you
+> can expand, filter and search. No flags to learn, no output to redirect, and
+> nothing leaves your machine.
+>
+> ```bash
+> brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+> brew trust nurkamol/seo-audit
+> brew install --cask seo-audit
+> ```
+>
+> It is a window over this engine, never a second copy of it — the checks are
+> the same ones the command line and the Action run, so the reports match. See
+> [A window instead of a terminal](#a-window-instead-of-a-terminal), or
+> [download it](https://github.com/nurkamol/seo-audit/releases/latest) if you
+> would rather not use Homebrew.
+
 ---
 
 ## Why
@@ -175,8 +194,9 @@ brew install --cask seo-audit
 ```
 
 SwiftUI throughout, Liquid Glass, and the report drawn natively: cause cards
-that expand into the pages they affect, filtering, search, PDF export. No web
-view in it.
+that expand into the pages they affect, filtering, search, and export as PDF,
+HTML, Markdown, CSV or JSON. Every finished run is kept, so a seven-minute
+crawl survives closing the window. No web view in it.
 
 It is a window over this engine and not a second one. The app runs
 `node bin/seo-audit.mjs --serve` as a child process and reads its stream, and
