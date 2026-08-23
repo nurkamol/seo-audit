@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.24.1] — 2026-08-24
+
 ### Added
 - **A way to start a second audit that people can find.** Once a report filled
   the window the only way back was a ghost `‹ New audit` button in the report's
