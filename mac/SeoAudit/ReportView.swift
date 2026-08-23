@@ -204,7 +204,7 @@ private struct Tally: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .glassEffect(.regular, in: .rect(cornerRadius: Radius.card))
     }
 }
 
@@ -309,7 +309,7 @@ private struct CauseCard: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .glassEffect(.regular, in: .rect(cornerRadius: Radius.card))
         .glassEffectID(cause.identity, in: cards)
         // Where somebody decides they can live with a check: on the finding
         // itself, at the moment they are looking at it and disagreeing with it.
@@ -395,8 +395,8 @@ struct Pill: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
             .foregroundStyle(tint)
-            .background(tint.opacity(0.14), in: .rect(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(tint.opacity(0.35), lineWidth: 1))
+            .background(tint.opacity(0.14), in: .rect(cornerRadius: Radius.pill))
+            .overlay(RoundedRectangle(cornerRadius: Radius.pill).stroke(tint.opacity(0.35), lineWidth: 1))
     }
 
     private var tint: Color {

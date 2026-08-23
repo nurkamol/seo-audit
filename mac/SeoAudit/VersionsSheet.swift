@@ -146,7 +146,7 @@ private struct Detail: View {
                         .textSelection(.enabled)
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                        .glassEffect(.regular, in: .rect(cornerRadius: Radius.control))
 
                     HStack(spacing: 10) {
                         Button {

@@ -202,6 +202,7 @@ team to delete tests.
 | `Library.swift` | reports kept on disk, and the sidebar that lists them |
 | `CrawlSettings.swift` | what a run does, and the query it becomes |
 | `SettingsScene.swift` | ⌘, — seven panes and the sidebar that finds them |
+| `Design.swift` | the four radii every surface is built from |
 | `Comparison.swift` | two runs of one site, and what moved |
 | `Support.swift` | the one folder this app keeps things in |
 | `PDF.swift` | the report on paper — A4 pages, the engine's areas, every affected page |

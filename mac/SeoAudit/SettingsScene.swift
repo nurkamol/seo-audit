@@ -77,6 +77,8 @@ struct SettingsScene: View {
         }
     }
 
+    private var showing: Pane { pane ?? .crawl }
+
     var body: some View {
         NavigationSplitView {
             List(Pane.allCases, selection: $pane) { pane in
@@ -86,27 +88,41 @@ struct SettingsScene: View {
                     } icon: {
                         PaneIcon(symbol: pane.symbol, tint: pane.tint)
                     }
+                    .padding(.vertical, 2)
                 }
             }
-            .navigationSplitViewColumnWidth(196)
+            .navigationSplitViewColumnWidth(198)
+            // On the sidebar's own content, which is where it takes. Applied to
+            // the split view it did nothing, and the button stayed — in a
+            // Settings window, where the sidebar is the only route to six of
+            // the seven panes and collapsing it is never what somebody wants.
+            .toolbar(removing: .sidebarToggle)
         } detail: {
-            VStack(alignment: .leading, spacing: 0) {
-                Header(pane: pane ?? .crawl)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-                // Form, not a hand-built stack. It is what puts the labels in
-                // one right-aligned column and the controls at one x, which is
-                // the thing that makes System Settings readable and the thing a
-                // VStack of LabeledContent does not do.
-                body(of: pane ?? .crawl)
-                    .formStyle(.grouped)
+            // One Form for the whole pane, header included. Two stacked views
+            // each carrying their own insets left an empty band the height of a
+            // toolbar between the title bar and the first control.
+            Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        PaneIcon(symbol: showing.symbol, tint: showing.tint, size: 44)
+                        Text(showing.title)
+                            .font(.system(.title2, design: .rounded).weight(.semibold))
+                        Text(showing.blurb)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, 10)
+                }
+
+                body(of: showing)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
-        // A Settings window has no business hiding its own sidebar: it is the
-        // only way to get to six of the seven panes.
-        .toolbar(removing: .sidebarToggle)
-        .frame(width: 720, height: 480)
+        .frame(width: 740, height: 540)
     }
 
     @ViewBuilder
@@ -121,27 +137,13 @@ struct SettingsScene: View {
         case .updates: UpdatesPane(updates: updates)
         }
     }
-
-    private struct Header: View {
-        let pane: Pane
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    PaneIcon(symbol: pane.symbol, tint: pane.tint, size: 26)
-                    Text(pane.title).font(.system(.title2, design: .rounded).weight(.semibold))
-                }
-                Text(pane.blurb).font(.callout).foregroundStyle(.secondary)
-            }
-        }
-    }
 }
 
 /// The rounded square macOS puts a symbol in, at the two sizes this uses.
 private struct PaneIcon: View {
     let symbol: String
     let tint: Color
-    var size: CGFloat = 18
+    var size: CGFloat = 20
 
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
@@ -165,7 +167,7 @@ private struct CrawlPane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        Form {
+        Group {
             Section {
                 Picker("Speed", selection: $settings.speed) {
                     ForEach(CrawlSettings.Speed.allCases) { Text($0.label).tag($0) }
@@ -189,7 +191,7 @@ private struct CoveragePane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        Form {
+        Group {
             Section {
                 Stepper(value: $settings.limit, in: 1...5000, step: 50) {
                     LabeledContent("Pages per run") {
@@ -220,7 +222,7 @@ private struct IdentityPane: View {
     }
 
     var body: some View {
-        Form {
+        Group {
             Section {
                 Picker("Browser", selection: $settings.browser) {
                     Text("This machine").tag("")
@@ -258,7 +260,7 @@ private struct PerformancePane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        Form {
+        Group {
             Section {
                 Picker("Measure", selection: $settings.performance) {
                     ForEach(CrawlSettings.Performance.allCases) { Text($0.label).tag($0) }
@@ -296,7 +298,7 @@ private struct SilencedPane: View {
     @ObservedObject var settings: CrawlSettings
 
     var body: some View {
-        Form {
+        Group {
             if settings.ignored.isEmpty {
                 Section {
                     Text("Nothing is silenced. Right-click a finding in a report to leave its check "
@@ -338,7 +340,7 @@ private struct ReportsPane: View {
     }
 
     var body: some View {
-        Form {
+        Group {
             Section {
                 LabeledContent("Kept") {
                     Text(library.reports.isEmpty
@@ -382,7 +384,7 @@ private struct UpdatesPane: View {
     @ObservedObject var updates: Updates
 
     var body: some View {
-        Form {
+        Group {
             Section {
                 LabeledContent("Version") {
                     Text(updates.current.description).font(.system(.body, design: .monospaced))

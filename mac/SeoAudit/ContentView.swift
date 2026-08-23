@@ -246,6 +246,6 @@ struct Card<Content: View>: View {
     var body: some View {
         VStack(alignment: alignment, spacing: 12) { content }
             .padding(28)
-            .glassEffect(.regular, in: .rect(cornerRadius: 26))
+            .glassEffect(.regular, in: .rect(cornerRadius: Radius.surface))
     }
 }

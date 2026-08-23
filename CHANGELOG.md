@@ -41,6 +41,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   custom string is set; the window showed all three as live.
 
 ### Fixed
+- **The Settings window had a toolbar-height empty band and a button that
+  should not exist.** The band was two stacked views each carrying their own
+  insets; the header lives inside the Form now, so the platform's spacing is the
+  only spacing. And `.toolbar(removing: .sidebarToggle)` was applied to the
+  split view, where it does nothing — it belongs on the sidebar's own content.
+  A Settings window has no business hiding the sidebar that is the only route to
+  six of its seven panes.
+
+- **Eight corner radii became four.** 6, 10, 12, 15, 16, 20, 26 and 28, across
+  nine files. The pairs are the tell: nobody decides that a text field is 15 and
+  the tally card beside it is 16, or that one glass container is 26 and its
+  neighbour is 28. Each was chosen alone, months apart, and *almost* consistent
+  reads worse than plainly inconsistent — the eye notices two points without
+  being able to name them. `Radius.pill`, `.control`, `.card` and `.surface`
+  now, with a test that fails on a raw number so a fifth needs an argument.
+
 - **A cause card showed one page's detail as though it were the group's.** It
   printed the first finding's line above the whole list, and details differ per
   page — so "267 chars (limit ~160)" appeared above a page that was 202

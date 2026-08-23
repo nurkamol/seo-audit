@@ -57,7 +57,7 @@ struct AskStage: View {
                         .onSubmit(begin)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 14)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 15))
+                        .glassEffect(.regular, in: .rect(cornerRadius: Radius.control))
 
                     HStack(spacing: 14) {
                         Text("Pages at most")
@@ -99,7 +99,7 @@ struct AskStage: View {
                 }
                 .frame(maxWidth: 520)
                 .padding(26)
-                .glassEffect(.regular, in: .rect(cornerRadius: 28))
+                .glassEffect(.regular, in: .rect(cornerRadius: Radius.surface))
                 .glassEffectID("stage", in: stage)
             }
             .padding(40)
@@ -152,7 +152,7 @@ struct CrawlStage: View {
         }
         .padding(24)
         .frame(maxWidth: 640)
-        .glassEffect(.regular, in: .rect(cornerRadius: 28))
+        .glassEffect(.regular, in: .rect(cornerRadius: Radius.surface))
         .glassEffectID("stage", in: stage)
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }

@@ -109,3 +109,26 @@ test('no source file is a binary file to git', () => {
     `${offenders.join(', ')} contains a raw control byte. Write it as an escape ` +
     '(\\u0000) so the file stays text.');
 });
+
+test('the app is built from the four named radii, not from eight numbers', () => {
+  // There were eight, in nine files: 6, 10, 12, 15, 16, 20, 26 and 28. The
+  // pairs are the tell — nobody decides a text field is 15 and the tally card
+  // beside it is 16. Each was chosen alone, months apart, and "almost
+  // consistent" reads worse than plainly inconsistent, because the eye notices
+  // the two points without being able to name them.
+  const files = execSync('git ls-files "mac/SeoAudit/*.swift"', { cwd: root, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .filter((f) => !f.endsWith('Design.swift'));   // where the scale is defined
+
+  const offenders = [];
+  for (const file of files) {
+    const source = readFileSync(join(root, file), 'utf8');
+    for (const match of source.matchAll(/cornerRadius:\s*(\d+)/g)) {
+      offenders.push(`${file}: cornerRadius: ${match[1]}`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    `${offenders.join(', ')} — use Radius.pill, .control, .card or .surface. ` +
+    'A fifth radius should need an argument.');
+});

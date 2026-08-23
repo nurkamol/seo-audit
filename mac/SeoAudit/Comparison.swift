@@ -186,7 +186,7 @@ struct ComparisonSheet: View {
                     }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                    .glassEffect(.regular, in: .rect(cornerRadius: Radius.control))
                 }
             }
         }
