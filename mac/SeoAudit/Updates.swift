@@ -115,11 +115,9 @@ final class Updates: ObservableObject {
     var listIsPartial: Bool { !releases.isEmpty && releases.allSatisfy(\.fromFeed) }
 
     init(root: URL? = nil) {
-        let base = root ?? FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SEO Audit")
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        cache = base.appendingPathComponent("releases.json")
+        // The same folder the reports live in. These were briefly two: "SEO
+        // Audit" here and "seo-audit" there, which is one app with two homes.
+        cache = Support.directory(root).appendingPathComponent("releases.json")
 
         lastChecked = UserDefaults.standard.object(forKey: checkedKey) as? Date
         // A sheet that has ever succeeded should never open empty again. GitHub

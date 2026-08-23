@@ -5,11 +5,11 @@
       "name" : "seo-audit",
       "path" : "/Users/nurkamol/coding/seo-audit",
       "projects" : [
-        "28c8498dd466a3c3befe252562eba9d1120789cd05d219cae9f60768a694089d",
+        "f634f7f03226e4ebf204c6f23d38bf095810b8e776b3c16d4426199253caf30b",
         "470842a6fc7f33666d53e97857f85bc13583f764af48eb250f5373da5177580b"
       ]
     },
-    "signature" : "34b564cad815f07d14acdb2384bcb150f5f2adf2fe1982493edd560614651a03",
+    "signature" : "1ea992d34e1e21e95815a02fb2205e923ca239000e0590f098baa19589004576",
     "type" : "workspace"
   },
   {
@@ -338,6 +338,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_12",
+                "name" : "Support.swift",
+                "path" : "Support.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_13",
                 "name" : "Updates.swift",
                 "path" : "Updates.swift",
                 "sourceTree" : "<group>",
@@ -345,7 +353,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_13",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_14",
                 "name" : "VersionsSheet.swift",
                 "path" : "VersionsSheet.swift",
                 "sourceTree" : "<group>",
@@ -459,6 +467,14 @@
               {
                 "fileType" : "sourcecode.swift",
                 "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_12",
+                "name" : "Support.swift",
+                "path" : "Support.swift",
+                "sourceTree" : "<group>",
+                "type" : "file"
+              },
+              {
+                "fileType" : "sourcecode.swift",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_13",
                 "name" : "Updates.swift",
                 "path" : "Updates.swift",
                 "sourceTree" : "<group>",
@@ -466,7 +482,7 @@
               },
               {
                 "fileType" : "sourcecode.swift",
-                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_13",
+                "guid" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_14",
                 "name" : "VersionsSheet.swift",
                 "path" : "VersionsSheet.swift",
                 "sourceTree" : "<group>",
@@ -495,12 +511,12 @@
         "ff80f9a6bfe5a2fb6585d7bd609a30f575e130c70024b9c112b3dc5091ac98d1",
         "504e347972341c803137d89c3dd6a51ea66603ac61beac7e6bbea952a942049e",
         "d7d129fe73b95827d770a6bf89533f8eaadd2ccb77725f2c06ecf6f727018de0",
-        "32834acf6ed30d204841efddf6bb00f0270061599bc047d1a5526ee3b5e5500c",
-        "4dab23ec583506926575be4fbfc948da1125e436bbd5195227aea22ede8b2e8d",
+        "44d235ac06b4916c13ec7d42914e0b12551f9ffc84fe4202407edd3c52dc51b8",
+        "dd47731d0defeeb8bf85df66e18eac5f8d4553436783090e25226424cb672486",
         "416a343b977a17313133cfe5474fa3b7de6086a61bc9c09f32bfe865465b3131"
       ]
     },
-    "signature" : "28c8498dd466a3c3befe252562eba9d1120789cd05d219cae9f60768a694089d",
+    "signature" : "f634f7f03226e4ebf204c6f23d38bf095810b8e776b3c16d4426199253caf30b",
     "type" : "project"
   },
   {
@@ -1146,6 +1162,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_6::REF_14",
+              "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0::14",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-PRODUCT:seo-audit_SeoAudit.SeoAudit::BUILDPHASE_0",
@@ -1171,7 +1196,7 @@
       "productTypeIdentifier" : "com.apple.product-type.tool",
       "type" : "standard"
     },
-    "signature" : "32834acf6ed30d204841efddf6bb00f0270061599bc047d1a5526ee3b5e5500c",
+    "signature" : "44d235ac06b4916c13ec7d42914e0b12551f9ffc84fe4202407edd3c52dc51b8",
     "type" : "target"
   },
   {
@@ -1432,6 +1457,15 @@
 
               ],
               "removeHeadersOnCopy" : "false"
+            },
+            {
+              "codeSignOnCopy" : "false",
+              "fileReference" : "PACKAGE:seo-audit::MAINGROUP::REF_7::REF_14",
+              "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0::14",
+              "platformFilters" : [
+
+              ],
+              "removeHeadersOnCopy" : "false"
             }
           ],
           "guid" : "PACKAGE-TARGET:SeoAudit--292C7E9BDB1734DA-testable::BUILDPHASE_0",
@@ -1457,7 +1491,7 @@
       "productTypeIdentifier" : "org.swift.product-type.common.object",
       "type" : "standard"
     },
-    "signature" : "4dab23ec583506926575be4fbfc948da1125e436bbd5195227aea22ede8b2e8d",
+    "signature" : "dd47731d0defeeb8bf85df66e18eac5f8d4553436783090e25226424cb672486",
     "type" : "target"
   },
   {

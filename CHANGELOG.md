@@ -6,10 +6,26 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A way to start a second audit that people can find.** Once a report filled
+  the window the only way back was a ghost `‹ New audit` button in the report's
+  own header — and `⌘N` had been removed along with the document commands this
+  app has no use for, so there was no menu item and no shortcut either. Somebody
+  looking for it did not find it, which is the only evidence that matters. There
+  is now a **+ New audit** button at the top of the sidebar, visible whatever is
+  on screen, and `⌘N` and File ▸ New Audit both work. A crawl in progress is
+  stopped rather than left running into a window no longer showing it.
+
 - **The settings window is on the website**, next to a sentence about the one
   setting that earned it.
 
 ### Fixed
+- **The app kept its things in two folders.** The report library wrote to
+  `~/Library/Application Support/seo-audit` and the version cache added in
+  1.24.0 to `.../SEO Audit`, so one app had two homes and neither was obviously
+  the real one. Both go through one `Support.directory()` now, named for the
+  bundle id rather than the display name — the display name is for people, and
+  it has already changed once.
+
 - **Two rows in the new Settings read as the wrong thing.** The sitemap field's
   placeholder was written as the field's *title*, so "Found automatically"
   printed as a label beside an empty box — which reads as a setting that is

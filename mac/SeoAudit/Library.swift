@@ -38,9 +38,7 @@ final class Library: ObservableObject {
     /// than preferences. Caches would be wrong: the system may delete those,
     /// and seven minutes of crawling is not a cache.
     init(root: URL? = nil) {
-        let base = root ?? FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("seo-audit", isDirectory: true)
+        let base = Support.directory(root)
         folder = base.appendingPathComponent("reports", isDirectory: true)
         indexFile = base.appendingPathComponent("index.json")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

@@ -93,8 +93,11 @@ struct ContentView: View {
             } again: { url in
                 site = url
                 start()
+            } newAudit: {
+                startOver()
             }
             .navigationSplitViewColumnWidth(min: 214, ideal: 244, max: 320)
+            .onReceive(NotificationCenter.default.publisher(for: .newAudit)) { _ in startOver() }
         } detail: {
             ZStack {
                 Backdrop()
@@ -139,6 +142,15 @@ struct ContentView: View {
                 AskStage(site: $site, limit: $settings.limit, stage: stage, begin: start)
             }
         }
+    }
+
+    /// Back to the field, from wherever. A crawl in progress is stopped rather
+    /// than left running into a window that is no longer showing it.
+    private func startOver() {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            session.clear()
+        }
+        site = ""
     }
 
     private func start() {

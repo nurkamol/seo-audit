@@ -421,3 +421,41 @@ struct CrawlSettingsTests {
         }
     }
 }
+
+@Suite("One app, one folder")
+struct SupportTests {
+    @Test("the library and the version cache land in the same place")
+    func oneHome() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("seo-audit-support-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // Both went through their own copy of this once, and disagreed about
+        // capitalisation — so the app had two homes and neither was the real one.
+        let first = Support.directory(root)
+        let second = Support.directory(root)
+        #expect(first == second)
+        #expect(FileManager.default.fileExists(atPath: first.path), "it creates what it returns")
+    }
+
+    @MainActor
+    @Test("a report kept and a release cached share a directory")
+    func shared() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("seo-audit-support-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let url = try #require(Bundle.module.url(forResource: "payload", withExtension: "json"))
+        let raw = try Data(contentsOf: url)
+        let library = Library(root: root)
+        _ = library.keep(try JSONDecoder().decode(Report.self, from: raw), site: "https://x.test", raw: raw)
+        _ = Updates(root: root)
+
+        let contents = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        #expect(contents.contains("reports"))
+        #expect(contents.contains("index.json"))
+        // Nothing with the display name in it — that name is for people, and it
+        // has already changed once.
+        #expect(!contents.contains { $0.contains("SEO Audit") })
+    }
+}

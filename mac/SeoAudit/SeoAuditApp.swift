@@ -37,7 +37,14 @@ struct SeoAuditApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 840)
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            // Not empty. It was, which removed ⌘N along with the document
+            // commands this app has no use for — so once a report filled the
+            // window there was no menu item, no shortcut, and only a ghost
+            // button in the report header to start another one.
+            CommandGroup(replacing: .newItem) {
+                Button("New Audit") { NotificationCenter.default.post(name: .newAudit, object: nil) }
+                    .keyboardShortcut("n", modifiers: .command)
+            }
 
             // The standard About panel lists a bundle's metadata; this one can
             // say what the app is and link to the thing it is a window over.
@@ -72,6 +79,7 @@ struct SeoAuditApp: App {
 }
 
 extension Notification.Name {
+    static let newAudit = Notification.Name("seo-audit.newAudit")
     static let exportReport = Notification.Name("seo-audit.exportReport")
     static let showAbout = Notification.Name("seo-audit.showAbout")
 }

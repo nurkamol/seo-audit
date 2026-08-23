@@ -10,6 +10,7 @@ struct Sidebar: View {
     @Binding var showingVersions: Bool
     var reopen: (StoredReport) -> Void
     var again: (String) -> Void
+    var newAudit: () -> Void
 
     var body: some View {
         List {
@@ -49,6 +50,23 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        // At the top of the sidebar, where "new" lives in every other
+        // application, and visible whatever is on screen. There was only the
+        // ghost button in the report's own header, which somebody looking for a
+        // way to start a second audit did not find — the report filled the
+        // window and looked like the whole app.
+        .safeAreaInset(edge: .top) {
+            Button(action: newAudit) {
+                Label("New audit", systemImage: "plus")
+                    .font(.callout.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.glass)
+            .keyboardShortcut("n", modifiers: .command)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 Button {

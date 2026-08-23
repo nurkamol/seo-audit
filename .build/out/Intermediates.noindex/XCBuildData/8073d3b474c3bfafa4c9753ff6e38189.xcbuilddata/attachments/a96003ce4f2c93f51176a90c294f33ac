@@ -26,6 +26,16 @@
     "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/ContentView.swiftdeps",
     "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
   },
+  "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/CrawlSettings.swift" : {
+    "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.swiftconstvalues",
+    "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.d",
+    "diagnostics" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.dia",
+    "index-unit-output-path" : "/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.o",
+    "llvm-bc" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.bc",
+    "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.o",
+    "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings.swiftdeps",
+    "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/CrawlSettings~partial.swiftmodule"
+  },
   "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Engine.swift" : {
     "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Engine.swiftconstvalues",
     "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Engine.d",
@@ -106,16 +116,6 @@
     "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/SeoAuditApp.swiftdeps",
     "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/SeoAuditApp~partial.swiftmodule"
   },
-  "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Settings.swift" : {
-    "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.swiftconstvalues",
-    "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.d",
-    "diagnostics" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.dia",
-    "index-unit-output-path" : "/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.o",
-    "llvm-bc" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.bc",
-    "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.o",
-    "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings.swiftdeps",
-    "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Settings~partial.swiftmodule"
-  },
   "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Stages.swift" : {
     "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Stages.swiftconstvalues",
     "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Stages.d",
@@ -125,6 +125,16 @@
     "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Stages.o",
     "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Stages.swiftdeps",
     "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Stages~partial.swiftmodule"
+  },
+  "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Support.swift" : {
+    "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.swiftconstvalues",
+    "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.d",
+    "diagnostics" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.dia",
+    "index-unit-output-path" : "/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.o",
+    "llvm-bc" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.bc",
+    "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.o",
+    "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support.swiftdeps",
+    "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Support~partial.swiftmodule"
   },
   "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Updates.swift" : {
     "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Updates.swiftconstvalues",

@@ -1,5 +1,6 @@
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/AtomReleases.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/ContentView.swift
+/Users/nurkamol/coding/seo-audit/mac/SeoAudit/CrawlSettings.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/Engine.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/Export.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/History.swift
@@ -8,7 +9,7 @@
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/Report.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/ReportView.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/SeoAuditApp.swift
-/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Settings.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/Stages.swift
+/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Support.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/Updates.swift
 /Users/nurkamol/coding/seo-audit/mac/SeoAudit/VersionsSheet.swift
