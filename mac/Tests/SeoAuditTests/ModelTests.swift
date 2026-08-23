@@ -459,3 +459,85 @@ struct SupportTests {
         #expect(!contents.contains { $0.contains("SEO Audit") })
     }
 }
+
+@Suite("Two runs of one site")
+struct ComparisonTests {
+    @MainActor
+    private func library() throws -> (Library, URL, Data) {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("seo-audit-compare-\(UUID().uuidString)")
+        let url = try #require(Bundle.module.url(forResource: "payload", withExtension: "json"))
+        return (Library(root: root), root, try Data(contentsOf: url))
+    }
+
+    @MainActor
+    @Test("a run is never offered as something to compare itself with")
+    func neverItself() throws {
+        let (library, root, raw) = try library()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let report = try JSONDecoder().decode(Report.self, from: raw)
+
+        let first = library.keep(report, site: "https://a.test", raw: raw,
+                                 at: Date(timeIntervalSince1970: 1_000))
+        let second = library.keep(report, site: "https://a.test", raw: raw,
+                                  at: Date(timeIntervalSince1970: 2_000))
+        _ = library.keep(report, site: "https://b.test", raw: raw,
+                         at: Date(timeIntervalSince1970: 3_000))
+
+        let offered = library.otherRuns(of: "a.test", besides: second)
+        #expect(offered.map(\.id) == [first.id], "only the other run of the same site")
+        #expect(library.otherRuns(of: "b.test", besides: nil).count == 1)
+        // The first audit of a site has nothing to compare against, and the
+        // menu says so rather than being absent.
+        #expect(library.otherRuns(of: "a.test", besides: first).map(\.id) == [second.id])
+    }
+
+    @MainActor
+    @Test("newest first, so the obvious comparison is the top of the menu")
+    func ordering() throws {
+        let (library, root, raw) = try library()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let report = try JSONDecoder().decode(Report.self, from: raw)
+
+        let old = library.keep(report, site: "https://a.test", raw: raw, at: Date(timeIntervalSince1970: 1_000))
+        let mid = library.keep(report, site: "https://a.test", raw: raw, at: Date(timeIntervalSince1970: 2_000))
+        let new = library.keep(report, site: "https://a.test", raw: raw, at: Date(timeIntervalSince1970: 3_000))
+
+        #expect(library.otherRuns(of: "a.test", besides: new).map(\.id) == [mid.id, old.id])
+        #expect(library.mostRecent(of: "a.test")?.id == new.id)
+        #expect(library.mostRecent(of: "nothing.test") == nil)
+    }
+
+    @Test("what the engine sends back decodes, grouping included")
+    func decodes() throws {
+        let payload = Data("""
+        {
+          "previousDate": "2026-08-17",
+          "unchanged": 12,
+          "added": {
+            "findings": [{"level":"error","id":"h1-missing","title":"No <h1>","detail":"d","url":"https://a.test/x"}],
+            "causes": [{"id":"h1-missing","title":"No <h1>","level":"error","section":"/","count":1,
+                        "pages":["https://a.test/x"],"scope":"once","area":"Content"}]
+          },
+          "fixed": { "findings": [], "causes": [] }
+        }
+        """.utf8)
+
+        let comparison = try JSONDecoder().decode(Comparison.self, from: payload)
+        #expect(comparison.unchanged == 12)
+        #expect(comparison.previousDate == "2026-08-17")
+        #expect(comparison.added.causes.count == 1)
+        #expect(comparison.added.causes.first?.scope == "once")
+        #expect(comparison.fixed.causes.isEmpty)
+        #expect(!comparison.isUnchanged, "something appeared, so something moved")
+    }
+
+    @Test("a run where nothing moved says so rather than showing two empty lists")
+    func nothingMoved() throws {
+        let payload = Data("""
+        {"previousDate":"2026-08-17","unchanged":40,
+         "added":{"findings":[],"causes":[]},"fixed":{"findings":[],"causes":[]}}
+        """.utf8)
+        #expect(try JSONDecoder().decode(Comparison.self, from: payload).isUnchanged)
+    }
+}

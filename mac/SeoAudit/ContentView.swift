@@ -16,11 +16,16 @@ final class Session: ObservableObject {
     private var task: Task<Void, Never>?
 
     /// Open a report that was already on disk, without crawling anything.
-    func show(_ report: Report, raw: Data, for run: Run) {
+    /// The row in the library this report is, when it is one. A run in progress
+    /// is not one until it finishes.
+    @Published private(set) var openedFrom: StoredReport?
+
+    func show(_ report: Report, raw: Data, for run: Run, from stored: StoredReport? = nil) {
         cancel()
         lines = []
         failure = nil
         running = run
+        openedFrom = stored
         self.raw = raw
         self.report = report
     }
@@ -33,6 +38,7 @@ final class Session: ObservableObject {
         raw = nil
         failure = nil
         running = run
+        openedFrom = nil
         task = Task { [weak self] in
             for await event in engine.run(query: settings.queryItems(for: run)) {
                 guard let self else { return }
@@ -46,7 +52,9 @@ final class Session: ObservableObject {
                     self.raw = raw
                     // Kept before it is shown: a crash while rendering should
                     // still leave the seven minutes on disk.
-                    library?.keep(report, site: run.url, raw: raw)
+                    // Which stored row this view is of, so "compare with" can
+                    // offer every other run of the site and never itself.
+                    self.openedFrom = library?.keep(report, site: run.url, raw: raw)
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { self.report = report }
                 case .failed(let why):
                     withAnimation(.snappy) { self.failure = why }
@@ -81,6 +89,16 @@ struct ContentView: View {
 
     @State private var site = ""
     @State private var showingVersions = false
+    @State private var comparing: Pair?
+
+    /// The two runs a comparison sheet is about. Identifiable so `.sheet(item:)`
+    /// can carry them, which is what makes the sheet impossible to open with
+    /// nothing to compare.
+    private struct Pair: Identifiable {
+        let earlier: StoredReport
+        let host: String
+        var id: String { earlier.id.uuidString }
+    }
     @Namespace private var stage
 
     var body: some View {
@@ -88,7 +106,7 @@ struct ContentView: View {
             Sidebar(library: library, updates: updates, showingVersions: $showingVersions) { stored in
                 guard let (report, raw) = library.reopen(stored) else { return }
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                    session.show(report, raw: raw, for: Run(url: stored.site, limit: stored.pages))
+                    session.show(report, raw: raw, for: Run(url: stored.site, limit: stored.pages), from: stored)
                 }
             } again: { url in
                 site = url
@@ -98,6 +116,12 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 214, ideal: 244, max: 320)
             .onReceive(NotificationCenter.default.publisher(for: .newAudit)) { _ in startOver() }
+            .sheet(item: $comparing) { pair in
+                if let later = session.openedFrom ?? library.mostRecent(of: pair.host) {
+                    ComparisonSheet(host: pair.host, earlier: pair.earlier, later: later, library: library)
+                        .environmentObject(engine)
+                }
+            }
         } detail: {
             ZStack {
                 Backdrop()
@@ -124,10 +148,14 @@ struct ContentView: View {
             .frame(maxWidth: 520)
         case .ready:
             if let report = session.report, let run = session.running {
-                ReportView(report: report, site: run.url, back: session.clear) { format in
-                    Export.save(format, report: report, host: run.host,
-                                engine: engine.base, raw: session.raw)
-                }
+                ReportView(report: report, site: run.url,
+                           earlierRuns: library.otherRuns(of: run.host, besides: session.openedFrom),
+                           back: session.clear,
+                           export: { format in
+                               Export.save(format, report: report, host: run.host,
+                                           engine: engine.base, raw: session.raw)
+                           },
+                           compare: { earlier in comparing = Pair(earlier: earlier, host: run.host) })
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
             } else if let failure = session.failure {
                 Card(alignment: .leading) {

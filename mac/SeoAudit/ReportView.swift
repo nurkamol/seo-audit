@@ -9,8 +9,13 @@ import SwiftUI
 struct ReportView: View {
     let report: Report
     let site: String
+    /// Other runs of this same site that are still on disk, newest first. Empty
+    /// on the first audit of a site, which is when there is nothing to compare
+    /// against and the menu says so rather than being missing.
+    var earlierRuns: [StoredReport] = []
     var back: () -> Void
     var export: (ExportFormat) -> Void
+    var compare: (StoredReport) -> Void = { _ in }
 
     @State private var expanded: Set<String> = []
     @State private var search = ""
@@ -29,7 +34,8 @@ struct ReportView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header(report: report, site: site, back: back, export: export)
+            Header(report: report, site: site, earlierRuns: earlierRuns,
+                   back: back, export: export, compare: compare)
 
             Filters(search: $search, level: $level, counts: report.counts)
                 .padding(.horizontal, 20)
@@ -38,7 +44,10 @@ struct ReportView: View {
             ScrollView {
                 GlassEffectContainer(spacing: 14) {
                     LazyVStack(spacing: 12) {
-                        ForEach(causes) { cause in
+                        // By identity: `id` is the check, and one check can be a
+                        // cause under two sections — a repeated id in a ForEach
+                        // expands the wrong card.
+                        ForEach(causes, id: \.identity) { cause in
                             CauseCard(
                                 cause: cause,
                                 findings: report.findings(for: cause),
@@ -83,8 +92,10 @@ struct ReportView: View {
 private struct Header: View {
     let report: Report
     let site: String
+    var earlierRuns: [StoredReport]
     var back: () -> Void
     var export: (ExportFormat) -> Void
+    var compare: (StoredReport) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -92,6 +103,30 @@ private struct Header: View {
                 Button(action: back) { Label("New audit", systemImage: "chevron.left") }
                     .buttonStyle(.glass)
                 Spacer(minLength: 0)
+                // Two runs of one site, and what moved. Beside Export because
+                // that is where somebody is already looking when they have a
+                // report in front of them and a previous one in mind.
+                Menu {
+                    if earlierRuns.isEmpty {
+                        Text("No earlier run of this site is kept yet")
+                    } else {
+                        ForEach(earlierRuns) { run in
+                            Button {
+                                compare(run)
+                            } label: {
+                                Text(run.finishedAt.formatted(date: .abbreviated, time: .shortened))
+                                Text(run.summary)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Compare", systemImage: "arrow.left.arrow.right")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.glass)
+                .disabled(earlierRuns.isEmpty)
+                .fixedSize()
+
                 Menu {
                     // Every format the engine can write, plus the one drawing
                     // this app makes itself.

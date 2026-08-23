@@ -16,6 +16,16 @@
     "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/AtomReleases.swiftdeps",
     "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/AtomReleases~partial.swiftmodule"
   },
+  "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Comparison.swift" : {
+    "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.swiftconstvalues",
+    "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.d",
+    "diagnostics" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.dia",
+    "index-unit-output-path" : "/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.o",
+    "llvm-bc" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.bc",
+    "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.o",
+    "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison.swiftdeps",
+    "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/Comparison~partial.swiftmodule"
+  },
   "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/ContentView.swift" : {
     "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/ContentView.swiftconstvalues",
     "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit-p.build/Objects-normal/arm64/ContentView.d",

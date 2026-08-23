@@ -142,9 +142,9 @@ for anyone without Xcode.
 swift test
 ```
 
-Twenty-eight, over the models, the URL normalising, version ordering, the
-library, the releases feed, the version cache, the PDF writer, what the settings
-send, and that the app keeps everything in one folder. The one that matters decodes a **real engine payload** captured from a
+Thirty-two, over the models, the URL normalising, version ordering, the library,
+the releases feed, the version cache, the PDF writer, what the settings send,
+that the app keeps everything in one folder, and which runs a comparison offers. The one that matters decodes a **real engine payload** captured from a
 live run and kept as a fixture, because the way this app breaks is the engine
 changing its output and nothing noticing until a window is opened. CI captures
 a fresh payload on every change and checks the app still decodes every field it
@@ -166,6 +166,7 @@ team to delete tests.
 | `ReportView.swift` | the report: cause cards, filters, pages |
 | `Library.swift` | reports kept on disk, and the sidebar that lists them |
 | `CrawlSettings.swift` | ⌘, — what a run does, and the query it becomes |
+| `Comparison.swift` | two runs of one site, and what moved |
 | `Support.swift` | the one folder this app keeps things in |
 | `PDF.swift` | the report on paper — A4 pages, the engine's areas, every affected page |
 | `Updates.swift` | releases, versions, and the command that moves between them |

@@ -173,6 +173,57 @@ test('a user agent is chosen from the presets, never invented', () => {
   assert.equal(agentFor(q('browser=safari&os=windows'), { USER_AGENT: 'configured' }), 'configured');
 });
 
+test('two runs are compared by the engine, not by whatever asked', async () => {
+  // diff() is what --baseline has always used. The macOS app posts here rather
+  // than comparing in Swift, so "did this get better" has one answer.
+  const was = {
+    meta: { pages: 10, date: '2026-08-17' },
+    findings: [
+      { level: 'warn', id: 'title-long', title: 'T', detail: 'd', url: 'https://x.test/a' },
+      { level: 'warn', id: 'thin-content', title: 'T', detail: 'd', url: 'https://x.test/b' },
+    ],
+  };
+  const now = {
+    meta: { pages: 10, date: '2026-08-24' },
+    findings: [
+      { level: 'warn', id: 'title-long', title: 'T', detail: 'd', url: 'https://x.test/a' },
+      { level: 'error', id: 'h1-missing', title: 'T', detail: 'd', url: 'https://x.test/c' },
+    ],
+  };
+
+  const res = await handle(
+    get('/diff', { token: SECRET, method: 'POST', body: JSON.stringify({ previous: was, current: now }) }),
+    env(),
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+
+  assert.deepEqual(body.added.findings.map((f) => f.id), ['h1-missing'], 'appeared since last time');
+  assert.deepEqual(body.fixed.findings.map((f) => f.id), ['thin-content'], 'gone since last time');
+  assert.equal(body.unchanged, 1, 'still there, and not worth reading twice');
+  assert.equal(body.previousDate, '2026-08-17');
+
+  // Grouped by the same function everything else groups by, so a regression on
+  // forty pages reads as one thing rather than forty rows.
+  assert.equal(body.added.causes.length, 1);
+  assert.equal(body.added.causes[0].id, 'h1-missing');
+  assert.ok(body.added.causes[0].scope, 'the scope sentence comes with it');
+});
+
+test('a comparison refuses a body it cannot compare', async () => {
+  const bad = async (payload) =>
+    (await handle(get('/diff', { token: SECRET, method: 'POST', body: payload }), env())).status;
+
+  assert.equal(await bad('not json'), 400);
+  assert.equal(await bad(JSON.stringify({ previous: {}, current: {} })), 400);
+  assert.equal(await bad(JSON.stringify({ current: { findings: [] } })), 400);
+  // The gate covers this like everything else.
+  assert.equal(
+    (await handle(get('/diff', { method: 'POST', body: '{}' }), env())).status,
+    401,
+  );
+});
+
 test('the presets are served rather than copied into every client', async () => {
   // Behind the same gate as everything else. The Mac app never sees the gate:
   // src/serve.mjs mints a token and adds the header on the way through.

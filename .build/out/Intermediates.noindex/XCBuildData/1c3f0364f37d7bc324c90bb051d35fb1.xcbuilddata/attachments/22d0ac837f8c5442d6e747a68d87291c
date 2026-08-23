@@ -16,6 +16,16 @@
     "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/AtomReleases.swiftdeps",
     "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/AtomReleases~partial.swiftmodule"
   },
+  "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Comparison.swift" : {
+    "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.swiftconstvalues",
+    "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.d",
+    "diagnostics" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.dia",
+    "index-unit-output-path" : "/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.o",
+    "llvm-bc" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.bc",
+    "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.o",
+    "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison.swiftdeps",
+    "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Comparison~partial.swiftmodule"
+  },
   "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/ContentView.swift" : {
     "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/ContentView.swiftconstvalues",
     "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/ContentView.d",
@@ -125,6 +135,16 @@
     "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Stages.o",
     "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Stages.swiftdeps",
     "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Stages~partial.swiftmodule"
+  },
+  "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Support.swift" : {
+    "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.swiftconstvalues",
+    "dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.d",
+    "diagnostics" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.dia",
+    "index-unit-output-path" : "/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.o",
+    "llvm-bc" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.bc",
+    "object" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.o",
+    "swift-dependencies" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support.swiftdeps",
+    "swiftmodule" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Support~partial.swiftmodule"
   },
   "/Users/nurkamol/coding/seo-audit/mac/SeoAudit/Updates.swift" : {
     "const-values" : "/Users/nurkamol/coding/seo-audit/.build/out/Intermediates.noindex/seo-audit.build/Debug/SeoAudit--292C7E9BDB1734DA-testable-t.build/Objects-normal/arm64/Updates.swiftconstvalues",

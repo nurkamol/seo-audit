@@ -94,6 +94,21 @@ final class Library: ObservableObject {
         return (report, data)
     }
 
+    /// Every other run of this host, newest first — what a comparison can be
+    /// against. `besides` is the one on screen, which is never worth offering
+    /// as something to compare itself with.
+    func otherRuns(of host: String, besides current: StoredReport?) -> [StoredReport] {
+        reports
+            .filter { $0.host == host && $0.id != current?.id }
+            .sorted { $0.finishedAt > $1.finishedAt }
+    }
+
+    /// The newest kept run of a host, for when a comparison needs the other
+    /// side and the report on screen was never stored.
+    func mostRecent(of host: String) -> StoredReport? {
+        reports.filter { $0.host == host }.max { $0.finishedAt < $1.finishedAt }
+    }
+
     func forget(_ stored: StoredReport) {
         deleteFile(stored)
         reports.removeAll { $0.id == stored.id }

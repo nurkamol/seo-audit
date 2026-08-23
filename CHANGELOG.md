@@ -6,6 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Compare two runs of a site, in the window.** The app has kept every finished
+  run since 1.23.0 and compared none of them, so it could not answer the
+  question that makes somebody open a tool a second time: did the fix work. A
+  **Compare** menu beside Export lists the other runs of the same site, newest
+  first, and the sheet shows what **appeared**, what is **gone**, and how much
+  did not move — grouped, so a regression across forty pages reads as one thing
+  rather than forty rows.
+
+  The comparing is not done in Swift. `diff()` has been in `src/baseline.mjs`
+  since `--baseline` shipped, and the app posts both sets to a new `/diff`
+  endpoint, so a comparison from this window and one from
+  `seo-audit --baseline` are the same comparison. On the first audit of a site
+  the menu is present and says there is nothing kept to compare against, rather
+  than being missing.
+
 - **Pages that are the same page again.** Titles and descriptions have been
   compared since early on; the bodies never were, and that is the axis a hundred
   product pages differ on by one word — they compete with each other for one

@@ -13,6 +13,7 @@
 import { audit } from '../src/audit.mjs';
 import { html as htmlReport, markdown as markdownReport, csv as csvReport } from '../src/report.mjs';
 import { causePayload } from '../src/causes.mjs';
+import { diff } from '../src/baseline.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
@@ -305,6 +306,38 @@ export async function handle(request, env, ctx, deps = {}) {
 
   // The findings, handed back and rendered. The native app holds the JSON it
   // was streamed and asks for a format when somebody exports; re-rendering here
+  // Two runs of the same site, and what moved between them. `diff()` lives in
+  // src/baseline.mjs and is what `--baseline` has always used; sending the two
+  // sets here rather than comparing them in the client means there is one
+  // answer to "did this get better", not one per front end. No crawl happens.
+  if (url.pathname === '/diff' && request.method === 'POST') {
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return new Response('That body is not JSON.', { status: 400 });
+    }
+    if (!Array.isArray(payload?.previous?.findings) || !Array.isArray(payload?.current?.findings)) {
+      return new Response('Expected { previous: { meta, findings }, current: { meta, findings } }.', {
+        status: 400,
+      });
+    }
+
+    const { added, fixed, unchanged, previousDate } = diff(payload.previous, payload.current.findings);
+    // Grouped by the same causePayload() everything else uses, so a regression
+    // reads as one thing to fix rather than as forty rows.
+    const pages = payload.current.meta?.pages ?? 0;
+    return new Response(
+      JSON.stringify({
+        previousDate,
+        unchanged,
+        added: { findings: added, causes: causePayload(added, pages) },
+        fixed: { findings: fixed, causes: causePayload(fixed, payload.previous.meta?.pages ?? 0) },
+      }),
+      { headers: { 'content-type': 'application/json' } },
+    );
+  }
+
   // Which browsers and systems can be pretended to be. A client building a menu
   // asks rather than carrying its own copy of the list, so adding a preset to
   // src/agents.mjs adds it everywhere instead of in one place and then, later
