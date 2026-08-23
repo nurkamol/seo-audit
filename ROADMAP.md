@@ -79,18 +79,18 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
-- **Two readers compared** (unreleased) — `--compare-as`, on what a search
+- **Two readers compared** (1.21.0) — `--compare-as`, on what a search
   engine reads rather than on bytes. forbes.com serves Googlebot half the words
   it serves Chrome; nytimes.com differs by 3% and stays silent.
-- **Search Console** (unreleased) — impressions per page, the one number here
+- **Search Console** (1.21.0) — impressions per page, the one number here
   that is not a proxy. Untested against the live API.
-- **`--serve` and a macOS app** (unreleased) — the Worker's own file answers
+- **`--serve` and a macOS app** (1.21.0) — the Worker's own file answers
   `node:http` too, so the local UI is thirty lines of adapter and the Mac app is
   a window around it. Running it for real found the bug reading it would not
   have: the server outlived the app and held the port.
-- **A report that prints** (unreleased) — forced light colours, margins, no
+- **A report that prints** (1.21.0) — forced light colours, margins, no
   finding split across a page break, and the causes taking page one.
-- **Ordering by reach** (unreleased) — the link graph moved out of
+- **Ordering by reach** (1.21.0) — the link graph moved out of
   `crossPageChecks`, where it was built twice and thrown away, into
   `src/graph.mjs` where three things read it. Causes are ordered by how much of
   the site points at them, and a section stops at two path segments because

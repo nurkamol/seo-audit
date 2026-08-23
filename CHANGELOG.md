@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.21.0] — 2026-08-23
+
 ### Added
 - **`--compare-as`: the same page, asked for by two different readers.** A site
   that serves one thing to Googlebot and another to a browser is either cloaking
