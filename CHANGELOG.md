@@ -6,6 +6,35 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--compare-as`: the same page, asked for by two different readers.** A site
+  that serves one thing to Googlebot and another to a browser is either cloaking
+  or misconfiguring its bot protection, and both are invisible to an audit that
+  fetches once.
+
+  Not a byte comparison — a nonce, a timestamp and a cart count all differ
+  between two fetches by the same client. What is compared is what a search
+  engine reads: status, title, canonical, robots meta, word count and link
+  count, the last two with a tenth of slack so ordinary dynamic content does
+  not fire.
+
+  **forbes.com** serves Googlebot 225 words where Chrome gets 503, and the same
+  on every page sampled. **nytimes.com** differs by 3% and correctly stays
+  silent. jekyllrb.com is identical on all ten and says so, because a clean
+  comparison is a result rather than an absence.
+
+- **`--search-console`: findings ordered by what the pages actually do.** Every
+  other ordering here is derived from the site's own markup and is a proxy.
+  Impressions are not. Opt-in, credentials read from the environment or
+  `~/.config/seo-audit/.env` and never from a repository, a domain property
+  named `sc-domain:example.com`, and the window ends three days back because
+  Search Console counts the last three incompletely.
+
+  Missing credentials, or a property the account cannot read, are a note: an
+  audit that dies because an optional integration failed is worse than one that
+  says so. **Tested against a fake API rather than a real one** — nobody here
+  has a property to point it at, so the request shape, the token exchange and
+  the date window are covered by tests and the live call is not.
+
 - **`--serve`, and a macOS app around it.** `node bin/seo-audit.mjs --serve`
   opens the same form the hosted version serves, on `127.0.0.1:4321` — no
   account, no bill, and none of a Worker's limits.

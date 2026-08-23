@@ -87,19 +87,32 @@ export function byCause(findings) {
         inlinks += finding.reach.inlinks;
       }
       const depths = measured.map((finding) => finding.reach.depth).filter((d) => d !== null);
+      // Impressions are not a proxy for anything: where Search Console has been
+      // asked, this is what these pages actually do in Google.
+      const shown = new Set();
+      let impressions = 0;
+      for (const finding of cause.findings) {
+        if (!finding.traffic || shown.has(finding.url)) continue;
+        shown.add(finding.url);
+        impressions += finding.traffic.impressions;
+      }
       return {
         ...cause,
         pages,
         count: cause.findings.length,
         inlinks: measured.length ? inlinks : null,
         depth: depths.length ? Math.min(...depths) : null,
+        impressions: shown.size ? impressions : null,
       };
     })
     .sort(
       (a, b) =>
         WORST_FIRST[a.level] - WORST_FIRST[b.level] ||
-        // Reach before breadth: a template on twenty pages that four hundred
-        // links point at is more of the site than one on fifty nobody visits.
+        // Measured traffic first where it is known, because it is the only
+        // number here that is not a proxy. Then reach before breadth: a
+        // template on twenty pages that four hundred links point at is more of
+        // the site than one on fifty nobody visits.
+        (b.impressions ?? -1) - (a.impressions ?? -1) ||
         (b.inlinks ?? -1) - (a.inlinks ?? -1) ||
         b.pages.length - a.pages.length ||
         a.id.localeCompare(b.id) ||
@@ -116,7 +129,10 @@ export function causeScope(cause, totalPages) {
   const where = cause.section === '/' ? 'across the site' : `under ${cause.section}`;
   const share =
     totalPages && pages / totalPages >= 0.5 ? `, ${Math.round((pages / totalPages) * 100)}% of the crawl` : '';
-  const reach = cause.inlinks ? `, ${cause.inlinks.toLocaleString()} links in` : '';
+  const seen = cause.impressions
+    ? `, ${cause.impressions.toLocaleString()} impressions in 28 days`
+    : '';
+  const reach = seen || (cause.inlinks ? `, ${cause.inlinks.toLocaleString()} links in` : '');
   const near =
     cause.depth === 0 ? ', starting at the homepage' : cause.depth === 1 ? ', one click from home' : '';
   return `${pages} pages ${where}${share}${reach}${near}`;

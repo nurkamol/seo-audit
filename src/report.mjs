@@ -236,6 +236,9 @@ const CATEGORY_OF = {
   // Redirects
   'sitemap-redirect': 'Redirects', 'redirect-chain': 'Redirects', 'host-variant-dead': 'Redirects',
   'origin-redirected': 'Redirects',
+  'serves-differently': 'Indexability', 'compare-sampled': 'Indexability',
+  'search-console': 'Site & security', 'search-console-unconfigured': 'Site & security',
+  'search-console-failed': 'Site & security',
   'trailing-slash': 'Redirects', 'meta-refresh': 'Redirects',
   'redirect-dead': 'Redirects', 'redirect-broken': 'Redirects',
   'redirect-not-applied': 'Redirects', 'redirect-hops': 'Redirects',

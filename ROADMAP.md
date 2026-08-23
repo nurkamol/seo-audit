@@ -4,31 +4,22 @@ Ordered by how much a real project would feel the difference, not by how interes
 
 ## Next
 
-Not more checks. There are about ninety, and the ninety-first adds a row to a
-report nobody can act on. A real store produced **2,081 findings across 347
-URLs, four checks accounting for 80% of them and 1,685 of them under
-`/products/`** — which is not 1,685 problems but one Shopify template repeated
-194 times. The work left is making the report say that.
+Empty, and this time it stayed empty for more than a day's work. Everything the
+professional-tool plan queued has shipped: grouping, ordering by reach, a report
+that prints, a local server, a macOS window, two readers compared, and Search
+Console.
 
-### 1. Fetch as two agents and diff them
+The one thing waiting is not a feature. **`--search-console` has never made a
+live call** — its request shape, token exchange and date window are covered by
+tests against a fake API, and nobody here has a property to point it at. The
+first person who does should run it before trusting it.
 
-`--browser` made this cheap. A site that serves one page to Googlebot and
-another to a browser is either cloaking or misconfiguring its bot protection,
-and both are invisible to every audit that fetches once. The diff machinery
-already exists for `--against`, which compares two deployments; this compares
-two readers of one deployment.
-
-Worth measuring before building: three real sites served byte-identical HTML to
-the default agent, to Chrome and to Googlebot, so the interesting case may be
-rarer than it sounds.
-
-### 2. Search Console, opt-in and last
-
-Impressions and clicks per URL, so findings sort by traffic at risk: "this
-broken canonical is on a page with 4,000 impressions a month" is the sentence
-commercial tools charge for. Reachable with `fetch` and a refresh token, so no
-dependency — but it is the only item here that needs auth, which is why it is
-last.
+What filled this section before, and is worth keeping in mind when it fills
+again: not more checks. There are about ninety, and the ninety-first adds a row
+to a report nobody can act on. The plan that just shipped came from one number —
+a real store's 2,081 findings across 347 URLs, four checks accounting for 80% of
+them and 1,685 under `/products/`, which is not 1,685 problems but one Shopify
+template repeated 194 times.
 
 ### Five things worth keeping in front of whatever comes next
 
@@ -36,8 +27,9 @@ last.
 fetched.** Click depth cost no requests — the link graph had been in memory
 since 0.3.0, and only its extreme case, the orphan, was ever reported. The
 viewport string has been parsed and kept since the first commit and was only
-ever tested for existing. The anchor-text pair and the contradictions above are
-the same shape, and so was pagination, which left this list in 1.14.0.
+ever tested for existing. Ordering by reach was the same shape again: the link
+graph had been built twice inside one function and thrown away, and moving it
+into `src/graph.mjs` cost nothing and let three things read it.
 
 **A check is narrowed by real sites, not by argument.** Twice now the estimate
 has been three or four false positives before a check settles, and twice that
@@ -87,6 +79,11 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Two readers compared** (unreleased) — `--compare-as`, on what a search
+  engine reads rather than on bytes. forbes.com serves Googlebot half the words
+  it serves Chrome; nytimes.com differs by 3% and stays silent.
+- **Search Console** (unreleased) — impressions per page, the one number here
+  that is not a proxy. Untested against the live API.
 - **`--serve` and a macOS app** (unreleased) — the Worker's own file answers
   `node:http` too, so the local UI is thirty lines of adapter and the Mac app is
   a window around it. Running it for real found the bug reading it would not

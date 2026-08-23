@@ -61,6 +61,15 @@ const HELP = `
                        host blocking crawlers will answer
     --os <name>        the system that browser is running on, default this one:
                        ${OS_NAMES.join(', ')}
+    --search-console [property]
+                       order findings by what the pages actually do in Google.
+                       Needs GSC_CLIENT_ID, GSC_CLIENT_SECRET and
+                       GSC_REFRESH_TOKEN in the environment or in
+                       ~/.config/seo-audit/.env. A domain property is named
+                       "sc-domain:example.com" rather than by its URL
+    --compare-as <name> fetch a sample of pages a second time as this browser
+                       or crawler and report what changed. A page that differs
+                       with the reader is cloaking, or bot protection misfiring
     --user-agent <ua>  identify as something else. Some hosts stall clients
                        that do not look like a browser
 
@@ -121,6 +130,13 @@ function parseArgs(argv) {
       const next = argv[i + 1];
       opts.serve = next && /^\d+$/.test(next) ? Number(argv[++i]) : true;
     }
+    else if (arg === '--search-console') {
+      // Optionally the property name, since a domain property is not a URL.
+      const next = argv[i + 1];
+      opts.searchConsole = next && !next.startsWith('--') ? argv[++i] : true;
+    }
+    else if (arg === '--compare-as') opts.compareAs = value();
+    else if (arg === '--compare-sample') opts.compareSample = Number(value());
     else if (arg === '--browser') opts.browser = value();
     else if (arg === '--os') opts.os = value();
     else if (arg === '--config') opts.config = value();
@@ -193,6 +209,16 @@ if (opts.browser) {
 } else if (opts.os) {
   console.error('  --os needs --browser: it says which system the browser is running on.');
   process.exit(2);
+}
+
+// The second reader, resolved the same way as the first and refused as loudly.
+if (opts.compareAs) {
+  const { ua, error } = userAgentFor(opts.compareAs, opts.os ?? thisPlatform());
+  if (error) {
+    console.error(`  ${error}`);
+    process.exit(2);
+  }
+  opts.compareAs = { ua, label: opts.compareAs };
 }
 
 if (opts.failOn === 'new' && !opts.baseline) {

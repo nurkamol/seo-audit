@@ -6,6 +6,8 @@ import { redirectChecks } from './redirects.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
 import { linkGraph } from './graph.mjs';
+import { compareAgents } from './compare.mjs';
+import { searchConsole } from './console.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 
@@ -314,6 +316,18 @@ export async function audit(target, opts = {}) {
   // and a list of work worth doing.
   const graph = linkGraph(pages.filter((p) => p.doc && p.res.ok), home);
   findings.push(...crossPageChecks(pages, { limits: opts.limits, truncated, home, graph }));
+  // The same pages, asked for by somebody else. Only when asked for: it doubles
+  // the request cost of every page it looks at.
+  if (opts.compareAs) {
+    findings.push(
+      ...(await compareAgents(pages, {
+        agent: opts.compareAs.ua,
+        label: opts.compareAs.label,
+        sample: opts.compareSample ?? 10,
+        onProgress,
+      })),
+    );
+  }
   findings.push(...sitemapChecks(entries, source, Date.now(), files));
   findings.push(...expectationChecks(pages, opts.expect));
   onProgress?.({ phase: 'checks', detail: `${findings.length} findings from the pages themselves` });
@@ -367,6 +381,14 @@ export async function audit(target, opts = {}) {
         'was not read at all. Pass a lower --concurrency to get through cleanly.',
       url: origin,
     });
+  }
+
+  // What these pages actually do in Google. Opt-in, and the only thing here
+  // that needs an account.
+  if (opts.searchConsole) {
+    findings.push(...(await searchConsole(origin, findings, {
+      siteUrl: typeof opts.searchConsole === 'string' ? opts.searchConsole : undefined,
+    })));
   }
 
   if (truncated > 0) {

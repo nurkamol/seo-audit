@@ -173,6 +173,42 @@ swiftc -O -o build/SeoAudit mac/SeoAudit/main.swift && build/SeoAudit
 It starts the CLI with `--serve` and points a web view at it. No check is
 written twice, because a check written twice is a check that drifts.
 
+### What the pages actually do in Google
+
+```bash
+node bin/seo-audit.mjs https://example.com --search-console
+node bin/seo-audit.mjs https://example.com --search-console sc-domain:example.com
+```
+
+Every other ordering here is derived from the site's own markup — how many
+links point at a page, how far it is from the homepage. Those are proxies.
+Impressions are not: a broken canonical on a page with four thousand
+impressions a month is a different sentence from the same canonical on a page
+nobody has been shown.
+
+Opt-in, and the only thing in this tool that needs an account. It reads
+`GSC_CLIENT_ID`, `GSC_CLIENT_SECRET` and `GSC_REFRESH_TOKEN` from the
+environment or from `~/.config/seo-audit/.env`, deliberately outside any
+repository. A domain property is named `sc-domain:example.com` rather than by
+its URL. Missing credentials, or a property the account cannot read, are a note
+and the rest of the audit is unaffected.
+
+### Telling two readers apart
+
+```bash
+node bin/seo-audit.mjs https://example.com --compare-as googlebot
+```
+
+Fetches a sample of pages a second time as somebody else and reports what
+changed. Not a byte comparison — a nonce, a timestamp and a cart count all
+differ between two fetches of the same page by the same client. What is
+compared is what a search engine reads: status, title, canonical, robots meta,
+word count and link count.
+
+forbes.com serves Googlebot roughly half the words it serves Chrome on every
+page sampled. jekyllrb.com is identical on all ten, and says so rather than
+staying silent.
+
 ### Crawling as something else
 
 ```bash

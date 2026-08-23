@@ -1315,6 +1315,66 @@ test('a page nothing links to is not reported for the words nobody used', () => 
   assert.ok(found.includes('orphan-page'));
 });
 
+// --- what the pages actually do in Google ----------------------------------
+
+test('missing credentials are a note, not a failure', async () => {
+  // An audit that dies because an optional integration was not configured is
+  // worse than one that says so and carries on.
+  const { searchConsole } = await import('../src/console.mjs');
+  const out = await searchConsole('https://x.test', [], { credentials: { missing: ['GSC_CLIENT_ID'] } });
+  assert.deepEqual(ids(out), ['search-console-unconfigured']);
+  assert.equal(out[0].level, 'info');
+  assert.match(out[0].detail, /never in the repository/);
+});
+
+test('traffic is attached to the findings on the pages it belongs to', async () => {
+  const { pageTraffic } = await import('../src/console.mjs');
+  const calls = [];
+  const fetcher = async (url, init) => {
+    calls.push(url);
+    if (url.includes('oauth2')) return { ok: true, json: async () => ({ access_token: 'a-token' }) };
+    assert.match(init.headers.authorization, /^Bearer a-token$/);
+    const body = JSON.parse(init.body);
+    // Search Console counts the last three days incompletely, so the window
+    // has to end before them or a page looks like it lost all its impressions.
+    assert.equal(body.endDate, '2026-06-28');
+    assert.equal(body.startDate, '2026-05-31');
+    assert.deepEqual(body.dimensions, ['page']);
+    return {
+      ok: true,
+      json: async () => ({
+        rows: [
+          { keys: ['https://x.test/a/'], impressions: 4000.4, clicks: 12.7 },
+          { keys: ['https://x.test/b'], impressions: 3, clicks: 0 },
+        ],
+      }),
+    };
+  };
+  const traffic = await pageTraffic('https://x.test/', { clientId: 'i', clientSecret: 's', refreshToken: 'r' }, {
+    fetcher,
+    now: Date.parse('2026-07-01T00:00:00Z'),
+  });
+
+  assert.equal(calls.length, 2, 'a token, then one query');
+  // Keyed without the trailing slash, the way every other URL in this tool is.
+  assert.deepEqual(traffic.get('https://x.test/a'), { impressions: 4000, clicks: 13 });
+  assert.deepEqual(traffic.get('https://x.test/b'), { impressions: 3, clicks: 0 });
+});
+
+test('a property Google will not answer for is a note too', async () => {
+  const { searchConsole } = await import('../src/console.mjs');
+  const out = await searchConsole('https://x.test', [], {
+    credentials: { clientId: 'i', clientSecret: 's', refreshToken: 'r' },
+    fetcher: async (url) =>
+      url.includes('oauth2')
+        ? { ok: true, json: async () => ({ access_token: 't' }) }
+        : { ok: false, status: 403, json: async () => ({ error: { message: 'User does not have sufficient permission' } }) },
+  });
+  assert.deepEqual(ids(out), ['search-console-failed']);
+  assert.match(out[0].detail, /sufficient permission/);
+  assert.match(out[0].detail, /sc-domain:/, 'and says how a domain property is named');
+});
+
 // --- the local server ------------------------------------------------------
 
 test('--serve answers the same pages the Worker does, without a password', async () => {
