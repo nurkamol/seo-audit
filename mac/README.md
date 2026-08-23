@@ -51,6 +51,12 @@ Take `--no-node` if the person running it is a developer. Take the default if
 they are not, and accept that a self-contained app costs what a self-contained
 app costs — a quarter of what Slack asks for.
 
+## What it needs
+
+macOS 26 or later, and Apple Silicon. Liquid Glass is a macOS 26 API, and the
+released build carries an arm64 Node — a universal one would be two Nodes and
+216 MB. Building it yourself on an Intel Mac works if you have the macOS 26 SDK.
+
 ## Installing
 
 ```bash

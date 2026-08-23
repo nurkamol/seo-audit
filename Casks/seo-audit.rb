@@ -15,7 +15,10 @@ cask "seo-audit" do
   desc "Crawl a site's sitemap and check every page, from a window"
   homepage "https://github.com/nurkamol/seo-audit"
 
+  # Apple Silicon only: the release is built on an arm64 runner and carries an
+  # arm64 Node. A universal build would be two Nodes and 216 MB.
   depends_on macos: ">= :tahoe"
+  depends_on arch: :arm64
 
   app "seo-audit.app"
 

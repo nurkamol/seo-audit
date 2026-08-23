@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.22.0] — 2026-08-23
+
 ### Added
 - **The macOS app is a real application now.** `./mac/build.sh` produces a
   signed `seo-audit.app` with its own icon, `Info.plist` and engine inside it —

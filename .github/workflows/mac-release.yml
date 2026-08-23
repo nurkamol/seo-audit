@@ -20,7 +20,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    # macos-26 or newer: Liquid Glass needs the macOS 26 SDK, and macos-15
+    # carries Xcode 16, where the app does not compile at all.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +31,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Check the runner can build Liquid Glass
+        run: |
+          sdk="$(xcrun --sdk macosx --show-sdk-version)"
+          echo "macOS SDK $sdk, $(swiftc --version | head -1)"
+          case "$sdk" in
+            2[6-9].*|[3-9][0-9].*) ;;
+            *) echo "::error::Liquid Glass needs the macOS 26 SDK; this runner has $sdk"; exit 1 ;;
+          esac
 
       - name: Build the app with Node inside it
         run: |

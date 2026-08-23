@@ -79,6 +79,14 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **A macOS app** (1.22.0) — a real bundle, built by `swiftc` and a shell
+  script rather than an Xcode project, with the report drawn natively and no
+  web view left in it. The engine sits behind one protocol, so writing it in
+  Swift later is a second conformance rather than a rewrite of the app. Updates
+  and downgrades go through Homebrew, because an unsigned application that
+  replaces its own bundle is indistinguishable from something you would not
+  want.
+
 - **Two readers compared** (1.21.0) — `--compare-as`, on what a search
   engine reads rather than on bytes. forbes.com serves Googlebot half the words
   it serves Chrome; nytimes.com differs by 3% and stays silent.
