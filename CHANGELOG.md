@@ -6,6 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **An HTTP 429 is no longer read as "absent" or "dead".** Running the tool
+  twice against one host is enough to trip a store's rate limit, and the second
+  run reported *No sitemap found* about a site whose sitemap the first run had
+  just read, plus three `host-variant-dead` warnings — one of them against the
+  canonical host, which is the variant a crawl hammers hardest and so the one
+  most likely to be refused. 429 means "ask later". A rate-limited sitemap probe
+  is `sitemap-not-checked`, a rate-limited host variant is
+  `host-variant-not-checked` at note level, and a run where nothing was read at
+  all is `crawl-rate-limited` rather than `nothing-crawlable`. A 404 still
+  produces every one of the original findings, which is the half that matters.
+  robots.txt and llms.txt learned this in 1.15.0; these three had been missed.
 - **The app icon had a white frame around it.** `docs/icon@1024.png` had been
   flattened onto white — `hasAlpha: no` — so the transparent margin the squircle
   sits in came out opaque, and macOS drew the icon as a white rounded square

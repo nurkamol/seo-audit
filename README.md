@@ -667,6 +667,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No sitemap URL is disallowed by `robots.txt` — the site contradicting itself | error |
 | Every sitemap URL is actually indexable — not `noindex`, not canonicalised away | warning |
 | Each sitemap file is within the protocol's 50,000 URLs and 50MB | error |
+| A sitemap is actually absent before absence is reported — a probe that answers 429 is `sitemap-not-checked`, not `no-sitemap` | warning |
 | The sitemap declares `lastmod` at all | note |
 | `lastmod` differs between pages — one date on every URL is a build stamp, and crawlers learn to ignore it | note |
 | No URL is listed twice — across two files of an index, or twice in one. Image and video sitemaps are skipped, since one entry per image is the format working | note |
@@ -674,11 +675,11 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | A favicon Google can use — the home page declares one that loads, or `/favicon.ico` is there | warning / note |
 | `llms.txt` exists | note |
 | Everything once-per-domain is read on the host that answers — audit `example.com` when the site lives at `www.` and the audit moves there, saying so, rather than reading robots.txt off a 301 | note |
-| `http://`, `www.` and `https://www.` each reach the canonical host in one hop | warning |
+| `http://`, `www.` and `https://www.` each reach the canonical host in one hop — a variant that answers 429 is reported as **not checked**, never as dead | warning / note |
 | The TLS certificate is not expired, and not expiring within 14 days | error / warning |
 | HSTS, `X-Content-Type-Options`, `Referrer-Policy`, CSP headers | warning / note |
 | A URL that cannot exist returns 404, not a 200 error page — the redirect chain is followed to its end | error / warning |
-| There is something to audit at all — no sitemap *and* no crawlable homepage is `nothing-crawlable` | error |
+| There is something to audit at all — no sitemap *and* no crawlable homepage is `nothing-crawlable`. If the server rate-limited the run instead, it says so and claims nothing about the site | error |
 | Every internal link resolves — the site-wide 404 sweep | error |
 | Any linked page that turns out to be page 2 of a sequence gets its canonical read, from the response the sweep already fetched | error |
 | Outbound links resolve, with `--check-external` — only a 404, 410 or no answer counts | warning / note |

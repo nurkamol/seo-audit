@@ -741,6 +741,35 @@ test('a rate-limited robots.txt or llms.txt is not a missing one', async () => {
   assert.ok(ids(gone).includes('llms-missing'));
 });
 
+test('a rate-limited host variant is not a dead one', async () => {
+  // The same lesson as the robots.txt test above, in the one place it hurts
+  // most: the variant a crawl hammers hardest is the canonical host, so a run
+  // that trips a rate limit reported the site's real home as not resolving.
+  const origin = 'https://x.test';
+  const variants = /^https?:\/\/(www\.)?x\.test\/$/;
+
+  const limited = await siteChecks(
+    origin,
+    fakeFetcher((url) => (variants.test(url) ? { status: 429 } : notFound(url))),
+    bareSite(origin),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(!ids(limited).includes('host-variant-dead'), 'HTTP 429 is not a dead variant');
+  const note = limited.find((f) => f.id === 'host-variant-not-checked');
+  assert.ok(note, 'expected the run to say it did not find out');
+  assert.equal(note.level, 'info', 'a fact about the crawl is never an error about the site');
+
+  // A 404 still is, which is the half that matters.
+  const gone = await siteChecks(
+    origin,
+    fakeFetcher(() => ({ status: 404 })),
+    bareSite(origin),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(ids(gone).includes('host-variant-dead'));
+  assert.ok(!ids(gone).includes('host-variant-not-checked'));
+});
+
 // --- favicon ---------------------------------------------------------------
 
 const homeDeclaring = (origin, head) => [{

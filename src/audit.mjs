@@ -19,6 +19,10 @@ import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
  *  and both are wrong to assume. */
 async function discover(origin, fetcher, explicit) {
   const tried = [];
+  // A 429 is the server saying "ask later", which is not the same as "there is
+  // no sitemap here". Reporting absence from a refusal to answer is a false
+  // positive, and the caller needs to know the difference.
+  let rateLimited = false;
   let candidates = [explicit];
 
   if (!explicit) {
@@ -38,6 +42,7 @@ async function discover(origin, fetcher, explicit) {
     // A sitemap may itself redirect (http→https, or /sitemap.xml → the index).
     const res = (await fetcher.chain(candidate)).final;
     tried.push(`${candidate} → ${res.error ?? res.status}`);
+    if (res.status === 429) rateLimited = true;
     if (!res.ok || !/<(urlset|sitemapindex)/i.test(res.body)) continue;
 
     const { urls, sitemaps, entries } = parseSitemap(res.body);
@@ -54,6 +59,7 @@ async function discover(origin, fetcher, explicit) {
         files: [stat(candidate, res.body, urls)],
         source: candidate,
         tried,
+        rateLimited,
       };
     }
 
@@ -71,10 +77,11 @@ async function discover(origin, fetcher, explicit) {
         files: nested.flatMap((n) => n.files),
         source: candidate,
         tried,
+        rateLimited,
       };
     }
   }
-  return { urls: [], entries: [], files: [], source: null, tried };
+  return { urls: [], entries: [], files: [], source: null, tried, rateLimited };
 }
 
 // Files that are linked from pages but are not pages. Fetching a 40MB video to
@@ -198,7 +205,7 @@ export async function audit(target, opts = {}) {
       opts.onNote(`still serving inconsistent HTML after ${opts.settle}s — crawling anyway`);
     }
   }
-  const { urls, entries, files, source, tried } = await discover(
+  const { urls, entries, files, source, tried, rateLimited: sitemapRateLimited } = await discover(
     origin,
     fetcher,
     opts.sitemap ?? (/\.xml$/i.test(url.pathname) ? target : null),
@@ -272,28 +279,59 @@ export async function audit(target, opts = {}) {
     pages = crawled.pages;
     truncated = crawled.remaining;
 
-    findings.push({
-      level: 'warn',
-      id: 'no-sitemap',
-      title: 'No sitemap found',
-      detail:
-        `Tried: ${tried.join(', ')}. This run followed links from the homepage instead, which is what a ` +
-        `crawler has to do without one — ${pages.length} pages were reached that way. A sitemap states ` +
-        'the pages you want indexed rather than leaving it to be inferred, and carries lastmod. ' +
-        'Pass --sitemap <url> if one exists somewhere unusual.',
-      url: origin,
-    });
+    // A refusal to answer is not an absence. If the server rate-limited the
+    // probe, this run learned nothing about whether a sitemap exists, and
+    // saying "No sitemap found" would be a finding about the crawl reported as
+    // a finding about the site.
+    findings.push(
+      sitemapRateLimited
+        ? {
+            level: 'warn',
+            id: 'sitemap-not-checked',
+            title: 'Whether there is a sitemap is not known',
+            detail:
+              `Tried: ${tried.join(', ')}. The server answered HTTP 429 — "ask later" — so this run ` +
+              'never saw whether a sitemap is there, and followed links from the homepage instead, ' +
+              `reaching ${pages.length} page(s). This is a fact about the crawl, not about the site. ` +
+              'Run it again with a lower --concurrency, or pass --sitemap <url>.',
+            url: origin,
+          }
+        : {
+            level: 'warn',
+            id: 'no-sitemap',
+            title: 'No sitemap found',
+            detail:
+              `Tried: ${tried.join(', ')}. This run followed links from the homepage instead, which is what a ` +
+              `crawler has to do without one — ${pages.length} pages were reached that way. A sitemap states ` +
+              'the pages you want indexed rather than leaving it to be inferred, and carries lastmod. ' +
+              'Pass --sitemap <url> if one exists somewhere unusual.',
+            url: origin,
+          },
+    );
 
     if (!pages.some((p) => p.res.ok)) {
-      findings.push({
-        level: 'error',
-        id: 'nothing-crawlable',
-        title: 'Nothing could be crawled',
-        detail:
-          'No sitemap, and the homepage did not return a page to follow links from. There is nothing ' +
-          'here to audit.',
-        url: origin,
-      });
+      findings.push(
+        sitemapRateLimited || fetcher.rateLimited > 0
+          ? {
+              level: 'error',
+              id: 'crawl-rate-limited',
+              title: 'Nothing was read — the server rate limited this run',
+              detail:
+                'Every request came back HTTP 429, so no page was read and nothing below is a ' +
+                'statement about the site. Wait, then run it again with a lower --concurrency. ' +
+                'Two runs back to back against the same host will do this on their own.',
+              url: origin,
+            }
+          : {
+              level: 'error',
+              id: 'nothing-crawlable',
+              title: 'Nothing could be crawled',
+              detail:
+                'No sitemap, and the homepage did not return a page to follow links from. There is nothing ' +
+                'here to audit.',
+              url: origin,
+            },
+      );
     }
   }
 

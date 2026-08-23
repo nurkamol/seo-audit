@@ -256,7 +256,15 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   ];
   for (const variant of variants) {
     const { hops, final } = await fetcher.chain(variant);
-    if (!final.ok) {
+    if (final.status === 429) {
+      // "Ask later" is not "dead". Calling a variant broken because the server
+      // declined to answer this crawler reports the crawl as a fault of the
+      // site — and it is the canonical host that gets called dead most often,
+      // because it is the one the crawl has already been hammering.
+      out.push(f('info', 'host-variant-not-checked', `${variant} was not checked`,
+        'The server answered HTTP 429 — asking for a slower crawl — so whether this variant reaches ' +
+          'a page is not known. Run it again with a lower --concurrency.', variant));
+    } else if (!final.ok) {
       out.push(f('warn', 'host-variant-dead', `${variant} does not resolve to a page`,
         final.error ? `Request failed: ${final.error}` : `Ends at HTTP ${final.status}`, variant));
     } else if (hops.length > 2) {

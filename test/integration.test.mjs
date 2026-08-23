@@ -180,6 +180,41 @@ test('a site with no sitemap is crawled by following links instead of refused', 
   }
 });
 
+test('a rate-limited sitemap probe is not a missing sitemap', async () => {
+  // Two runs back to back against one host is enough to trigger this, and the
+  // second run said "No sitemap found" about a site whose sitemap the first run
+  // had just read. A 429 is the server saying "ask later"; reporting absence
+  // from it is a finding about the crawl dressed as a finding about the site.
+  const site = await startFixtureSite({ rateLimit: { '/sitemap.xml': 99, '/robots.txt': 99 } });
+  try {
+    const result = await audit(site.origin, { concurrency: 1 });
+    const ids = result.findings.map((f) => f.id);
+
+    assert.ok(!ids.includes('no-sitemap'), 'a 429 does not prove there is no sitemap');
+    const finding = result.findings.find((f) => f.id === 'sitemap-not-checked');
+    assert.ok(finding, 'expected the run to say it never found out');
+    assert.match(finding.detail, /429/);
+    assert.match(finding.detail, /not about the site/);
+  } finally {
+    await site.stop();
+  }
+});
+
+test('a 404 sitemap is still a missing sitemap', async () => {
+  // The half that matters: the fix above must not turn a real absence into a
+  // shrug.
+  const bare = await startFixtureSite({ withSitemap: false });
+  try {
+    const result = await audit(bare.origin, { concurrency: 1 });
+    const ids = result.findings.map((f) => f.id);
+    assert.ok(ids.includes('no-sitemap'));
+    assert.ok(!ids.includes('sitemap-not-checked'));
+    assert.ok(!ids.includes('crawl-rate-limited'));
+  } finally {
+    await bare.stop();
+  }
+});
+
 test('a link crawl follows a redirecting homepage instead of stopping at it', async () => {
   // www.mozilla.org answers 302 to /en-US/. Reading only the first hop finds a
   // redirect with no links in it and concludes the site has one page — which
