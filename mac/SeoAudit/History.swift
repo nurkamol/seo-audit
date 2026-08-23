@@ -78,6 +78,18 @@ struct Sidebar: View {
                 }
                 .buttonStyle(.glass)
 
+                HStack(spacing: 10) {
+                    Button("Help") { Links.open(Links.site) }
+                        .buttonStyle(.link)
+                    Text("·").foregroundStyle(.quaternary)
+                    Button("GitHub") { Links.open(Links.repo) }
+                        .buttonStyle(.link)
+                    Text("·").foregroundStyle(.quaternary)
+                    Button("About") { NotificationCenter.default.post(name: .showAbout, object: nil) }
+                        .buttonStyle(.link)
+                }
+                .font(.caption2)
+
                 Text("Nothing leaves this machine")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

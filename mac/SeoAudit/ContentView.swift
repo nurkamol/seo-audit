@@ -7,6 +7,9 @@ import SwiftUI
 final class Session: ObservableObject {
     @Published var lines: [String] = []
     @Published var report: Report?
+    /// Exactly what the engine sent, kept so a JSON export cannot quietly drop
+    /// a field these models do not know about yet.
+    @Published var raw: Data?
     @Published var failure: String?
     @Published var running: Run?
 
@@ -16,6 +19,7 @@ final class Session: ObservableObject {
         cancel()
         lines = []
         report = nil
+        raw = nil
         failure = nil
         running = run
         task = Task { [weak self] in
@@ -27,7 +31,8 @@ final class Session: ObservableObject {
                     // line of it in memory to show the last twenty.
                     self.lines.append(line)
                     if self.lines.count > 400 { self.lines.removeFirst(self.lines.count - 400) }
-                case .finished(let report):
+                case .finished(let report, let raw):
+                    self.raw = raw
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { self.report = report }
                 case .failed(let why):
                     withAnimation(.snappy) { self.failure = why }
@@ -46,6 +51,7 @@ final class Session: ObservableObject {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
             running = nil
             report = nil
+            raw = nil
             failure = nil
             lines = []
         }
@@ -96,8 +102,9 @@ struct ContentView: View {
             .frame(maxWidth: 520)
         case .ready:
             if let report = session.report, let run = session.running {
-                ReportView(report: report, site: run.url, back: session.clear) {
-                    PDF.export(report: report, host: run.host)
+                ReportView(report: report, site: run.url, back: session.clear) { format in
+                    Export.save(format, report: report, host: run.host,
+                                engine: engine.base, raw: session.raw)
                 }
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
             } else if let failure = session.failure {

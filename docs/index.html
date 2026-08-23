@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>seo-audit — every page, not just the homepage</title>
+<meta name="description" content="A zero-dependency CLI, GitHub Action and macOS app that crawls a site's sitemap and checks every page for the SEO, metadata and structured-data problems single-page graders miss.">
+<link rel="icon" href="icon.png">
+<meta property="og:title" content="seo-audit">
+<meta property="og:description" content="Every page, not just the homepage. Zero dependencies, one command, works in CI.">
+<meta property="og:image" content="https://nurkamol.github.io/seo-audit/icon.png">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #111827; --muted: #4b5563; --line: #e5e7eb;
+    --panel: #fafafa; --brand: #ea580c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d0f14; --fg: #f3f4f6; --muted: #9ca3af; --line: #1f2530; --panel: #12151c; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 52rem; margin: 0 auto; padding: 0 1.25rem; }
+  a { color: var(--brand); }
+
+  header { padding: 5rem 0 3.5rem; text-align: center; }
+  header img { width: 96px; height: 96px; border-radius: 22px; }
+  h1 { font-size: 2.6rem; line-height: 1.1; letter-spacing: -.02em; margin: 1.25rem 0 .5rem; }
+  .tagline { font-size: 1.15rem; color: var(--muted); margin: 0 auto 2rem; max-width: 34rem; }
+  .badges { display: flex; gap: .5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+  .badges img { height: 20px; }
+
+  pre {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1rem 1.1rem; overflow-x: auto;
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  p code, li code, td code { background: var(--panel); padding: .1rem .35rem; border-radius: 4px; }
+
+  section { padding: 2.5rem 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.45rem; letter-spacing: -.015em; margin: 0 0 .5rem; }
+  .lede { color: var(--muted); margin: 0 0 1.4rem; }
+
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 1.1rem 1.2rem; background: var(--panel); }
+  .card h3 { margin: 0 0 .35rem; font-size: 1rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+  table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+  th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+
+  .quiet { color: var(--muted); font-size: .9rem; }
+  footer { padding: 3rem 0 4rem; color: var(--muted); font-size: .9rem; text-align: center; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <img src="icon.png" alt="">
+  <h1>Every page, not just the homepage</h1>
+  <p class="tagline">
+    A crawler that reads a site's whole sitemap and checks each page for the SEO,
+    metadata and structured-data problems that single-URL graders cannot see.
+  </p>
+  <div class="badges">
+    <a href="https://github.com/nurkamol/seo-audit/releases"><img src="https://img.shields.io/github/v/release/nurkamol/seo-audit?color=ea580c" alt="latest release"></a>
+    <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="zero dependencies">
+    <img src="https://img.shields.io/badge/node-%E2%89%A518-3c873a" alt="node 18 or newer">
+    <a href="https://github.com/nurkamol/seo-audit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
+  </div>
+  <pre><code>npx github:nurkamol/seo-audit@v1 https://example.com</code></pre>
+  <p class="quiet">Nothing to install. Node 18 or newer, and no dependencies at all.</p>
+</header>
+
+<section class="wrap">
+  <h2>Why it exists</h2>
+  <p class="lede">
+    It was written after three commercial graders all called a client's homepage healthy
+    while the language switcher on every translated article linked to a 404 — a bug none
+    of them could see, because it was only wrong on pages they never opened.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <h3>Ninety-odd checks</h3>
+      <p>Indexability, canonicals, headings, structured data, hreflang, images, links,
+         sitemaps, redirects and the certificate.</p>
+    </div>
+    <div class="card">
+      <h3>No false positives</h3>
+      <p>A check that cries wolf gets the whole report ignored. Anything sometimes
+         legitimate is a note, never an error.</p>
+    </div>
+    <div class="card">
+      <h3>Performance is never estimated</h3>
+      <p>A fetch loop cannot see rendering. <code>--psi</code> asks Google for Google's
+         own measurement instead of guessing.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>It tells you what to change, not what it found</h2>
+  <p class="lede">
+    A real store produced 2,081 findings across 347 URLs. That is not 2,081 problems — it
+    is one product template repeated 194 times. Every report opens with the work, ordered
+    worst first and then by how much of the site points at it.
+  </p>
+  <pre><code>✗  No &lt;h1&gt;                              10 pages under /pages/
+✗  Structured data is not valid JSON     3 pages under /collections/
+!  Heading level jumps from h1 to h3    225 pages under /products/, 69% of the crawl
+!  Title may be truncated in results    162 pages under /products/</code></pre>
+</section>
+
+<section class="wrap">
+  <h2>Four ways to run it</h2>
+  <table>
+    <tr><th>Where</th><th>How</th></tr>
+    <tr>
+      <td><b>Terminal</b></td>
+      <td><code>npx github:nurkamol/seo-audit@v1 https://example.com</code><br>
+        <span class="quiet">Reports as terminal output, Markdown, HTML, JSON or CSV.</span></td>
+    </tr>
+    <tr>
+      <td><b>CI</b></td>
+      <td><code>uses: nurkamol/seo-audit@v1</code><br>
+        <span class="quiet">Fails a build on regressions only, and comments on the pull request.</span></td>
+    </tr>
+    <tr>
+      <td><b>A window</b></td>
+      <td><code>brew install --cask seo-audit</code><br>
+        <span class="quiet">A macOS app. Native report, no limits, nothing leaves the machine.</span></td>
+    </tr>
+    <tr>
+      <td><b>Your own Cloudflare</b></td>
+      <td><span class="quiet">A password-protected form on your own Workers account, for people who
+        will not open a terminal. <a href="https://github.com/nurkamol/seo-audit/blob/main/docs/hosting.md">What it costs</a>.</span></td>
+    </tr>
+  </table>
+</section>
+
+<section class="wrap">
+  <h2>The macOS app</h2>
+  <p class="lede">
+    SwiftUI and Liquid Glass, with the report drawn natively — cause cards that expand into
+    the pages they affect, filtering, search, and export as PDF, HTML, Markdown, CSV or JSON.
+    It is a window over the same engine, never a second one.
+  </p>
+  <pre><code>brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+brew install --cask seo-audit</code></pre>
+  <p class="quiet">
+    macOS 26 or later, Apple Silicon. Or build it yourself — <code>./mac/build.sh</code>,
+    which needs swiftc and the command line tools and nothing else.
+  </p>
+</section>
+
+<footer class="wrap">
+  <p>
+    MIT licensed · <a href="https://github.com/nurkamol/seo-audit">source</a> ·
+    <a href="https://github.com/nurkamol/seo-audit/blob/main/CHANGELOG.md">changelog</a> ·
+    <a href="https://github.com/nurkamol/seo-audit/blob/main/ROADMAP.md">roadmap</a>
+  </p>
+</footer>
+
+</body>
+</html>

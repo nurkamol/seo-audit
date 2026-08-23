@@ -84,7 +84,7 @@ struct Report: Decodable, Hashable {
 /// What a run emits while it happens.
 enum AuditEvent {
     case progress(String)
-    case finished(Report)
+    case finished(Report, raw: Data)
     case failed(String)
 }
 

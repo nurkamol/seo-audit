@@ -5,6 +5,35 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`--csv`, and every format in the Mac app.** The findings as a spreadsheet:
+  one row each, with the page, the section, whether it is indexable, how many
+  links point at it, how far from the homepage, and impressions where Search
+  Console has been asked. A flat table on purpose — the grouped view is what
+  the report is for, this is for sorting 2,081 rows by impressions or handing a
+  filtered slice to a developer. Written with a byte-order mark, which is the
+  difference between Excel showing "Maison Éthérique" and "Maison Ã‰thÃ©rique".
+
+  The app exports **PDF, HTML, Markdown, CSV and JSON**, and owns none of those
+  formats: it holds the findings it was streamed and posts them back to the
+  engine's new `/render` endpoint, which runs the same writers the CLI uses. A
+  report exported from the app and one written by `seo-audit --csv` are the
+  same file. PDF is the exception, because it is a drawing of what is on screen
+  rather than a format the engine has. JSON is written exactly as it arrived,
+  so a re-encode cannot quietly drop a field the app's models do not know yet.
+
+- **A website, and Help inside the app.** <https://nurkamol.github.io/seo-audit/>
+  is built from `docs/`. The app's Help menu, its sidebar and a proper About
+  sheet all point at it, so the answer to "what is this" is one click away
+  rather than a search.
+
+### Changed
+- **A new icon.** The old one was the sitemap mark from the logo, which is
+  accurate and abstract. This is a magnifier over a rising line — what the tool
+  looks for, and what finding it is for. Drawn flat on the macOS squircle
+  rather than the glossy bevel that style implies, because gloss is a 2010 idiom
+  and the specular highlight is the first thing to disappear at 16 pixels.
+
 ## [1.22.0] — 2026-08-23
 
 ### Added

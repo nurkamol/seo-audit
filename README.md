@@ -380,6 +380,7 @@ reason.
 | `--md <file>` | — | Write a Markdown report |
 | `--html <file>` | — | Write a self-contained HTML report — one file, no assets |
 | `--json <file>` | — | Write a JSON report — also usable as a baseline |
+| `--csv <file>` | — | Write the findings as a spreadsheet, one row each |
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
 | `--update-baseline` | — | Rewrite the baseline after comparing |
 | `--limit <n>` | 200 | Maximum pages to check |

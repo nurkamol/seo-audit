@@ -77,6 +77,11 @@ inputs:
     description: Where to write the JSON report
     required: false
     default: seo-audit.json
+  csv:
+    description: >
+      Where to write the findings as a spreadsheet, one row per finding. Off
+      unless a path is given.
+    required: false
   comment:
     description: Post the findings as a sticky comment on the pull request
     required: false
@@ -130,6 +135,7 @@ runs:
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_REPORT: ${{ inputs.report }}
         INPUT_JSON: ${{ inputs.json }}
+        INPUT_CSV: ${{ inputs.csv }}
       run: |
         args=("$INPUT_URL" --html "$INPUT_REPORT" --json "$INPUT_JSON" --fail-on "$INPUT_FAIL_ON")
         [ -n "$INPUT_BASELINE" ] && args+=(--baseline "$INPUT_BASELINE")
@@ -142,6 +148,7 @@ runs:
         [ -n "$INPUT_SETTLE" ]   && args+=(--settle "$INPUT_SETTLE")
         [ -n "$INPUT_BROWSER" ]  && args+=(--browser "$INPUT_BROWSER")
         [ -n "$INPUT_OS" ]       && args+=(--os "$INPUT_OS")
+        [ -n "$INPUT_CSV" ]      && args+=(--csv "$INPUT_CSV")
 
         node "$SEO_AUDIT_BIN" "${args[@]}"
         status=$?

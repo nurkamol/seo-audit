@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { audit } from '../src/audit.mjs';
-import { terminal, markdown, html, diffReport, counts, portfolio, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
+import { terminal, markdown, html, csv, diffReport, counts, portfolio, portfolioMarkdown, portfolioHtml, progressLine } from '../src/report.mjs';
 import { loadConfig, resolveSites, optionsForSite } from '../src/config.mjs';
 import { readFileSync as read } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,7 @@ const HELP = `
     --md <file>        write a Markdown report
     --html <file>      write a self-contained HTML report (one file, no assets)
     --json <file>      write a JSON report (also usable as a baseline)
+    --csv <file>       write the findings as a spreadsheet, one row each
     --quiet            print nothing; rely on the exit code and the files
     --verbose          print each request as it happens, to stderr. A long
                        crawl is otherwise silent from start to finish, and a
@@ -117,6 +118,7 @@ function parseArgs(argv) {
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
     else if (arg === '--json') opts.json = value();
+    else if (arg === '--csv') opts.csv = value();
     else if (arg === '--baseline') opts.baseline = value();
     else if (arg === '--update-baseline') opts.updateBaseline = true;
     else if (arg === '--limit') opts.limit = Number(value());
@@ -411,6 +413,7 @@ if (!opts.quiet) {
 if (opts.md) writeFileSync(opts.md, markdown(findings, meta));
 if (opts.html) writeFileSync(opts.html, html(findings, meta));
 if (opts.json) writeFileSync(opts.json, serialize(findings, meta, { full: true }));
+if (opts.csv) writeFileSync(opts.csv, csv(findings, meta));
 if (!opts.quiet && (opts.md || opts.html || opts.json)) {
   console.log(`  ${[opts.md, opts.html, opts.json].filter(Boolean).join('  ')}\n`);
 }

@@ -10,7 +10,7 @@ struct ReportView: View {
     let report: Report
     let site: String
     var back: () -> Void
-    var exportPDF: () -> Void
+    var export: (ExportFormat) -> Void
 
     @State private var expanded: Set<String> = []
     @State private var search = ""
@@ -29,7 +29,7 @@ struct ReportView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Header(report: report, site: site, back: back, exportPDF: exportPDF)
+            Header(report: report, site: site, back: back, export: export)
 
             Filters(search: $search, level: $level, counts: report.counts)
                 .padding(.horizontal, 20)
@@ -75,6 +75,8 @@ struct ReportView: View {
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: causes)
         }
+        // ⌘E from the menu bar, which cannot reach into this view otherwise.
+        .onReceive(NotificationCenter.default.publisher(for: .exportReport)) { _ in export(.pdf) }
     }
 }
 
@@ -82,7 +84,7 @@ private struct Header: View {
     let report: Report
     let site: String
     var back: () -> Void
-    var exportPDF: () -> Void
+    var export: (ExportFormat) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -90,8 +92,23 @@ private struct Header: View {
                 Button(action: back) { Label("New audit", systemImage: "chevron.left") }
                     .buttonStyle(.glass)
                 Spacer(minLength: 0)
-                Button(action: exportPDF) { Label("Export PDF", systemImage: "square.and.arrow.down") }
-                    .buttonStyle(.glass)
+                Menu {
+                    // Every format the engine can write, plus the one drawing
+                    // this app makes itself.
+                    ForEach(ExportFormat.allCases) { format in
+                        Button {
+                            export(format)
+                        } label: {
+                            Label(format.label, systemImage: format.symbol)
+                            Text(format.detail)
+                        }
+                    }
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.down")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.glass)
+                .fixedSize()
             }
 
             VStack(alignment: .leading, spacing: 4) {

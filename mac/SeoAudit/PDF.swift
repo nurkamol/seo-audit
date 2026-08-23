@@ -8,22 +8,11 @@ import SwiftUI
 import AppKit
 
 enum PDF {
-    @MainActor
-    static func export(report: Report, host: String) {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "seo-audit — \(host).pdf"
-        panel.allowedContentTypes = [.pdf]
-        panel.begin { response in
-            guard response == .OK, let destination = panel.url else { return }
-            write(report: report, host: host, to: destination)
-        }
-    }
-
     /// A4 at 72dpi, laid out once and paginated by height. ImageRenderer draws
     /// SwiftUI into a PDF context, so what is exported is the same hierarchy
     /// that was on screen — with the glass flattened, because paper has none.
     @MainActor
-    private static func write(report: Report, host: String, to url: URL) {
+    static func write(report: Report, host: String, to url: URL) {
         let width: CGFloat = 595
         let renderer = ImageRenderer(content: PrintedReport(report: report, host: host).frame(width: width))
         renderer.render { size, draw in

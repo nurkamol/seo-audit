@@ -17,6 +17,10 @@ final class Engine: ObservableObject, AuditEngine {
     }
 
     @Published private(set) var state: State = .starting
+
+    /// Where the engine is listening, for anything that needs to ask it
+    /// something other than "run an audit".
+    var base: URL? { if case .ready(let url) = state { url } else { nil } }
     private let process = Process()
 
     /// Everything the engine needs, carried inside the bundle. A build made
@@ -156,7 +160,7 @@ final class Engine: ObservableObject, AuditEngine {
                                 }
                             case "done":
                                 if let report = try? JSONDecoder().decode(Report.self, from: payload) {
-                                    continuation.yield(.finished(report))
+                                    continuation.yield(.finished(report, raw: payload))
                                 } else {
                                     continuation.yield(.failed("The engine sent a report this app could not read."))
                                 }

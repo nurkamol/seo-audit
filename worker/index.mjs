@@ -11,7 +11,7 @@
 //
 // See docs/hosting.md for what it costs and what it is allowed to reach.
 import { audit } from '../src/audit.mjs';
-import { html as htmlReport } from '../src/report.mjs';
+import { html as htmlReport, markdown as markdownReport, csv as csvReport } from '../src/report.mjs';
 import { byCause, causeScope } from '../src/causes.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
@@ -256,6 +256,37 @@ export async function handle(request, env, ctx, deps = {}) {
           });
         </script>`),
     );
+  }
+
+  // The findings, handed back and rendered. The native app holds the JSON it
+  // was streamed and asks for a format when somebody exports; re-rendering here
+  // means every writer stays in src/report.mjs and the app owns no formatting
+  // at all. No crawl happens — this is the same run, written differently.
+  if (url.pathname === '/render' && request.method === 'POST') {
+    const asked = url.searchParams.get('as') ?? 'html';
+    const writers = {
+      html: { render: htmlReport, type: 'text/html; charset=utf-8' },
+      markdown: { render: markdownReport, type: 'text/markdown; charset=utf-8' },
+      csv: { render: csvReport, type: 'text/csv; charset=utf-8' },
+    };
+    const writer = writers[asked];
+    if (!writer) {
+      return new Response(`Unknown format "${asked}". Try: ${Object.keys(writers).join(', ')}, json.`, {
+        status: 400,
+      });
+    }
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return new Response('That body is not JSON.', { status: 400 });
+    }
+    if (!Array.isArray(payload?.findings) || !payload?.meta) {
+      return new Response('Expected { meta, findings }.', { status: 400 });
+    }
+    return new Response(writer.render(payload.findings, payload.meta), {
+      headers: { 'content-type': writer.type },
+    });
   }
 
   if (url.pathname === '/stream') {

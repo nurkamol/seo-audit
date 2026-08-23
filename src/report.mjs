@@ -1,7 +1,7 @@
 // Two renderings of the same findings: one for the terminal, one for a file
 // you can commit, diff between runs, or send to a client.
 
-import { byCause, causeScope } from './causes.mjs';
+import { byCause, causeScope, sectionOf } from './causes.mjs';
 
 const COLOR = process.env.NO_COLOR === undefined && process.stdout.isTTY;
 const c = (code, s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -522,6 +522,45 @@ export function diffReport({ added, fixed, unchanged, previousDate }) {
  *  A report that needs the network to render is a report that renders blank in
  *  an email client, on a plane, or in three years' time when the CDN is gone.
  */
+/** The findings as a spreadsheet: one row per finding, one column per thing
+ *  somebody might sort or filter by.
+ *
+ *  A flat table on purpose. The grouped view is what the report is for; this is
+ *  for the person who wants to sort 2,081 rows by impressions, hand a filtered
+ *  slice to a developer, or paste the lot into a tracker. Anything that cannot
+ *  survive a column — the shortest route to a deep page, the list of files a
+ *  duplicate URL appears in — stays in `detail`, whole.
+ *
+ *  Written with a byte-order mark, which is the difference between Excel
+ *  showing "Maison Éthérique" and showing "Maison Ã‰thÃ©rique". Every other
+ *  reader ignores it. */
+export function csv(findings, meta) {
+  // RFC 4180: quote everything that could contain a delimiter, and double any
+  // quote inside. Quoting every field is simpler than deciding per value, and
+  // a spreadsheet cannot tell the difference.
+  const cell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  const columns = [
+    'level', 'check', 'finding', 'page', 'section', 'indexable',
+    'inlinks', 'clicks_from_home', 'impressions', 'clicks', 'detail',
+  ];
+
+  const rows = findings.map((finding) => [
+    finding.level,
+    finding.id,
+    finding.title,
+    finding.url ?? '',
+    finding.url ? sectionOf(finding.url) : '',
+    finding.indexable === false ? 'no' : 'yes',
+    finding.reach?.inlinks ?? '',
+    finding.reach?.depth ?? '',
+    finding.traffic?.impressions ?? '',
+    finding.traffic?.clicks ?? '',
+    finding.detail,
+  ]);
+
+  return `\uFEFF${[columns, ...rows].map((row) => row.map(cell).join(',')).join('\r\n')}\r\n`;
+}
+
 export function html(findings, meta, { backHref, backLabel = 'New audit' } = {}) {
   const n = counts(findings);
   const esc = (s) =>
