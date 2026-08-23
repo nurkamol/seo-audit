@@ -5,6 +5,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Two rows in the new Settings read as the wrong thing.** The sitemap field's
+  placeholder was written as the field's *title*, so "Found automatically"
+  printed as a label beside an empty box — which reads as a setting that is
+  switched on rather than as what happens when the field is left alone. And the
+  page count sat against its row's title on the far left with the stepper arrows
+  an inch away, so the number looked like part of the label instead of the value
+  the arrows change. Found by looking at a screenshot of it, which is the only
+  way this kind of thing is ever found.
+
 ## [1.24.0] — 2026-08-24
 
 ### Added

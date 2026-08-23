@@ -117,8 +117,15 @@ struct SettingsScene: View {
             }
 
             Section {
-                Stepper(value: $settings.limit, in: 1...5000, step: 50) {
-                    LabeledContent("Pages per run", value: "\(settings.limit)")
+                // The number belongs beside the control that changes it. As a
+                // Stepper label it sat against the row's title on the far left
+                // with the arrows an inch away, and read as part of the label.
+                LabeledContent("Pages per run") {
+                    HStack(spacing: 6) {
+                        Text("\(settings.limit)").monospacedDigit()
+                        Stepper("Pages per run", value: $settings.limit, in: 1...5000, step: 50)
+                            .labelsHidden()
+                    }
                 }
                 Text("A crawl that stops at its limit says so in the report, with the number it did not reach.")
                     .font(.caption)
@@ -154,8 +161,15 @@ struct SettingsScene: View {
             }
 
             Section {
-                TextField("Found automatically", text: $settings.sitemap)
+                // As a TextField *title* this printed "Found automatically" as a
+                // label beside an empty box, which reads as a setting that is
+                // switched on. It is a placeholder: what happens when the field
+                // is left alone.
+                TextField("Sitemap URL",
+                          text: $settings.sitemap,
+                          prompt: Text("Found automatically"))
                     .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
                 Text("Only used when a sitemap is somewhere the usual names do not find it. It has to be "
                      + "on the site being audited.")
                     .font(.caption)
