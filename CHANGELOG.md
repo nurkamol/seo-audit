@@ -5,6 +5,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A rate limit is not a missing file either.** 1.15.0 taught the page checks
+  that HTTP 429 describes the crawl rather than the page; `src/site.mjs` never
+  learned it. Re-running a real store on 1.19.0 reported **No llms.txt** for a
+  site that serves one at 200 — it had answered 429 during the crawl, and
+  `!res.ok` was being read as "absent".
+
+  `robots.txt` and `llms.txt` now report missing only on 404, 410 or no answer
+  at all. A rate limit, a 403 from bot protection or a 5xx means the answer was
+  not given, and "there is no robots.txt" is an answer. The favicon check
+  already worked this way, which is why it was unaffected.
+
+- **`rate-limit-slowed` no longer claims every page was read.** In the run that
+  found the above, 164 of 325 pages were rate-limited away — so the note
+  explaining the slow run was contradicting the 164 findings underneath it.
+
 ## [1.19.0] — 2026-08-23
 
 ### Added

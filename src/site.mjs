@@ -66,13 +66,22 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   const out = [];
   const base = new URL(origin);
 
+  // A file is absent when the server says it is absent. Anything else — a rate
+  // limit, a 403 from bot protection, a 5xx — means the answer was not given,
+  // and "there is no robots.txt" is an answer. The page checks learned this in
+  // 1.15.0 and these did not: a store that answers 429 under load had its
+  // llms.txt reported missing while serving it at 200 the moment it was asked
+  // again by hand.
+  const absent = (res) => res.status === 404 || res.status === 410 || res.status === 0;
+
   // --- robots.txt ---------------------------------------------------------
   const robots = await fetcher.get(new URL('/robots.txt', base).toString());
   let blocksAll = false;
-  if (!robots.ok) {
+  if (!robots.ok && absent(robots)) {
     out.push(f('warn', 'robots-missing', 'No robots.txt',
-      `HTTP ${robots.status}. Not fatal, but it is where the sitemap is advertised.`, robots.url));
-  } else {
+      `HTTP ${robots.status || robots.error}. Not fatal, but it is where the sitemap is advertised.`,
+      robots.url));
+  } else if (robots.ok) {
     const groups = parseRobots(robots.body);
 
     // Asked of the parser rather than by pattern-matching the file. The old
@@ -118,7 +127,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
 
   // --- llms.txt -----------------------------------------------------------
   const llms = await fetcher.get(new URL('/llms.txt', base).toString());
-  if (!llms.ok) {
+  if (absent(llms)) {
     out.push(f('info', 'llms-missing', 'No llms.txt',
       'The emerging convention for telling AI assistants what a site is and which pages matter.', llms.url));
   }
@@ -210,13 +219,13 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     // og:image sweep makes. Only an answer that means "not here" counts — and
     // a page counts, because the catch-all handler answering 200 with HTML
     // reaches a search engine as no icon just as surely as a 404 does.
-    const absent = res.status === 404 || res.status === 410 || res.status === 0;
+    const missing = absent(res);
     const isPage = res.ok && /text\/html/i.test(type);
-    const because = absent
+    const because = missing
       ? `answers ${res.status || res.error}`
       : `answers 200 with ${type.split(';')[0]} — the site's catch-all handler rather than an icon`;
 
-    if (absent || isPage) {
+    if (missing || isPage) {
       if (declared) {
         out.push(f('warn', 'favicon-broken', 'The declared favicon does not load',
           `${target} ${because}. The home page asks for it by name, so search results fall back to a ` +

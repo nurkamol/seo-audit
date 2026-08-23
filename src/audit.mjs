@@ -356,9 +356,9 @@ export async function audit(target, opts = {}) {
       title: 'The crawl was slowed down to get through',
       detail:
         `The server answered HTTP 429 — asking for a slower crawl — ${fetcher.rateLimited} time(s), so ` +
-        `requests were paused and the concurrency came down to ${fetcher.concurrency}. Every page was ` +
-        'still read; this only explains the elapsed time. Pass a lower --concurrency to avoid the ' +
-        'pauses altogether.',
+        `requests were paused and the concurrency came down to ${fetcher.concurrency}. This is not a ` +
+        'finding about the site — it explains the elapsed time, and any page reported as rate-limited ' +
+        'was not read at all. Pass a lower --concurrency to get through cleanly.',
       url: origin,
     });
   }

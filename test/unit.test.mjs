@@ -708,6 +708,30 @@ test('a URL listed twice in a sitemap is reported, wherever the second one is', 
   ]).length, 0);
 });
 
+test('a rate-limited robots.txt or llms.txt is not a missing one', async () => {
+  // The store that prompted this answers 429 under load and serves its
+  // llms.txt at 200 the moment it is asked again by hand. The page checks
+  // learned this in 1.15.0; these had not.
+  const origin = 'https://x.test';
+  for (const status of [429, 403, 500]) {
+    const out = await siteChecks(
+      origin,
+      fakeFetcher((url) => (/robots\.txt|llms\.txt/.test(url) ? { status } : notFound(url))),
+      bareSite(origin),
+      { sitemapUrls: [`${origin}/p/`] },
+    );
+    assert.ok(!ids(out).includes('robots-missing'), `HTTP ${status} is not a missing robots.txt`);
+    assert.ok(!ids(out).includes('llms-missing'), `HTTP ${status} is not a missing llms.txt`);
+  }
+
+  // A 404 still is.
+  const gone = await siteChecks(origin, fakeFetcher(() => ({ status: 404 })), bareSite(origin), {
+    sitemapUrls: [`${origin}/p/`],
+  });
+  assert.ok(ids(gone).includes('robots-missing'));
+  assert.ok(ids(gone).includes('llms-missing'));
+});
+
 // --- favicon ---------------------------------------------------------------
 
 const homeDeclaring = (origin, head) => [{
