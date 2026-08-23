@@ -91,7 +91,9 @@
   .shot.wide { margin-bottom: 1.25rem; }
   .shots { display: grid; gap: 1.25rem; grid-template-columns: 1.3fr 1fr; align-items: start; }
   /* A tall portrait window has no business being full width. */
-  .settings-row { margin-top: 1.25rem; grid-template-columns: minmax(0, 22rem) 1fr; align-items: center; }
+  /* The settings window is landscape now — a sidebar and a pane — so it takes
+     the full column rather than a narrow one meant for a tall form. */
+  .settings-row { margin-top: 1.25rem; grid-template-columns: 1fr; align-items: start; }
   .settings-row figcaption { margin-top: 0; }
   @media (max-width: 34rem) { .settings-row { grid-template-columns: 1fr; } }
   @media (max-width: 34rem) { .shots { grid-template-columns: 1fr; } }
@@ -216,13 +218,13 @@
   </div>
   <div class="shots settings-row">
     <figure class="shot">
-      <img src="shots/settings.png" alt="The app's settings: crawl speed, page limit, outbound links, user agent and sitemap"
-           width="620" height="1000" loading="lazy">
+      <img src="shots/settings.png" alt="The app's settings: a sidebar of seven panes — crawl, coverage, identity, performance, silenced, reports and updates"
+           width="1100" height="850" loading="lazy">
     </figure>
     <p class="lede">
-      Settings, and only the flags that change what a run <em>does</em>. <b>Gentle</b> is one
-      connection at a time — the setting that gets through a site answering 429. Anything left
-      at its default is not sent, so the engine's defaults stay in the engine.
+      Settings: seven panes, laid out the way macOS lays out System Settings. <b>Gentle</b> is one
+      connection at a time — the setting that gets through a site answering 429. Anything left at
+      its default is not sent, so the engine's defaults stay in the engine.
     </p>
   </div>
 </section>
