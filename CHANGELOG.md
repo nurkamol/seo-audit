@@ -15,8 +15,9 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on screen, and `⌘N` and File ▸ New Audit both work. A crawl in progress is
   stopped rather than left running into a window no longer showing it.
 
-- **The settings window is on the website**, next to a sentence about the one
-  setting that earned it.
+- **The settings window and a real report are on the website.** The app's shot
+  is now a 25-page audit of jekyllrb.com — 169 findings as 50 things to change —
+  rather than an empty field, because what the app is for is the report.
 
 ### Fixed
 - **The app kept its things in two folders.** The report library wrote to
