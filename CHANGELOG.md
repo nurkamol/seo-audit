@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.26.0] — 2026-08-24
+
 ### Added
 - **`--since <date>`.** A five-thousand-page site audited every week does not
   need five thousand requests — the sitemap already says which pages moved, and
