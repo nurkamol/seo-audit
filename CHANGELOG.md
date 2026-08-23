@@ -5,6 +5,37 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Causes are ordered by reach, not just by breadth.** The link graph has been
+  built inside `crossPageChecks` and thrown away since 1.11.0, which meant the
+  two checks that read it could disagree about the same site and nothing else
+  could see it at all. It is now built once in `src/graph.mjs` and read by the
+  orphan check, by click depth, and by the report.
+
+  Every finding on a crawled page carries how many pages link to it and how far
+  it is from the homepage. Causes are ordered worst first, then by **how much
+  of the site points at them**, then by how many pages they cover. On
+  jekyllrb.com that puts `schema-incomplete` on 7 pages with 1,047 links in
+  ahead of `duplicate-title` on 10 — seven pages the site points at constantly
+  beat ten it mentions once.
+
+  Both numbers are counts of links that were actually read. Nothing is weighted
+  or scored: absent stays absent, because "nothing links here" and "this was
+  never measured" are different answers.
+
+- **A section stops at two path segments.** Past that a path is usually a date
+  or a taxonomy rather than a different template. jekyllrb.com's dated archive
+  was becoming one section per month, so 1,206 findings arrived as 602 "things
+  to change" — a number nobody can act on. Capping at two took it to 214 and
+  left a Shopify store's eight sections exactly as they were.
+
+### Fixed
+- **The `--json` report keeps what the HTML shows.** `serialize()` picked five
+  fields, so `indexable` — and now `reach` — never reached the file. A baseline
+  still carries only the five: it is committed and diffed in git, and how many
+  links point at a page changes every time the site does, so a baseline whose
+  diff churns is a baseline nobody reads. The report carries everything.
+
 ## [1.20.0] — 2026-08-23
 
 ### Added

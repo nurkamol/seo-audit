@@ -29,8 +29,15 @@ export function sectionOf(url) {
     return '/';
   }
   const segments = path.split('/').filter(Boolean);
-  // The last segment names the page; the ones before it name the template.
-  return segments.length <= 1 ? '/' : `/${segments.slice(0, -1).join('/')}/`;
+  if (segments.length <= 1) return '/';
+  // The last segment names the page; the ones before it name the template — but
+  // only the first two of them. Past that a path is usually a date or a
+  // taxonomy rather than a different template: jekyllrb.com's /news/2024/01/
+  // would otherwise be its own section, one per month, and 1,206 findings
+  // arrived as 602 "things to change" instead of a number anybody can act on.
+  // Capping at two took its sections from 112 to 27 and left a Shopify store's
+  // eight exactly as they were.
+  return `/${segments.slice(0, Math.min(segments.length - 1, 2)).join('/')}/`;
 }
 
 const WORST_FIRST = { error: 0, warn: 1, info: 2 };
@@ -66,14 +73,34 @@ export function byCause(findings) {
   }
 
   return [...causes.values()]
-    .map((cause) => ({
-      ...cause,
-      pages: [...new Set(cause.findings.map((f) => f.url).filter(Boolean))],
-      count: cause.findings.length,
-    }))
+    .map((cause) => {
+      const pages = [...new Set(cause.findings.map((f) => f.url).filter(Boolean))];
+      // How much of the site points at the pages this cause is on, and how
+      // close the nearest of them is to the homepage. Both are counts of links
+      // that were actually read — nothing is weighted or scored.
+      const measured = cause.findings.filter((finding) => finding.reach);
+      const seen = new Set();
+      let inlinks = 0;
+      for (const finding of measured) {
+        if (seen.has(finding.url)) continue;
+        seen.add(finding.url);
+        inlinks += finding.reach.inlinks;
+      }
+      const depths = measured.map((finding) => finding.reach.depth).filter((d) => d !== null);
+      return {
+        ...cause,
+        pages,
+        count: cause.findings.length,
+        inlinks: measured.length ? inlinks : null,
+        depth: depths.length ? Math.min(...depths) : null,
+      };
+    })
     .sort(
       (a, b) =>
         WORST_FIRST[a.level] - WORST_FIRST[b.level] ||
+        // Reach before breadth: a template on twenty pages that four hundred
+        // links point at is more of the site than one on fifty nobody visits.
+        (b.inlinks ?? -1) - (a.inlinks ?? -1) ||
         b.pages.length - a.pages.length ||
         a.id.localeCompare(b.id) ||
         a.section.localeCompare(b.section),
@@ -88,6 +115,9 @@ export function causeScope(cause, totalPages) {
 
   const where = cause.section === '/' ? 'across the site' : `under ${cause.section}`;
   const share =
-    totalPages && pages / totalPages >= 0.5 ? ` — ${Math.round((pages / totalPages) * 100)}% of the crawl` : '';
-  return `${pages} pages ${where}${share}`;
+    totalPages && pages / totalPages >= 0.5 ? `, ${Math.round((pages / totalPages) * 100)}% of the crawl` : '';
+  const reach = cause.inlinks ? `, ${cause.inlinks.toLocaleString()} links in` : '';
+  const near =
+    cause.depth === 0 ? ', starting at the homepage' : cause.depth === 1 ? ', one click from home' : '';
+  return `${pages} pages ${where}${share}${reach}${near}`;
 }

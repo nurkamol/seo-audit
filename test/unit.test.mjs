@@ -1377,6 +1377,12 @@ test('a section is the template a page lives under', () => {
   assert.equal(sectionOf('https://x.test/about'), '/');
   assert.equal(sectionOf('https://x.test/'), '/');
   assert.equal(sectionOf('not a url'), '/');
+
+  // Past two segments a path is usually a date or a taxonomy rather than a
+  // different template. jekyllrb.com's dated archive was becoming one section
+  // per month, and 1,206 findings arrived as 602 "things to change".
+  assert.equal(sectionOf('https://x.test/news/2024/01/a-post'), '/news/2024/');
+  assert.equal(sectionOf('https://x.test/a/b/c/d/e'), '/a/b/');
 });
 
 test('the same check on pages of one section is one piece of work', () => {
@@ -1414,11 +1420,21 @@ test('the scope reads as English, and says when it is most of the site', () => {
     section,
     pages: Array.from({ length: n }, (_, i) => `https://x.test${section}p${i}`),
   });
-  assert.equal(causeScope(cause('/products/', 225), 325), '225 pages under /products/ — 69% of the crawl');
+  assert.equal(causeScope(cause('/products/', 225), 325), '225 pages under /products/, 69% of the crawl');
   assert.equal(causeScope(cause('/products/', 10), 325), '10 pages under /products/');
   assert.equal(causeScope(cause('/', 4), 325), '4 pages across the site');
   assert.equal(causeScope(cause('/blogs/', 1), 325), 'on one page under /blogs/');
   assert.equal(causeScope(cause('/', 1), 325), 'once');
+
+  // Reach is a count of links that were read, and it is shown when it is known.
+  assert.equal(
+    causeScope({ ...cause('/products/', 20), inlinks: 412, depth: 3 }, 325),
+    '20 pages under /products/, 412 links in',
+  );
+  assert.equal(
+    causeScope({ ...cause('/', 4), inlinks: 40, depth: 1 }, 325),
+    '4 pages across the site, 40 links in, one click from home',
+  );
 });
 
 test('one page tripping a check twice is one page, counted twice', () => {

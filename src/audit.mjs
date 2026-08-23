@@ -5,6 +5,7 @@ import { parseRobots, robotsVerdict } from './robots.mjs';
 import { redirectChecks } from './redirects.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
 import { siteChecks } from './site.mjs';
+import { linkGraph } from './graph.mjs';
 import { applyIgnores, expectationChecks } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 
@@ -307,7 +308,12 @@ export async function audit(target, opts = {}) {
       home = { url: final.url, doc: parseHtml(final.body, final.url) };
     }
   }
-  findings.push(...crossPageChecks(pages, { limits: opts.limits, truncated, home }));
+  // One graph for the whole run: the orphan check and click depth read it, and
+  // so does the ordering of the report. How many links point at a page, and how
+  // far it is from the homepage, is the difference between a list of problems
+  // and a list of work worth doing.
+  const graph = linkGraph(pages.filter((p) => p.doc && p.res.ok), home);
+  findings.push(...crossPageChecks(pages, { limits: opts.limits, truncated, home, graph }));
   findings.push(...sitemapChecks(entries, source, Date.now(), files));
   findings.push(...expectationChecks(pages, opts.expect));
   onProgress?.({ phase: 'checks', detail: `${findings.length} findings from the pages themselves` });
@@ -403,6 +409,10 @@ export async function audit(target, opts = {}) {
   }
   for (const finding of findings) {
     if (finding.url && notIndexable.has(finding.url)) finding.indexable = false;
+    // Absent stays absent: "nothing links here" and "this was never measured"
+    // are different answers, and only one of them is about the site.
+    const reach = finding.url ? graph.reachOf(finding.url) : null;
+    if (reach) finding.reach = reach;
   }
 
   // The sitemap says "index this"; the page says otherwise. Same shape as

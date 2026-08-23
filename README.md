@@ -130,6 +130,24 @@ canonical points somewhere else — are marked `not indexable`. The same thin
 page is a problem when Google will index it and noise when it won't, and that
 distinction is often more useful than the severity.
 
+### What to fix first
+
+Every report opens with the work rather than the findings. The same check on
+pages of one section is one piece of work — that is how a generated site is
+built — so a store's 2,081 findings read as 62 things to change, ordered worst
+first and then by how much of the site points at them:
+
+```
+✗  No <h1>                              10 pages under /pages/
+!  Heading level jumps from h1 to h3   225 pages under /products/, 69% of the crawl
+!  Structured data is missing headline   7 pages across the site, 1,047 links in
+```
+
+The link counts and the distance from the homepage are counts of links that
+were actually read, not a score: seven pages the site points at constantly are
+worth more than ten it mentions once, and that is an ordering rather than a
+number out of a hundred.
+
 ### Crawling as something else
 
 ```bash

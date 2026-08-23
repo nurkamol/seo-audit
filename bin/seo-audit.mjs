@@ -350,7 +350,7 @@ if (!opts.quiet) {
 }
 if (opts.md) writeFileSync(opts.md, markdown(findings, meta));
 if (opts.html) writeFileSync(opts.html, html(findings, meta));
-if (opts.json) writeFileSync(opts.json, serialize(findings, meta));
+if (opts.json) writeFileSync(opts.json, serialize(findings, meta, { full: true }));
 if (!opts.quiet && (opts.md || opts.html || opts.json)) {
   console.log(`  ${[opts.md, opts.html, opts.json].filter(Boolean).join('  ')}\n`);
 }

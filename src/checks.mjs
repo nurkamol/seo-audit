@@ -10,6 +10,8 @@
 //   warn  — worth fixing, judgement involved
 //   info  — worth knowing, may be deliberate
 
+import { linkGraph, key as graphKey } from './graph.mjs';
+
 import { attr, stripMarkupInAttributes } from './parse.mjs';
 
 // Defaults, overridable per site under `limits` in the config file. A
@@ -938,14 +940,16 @@ export function crossPageChecks(pages, opts = {}) {
         'unlinked. Raise --limit, or lower --concurrency if the pages were refused, and run it again.',
       anchorUrl));
   }
-  const linkedTo = new Set();
-  for (const p of live) {
-    for (const href of p.doc.links.internal) linkedTo.add(href.split('#')[0].replace(/\/$/, ''));
-  }
+  // One graph, built once, read by the orphan check below, by click depth
+  // further down and by the report's ordering. It used to be built twice inside
+  // this function and thrown away, which let two checks disagree about the same
+  // site and left everything else with no access to it at all.
+  const graph = opts.graph ?? linkGraph(live, opts.home);
+  const linkedTo = new Set([...graph.inlinks.keys()]);
   if (!partial) {
     for (const p of live) {
       const isHome = new URL(p.url).pathname.replace(/\/$/, '') === '';
-      if (!isHome && !linkedTo.has(p.url.replace(/\/$/, ''))) {
+      if (!isHome && !linkedTo.has(graphKey(p.url))) {
         out.push(f('warn', 'orphan-page', 'Nothing links to this page',
           'It is in the sitemap, but no other page links to it — so it collects no internal authority.', p.url));
       }
@@ -965,37 +969,17 @@ export function crossPageChecks(pages, opts = {}) {
   // eslint.org's names 499 URLs and not the one every visitor starts from. The
   // caller may hand one over for exactly that case; it is a root to measure
   // from, never a page to report on.
-  const key = (u) => withoutSlash((u ?? '').split('#')[0]);
-  const home =
-    live.find((p) => new URL(p.url).pathname.replace(/\/$/, '') === '') ??
-    (opts.home?.doc ? opts.home : null);
+  const key = graphKey;
+  const home = graph.root;
   if (home) {
-    const crawled = new Map(live.map((p) => [key(p.url), p]));
-    if (!crawled.has(key(home.url))) crawled.set(key(home.url), home);
-    const depth = new Map([[key(home.url), 0]]);
-    const cameFrom = new Map();
-    // Breadth first, so the first time a page is reached is by its shortest
-    // path — which is the number being reported, and the route worth printing.
-    for (let frontier = [key(home.url)]; frontier.length; ) {
-      const next = [];
-      for (const at of frontier) {
-        for (const href of crawled.get(at)?.doc.links.internal ?? []) {
-          const to = key(href);
-          if (!crawled.has(to) || depth.has(to)) continue;
-          depth.set(to, depth.get(at) + 1);
-          cameFrom.set(to, at);
-          next.push(to);
-        }
-      }
-      frontier = next;
-    }
+    const { depth, from: cameFrom } = graph;
 
     // Pages with no path from home at all. A few are a finding. A lot means the
     // navigation is built by JavaScript and this tool cannot see it — and then
     // every depth here is wrong, so none of them is worth printing. Google
     // renders, so it can follow those links; the honest report is that the
     // question was not answered, not a page of invented findings.
-    const stranded = live.filter((p) => !depth.has(key(p.url)));
+    const stranded = graph.stranded;
     const unreadable = live.length >= 5 && stranded.length > live.length * 0.3;
 
     if (partial || unreadable) {

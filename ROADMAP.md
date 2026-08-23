@@ -10,23 +10,13 @@ URLs, four checks accounting for 80% of them and 1,685 of them under
 `/products/`** — which is not 1,685 problems but one Shopify template repeated
 194 times. The work left is making the report say that.
 
-### 1. Order by reach, using what is already measured
-
-An error one click from the homepage with forty links into it matters more than
-the same error six clicks down that nothing points at. Click depth and the
-inlink graph have been in memory since 1.11.0 and neither is used for ordering.
-
-Severity × pages affected × depth is an *ordering*, not a score out of a
-hundred — the distinction the rejected list below turns on, and worth keeping
-sharp while implementing it.
-
-### 2. A report you can hand to a client
+### 1. A report you can hand to a client
 
 A cover page, the causes as the opening spread, a print stylesheet, and the
 detail behind it. The HTML report is already one self-contained file that can
 be emailed, which is most of the way there.
 
-### 3. The Swift app
+### 2. The Swift app
 
 A macOS front end, and the reason to want one is not a nicer window: a local
 run has no limits. Cloudflare bounds a Worker at 30s of CPU and 10,000
@@ -41,7 +31,7 @@ streaming report as the Worker, over `node:http`, no account and no limits — i
 the honest step first, and tells us whether the desktop framing is what is
 actually wanted before anyone writes Swift.
 
-### 4. Fetch as two agents and diff them
+### 3. Fetch as two agents and diff them
 
 `--browser` made this cheap. A site that serves one page to Googlebot and
 another to a browser is either cloaking or misconfiguring its bot protection,
@@ -53,7 +43,7 @@ Worth measuring before building: three real sites served byte-identical HTML to
 the default agent, to Chrome and to Googlebot, so the interesting case may be
 rarer than it sounds.
 
-### 5. Search Console, opt-in and last
+### 4. Search Console, opt-in and last
 
 Impressions and clicks per URL, so findings sort by traffic at risk: "this
 broken canonical is on a page with 4,000 impressions a month" is the sentence
@@ -118,6 +108,11 @@ handed 464 findings about navigation that works.
 
 ## Shipped
 
+- **Ordering by reach** (unreleased) — the link graph moved out of
+  `crossPageChecks`, where it was built twice and thrown away, into
+  `src/graph.mjs` where three things read it. Causes are ordered by how much of
+  the site points at them, and a section stops at two path segments because
+  past that a path is a date rather than a template.
 - **Crawl as a browser or a crawler** (1.20.0) — `--browser` and `--os`,
   with Googlebot's strings quoted from Google's documentation and impossible
   combinations refused rather than approximated.
