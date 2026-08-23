@@ -112,5 +112,7 @@ enum AuditEvent {
 /// are ever written in Swift, a second conformance — and every view, every
 /// animation and every model above this line stays exactly as it is.
 protocol AuditEngine {
-    func run(site: String, limit: Int) -> AsyncStream<AuditEvent>
+    /// `query` is everything the run is, assembled by `Settings` — so adding a
+    /// setting never means teaching this seam about it.
+    func run(query: [URLQueryItem]) -> AsyncStream<AuditEvent>
 }

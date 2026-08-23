@@ -344,3 +344,80 @@ struct PDFishDocument {
     var height: CGFloat { inner.page(at: 0)?.bounds(for: .mediaBox).height ?? 0 }
     var text: String { inner.string ?? "" }
 }
+
+@Suite("What a run is made of")
+struct CrawlSettingsTests {
+    @MainActor
+    private func fresh() -> CrawlSettings {
+        // @AppStorage reads the shared defaults, so a test has to put back what
+        // it changes or the next one starts somewhere unexpected.
+        let settings = CrawlSettings()
+        settings.speed = .normal
+        settings.limit = 200
+        settings.checkExternal = false
+        settings.browser = ""
+        settings.system = ""
+        settings.sitemap = ""
+        return settings
+    }
+
+    @MainActor
+    @Test("defaults send nothing but the run itself")
+    func defaults() {
+        let items = fresh().queryItems(for: Run(url: "https://x.test", limit: 200))
+        let names = Set(items.map(\.name))
+        // Sending concurrency=6 explicitly would move the default out of the
+        // engine and into this app, where changing it later would not take.
+        #expect(names == ["url", "limit", "format"])
+        #expect(items.first { $0.name == "format" }?.value == "json")
+    }
+
+    @MainActor
+    @Test("gentle is the setting that gets through a rate limit")
+    func gentle() {
+        let settings = fresh()
+        settings.speed = .gentle
+        defer { settings.speed = .normal }
+        let items = settings.queryItems(for: Run(url: "https://x.test", limit: 10))
+        #expect(items.first { $0.name == "concurrency" }?.value == "1")
+        #expect(CrawlSettings.Speed.gentle.connections < CrawlSettings.Speed.normal.connections)
+        #expect(CrawlSettings.Speed.normal.connections < CrawlSettings.Speed.fast.connections)
+    }
+
+    @MainActor
+    @Test("everything set reaches the engine, and blank fields do not")
+    func everything() {
+        let settings = fresh()
+        settings.checkExternal = true
+        settings.browser = "googlebot"
+        settings.system = "macos"
+        settings.sitemap = "   "        // whitespace is not a sitemap
+        defer {
+            settings.checkExternal = false
+            settings.browser = ""
+            settings.system = ""
+            settings.sitemap = ""
+        }
+
+        let items = settings.queryItems(for: Run(url: "https://x.test", limit: 10))
+        let byName = Dictionary(items.map { ($0.name, $0.value) }, uniquingKeysWith: { a, _ in a })
+        #expect(byName["external"] == "1")
+        #expect(byName["browser"] == "googlebot")
+        #expect(byName["os"] == "macos")
+        #expect(byName["sitemap"] == nil, "a field of spaces is empty")
+
+        settings.sitemap = "  /sitemaps/all.xml  "
+        let trimmed = settings.queryItems(for: Run(url: "https://x.test", limit: 10))
+        #expect(trimmed.first { $0.name == "sitemap" }?.value == "/sitemaps/all.xml")
+    }
+
+    @MainActor
+    @Test("every speed says what it does, in words rather than a number")
+    func described() {
+        for speed in CrawlSettings.Speed.allCases {
+            #expect(!speed.label.isEmpty)
+            #expect(!speed.detail.isEmpty)
+            #expect(speed.connections >= 1)
+        }
+    }
+}

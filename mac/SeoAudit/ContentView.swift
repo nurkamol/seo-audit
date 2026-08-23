@@ -25,7 +25,8 @@ final class Session: ObservableObject {
         self.report = report
     }
 
-    func begin(_ run: Run, using engine: some AuditEngine, keeping library: Library? = nil) {
+    func begin(_ run: Run, using engine: some AuditEngine, settings: CrawlSettings,
+               keeping library: Library? = nil) {
         cancel()
         lines = []
         report = nil
@@ -33,7 +34,7 @@ final class Session: ObservableObject {
         failure = nil
         running = run
         task = Task { [weak self] in
-            for await event in engine.run(site: run.url, limit: run.limit) {
+            for await event in engine.run(query: settings.queryItems(for: run)) {
                 guard let self else { return }
                 switch event {
                 case .progress(let line):
@@ -76,9 +77,9 @@ struct ContentView: View {
     @StateObject private var library = Library()
     @StateObject private var session = Session()
     @StateObject private var updates = Updates()
+    @EnvironmentObject private var settings: CrawlSettings
 
     @State private var site = ""
-    @State private var limit = 200
     @State private var showingVersions = false
     @Namespace private var stage
 
@@ -135,16 +136,16 @@ struct ContentView: View {
             } else if let run = session.running {
                 CrawlStage(host: run.host, lines: session.lines, stage: stage) { session.clear() }
             } else {
-                AskStage(site: $site, limit: $limit, stage: stage, begin: start)
+                AskStage(site: $site, limit: $settings.limit, stage: stage, begin: start)
             }
         }
     }
 
     private func start() {
         guard let url = Run.normalise(site) else { return }
-        let run = Run(url: url, limit: limit)
+        let run = Run(url: url, limit: settings.limit)
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-            session.begin(run, using: engine, keeping: library)
+            session.begin(run, using: engine, settings: settings, keeping: library)
         }
     }
 }

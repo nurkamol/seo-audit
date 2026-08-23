@@ -130,7 +130,7 @@ final class Engine: ObservableObject, AuditEngine {
     /// Server-sent events from the engine, turned into something SwiftUI can
     /// iterate. `format=json` asks for the findings rather than a rendered
     /// page — the grouping travels with them, computed once, in the engine.
-    nonisolated func run(site: String, limit: Int) -> AsyncStream<AuditEvent> {
+    nonisolated func run(query: [URLQueryItem]) -> AsyncStream<AuditEvent> {
         AsyncStream { continuation in
             let work = Task {
                 guard case .ready(let base) = await state else {
@@ -139,11 +139,7 @@ final class Engine: ObservableObject, AuditEngine {
                     return
                 }
                 var components = URLComponents(url: base.appending(path: "stream"), resolvingAgainstBaseURL: false)!
-                components.queryItems = [
-                    .init(name: "url", value: site),
-                    .init(name: "limit", value: String(limit)),
-                    .init(name: "format", value: "json"),
-                ]
+                components.queryItems = query
 
                 do {
                     let (bytes, _) = try await URLSession.shared.bytes(from: components.url!)

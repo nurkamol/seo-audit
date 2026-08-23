@@ -76,6 +76,24 @@ The cask's version and checksum are written by `.github/workflows/mac-release.ym
 when a tag is pushed, so the formula cannot describe a build that does not
 exist.
 
+## Settings
+
+`⌘,` — the flags that change what a run *does*, and only those. Where reports
+are kept and whether to check for updates are already answered by the sidebar
+and the Versions sheet, and a preference that duplicates a screen is a second
+place to look.
+
+| | |
+|---|---|
+| **Speed** | Gentle, Normal or Fast — one, six or twelve connections. Named rather than numbered, because "6" is not a thing anybody knows they want; "this site keeps refusing me" is. Gentle is what gets through a store answering 429 |
+| **Pages per run** | The default `--limit`. A crawl that stops at it says so, with the number it did not reach |
+| **Check outbound links** | `--check-external`. Slower, and only a 404, 410 or no answer is reported |
+| **Identify as** | The browser and OS presets from `src/agents.mjs`, fetched from the engine's `/agents` rather than listed again in Swift. A combination that cannot exist is refused by the engine and the run goes ahead as itself |
+| **Sitemap** | `--sitemap`, for one somewhere the usual names miss. Validated against the host being audited — otherwise the hosted version would be a fetcher for anything the machine it runs on can reach |
+
+Anything left at its default is **not sent**. The engine's defaults stay written
+down in the engine, where changing one takes effect everywhere.
+
 ## Updates, and why the app will not replace itself
 
 The sidebar checks GitHub's releases once a day and shows every version with its
@@ -124,8 +142,8 @@ for anyone without Xcode.
 swift test
 ```
 
-Twenty-two, over the models, the URL normalising, version ordering, the library,
-the releases feed, the version cache and the PDF writer. The one that matters decodes a **real engine payload** captured from a
+Twenty-six, over the models, the URL normalising, version ordering, the library,
+the releases feed, the version cache, the PDF writer and what the settings send. The one that matters decodes a **real engine payload** captured from a
 live run and kept as a fixture, because the way this app breaks is the engine
 changing its output and nothing noticing until a window is opened. CI captures
 a fresh payload on every change and checks the app still decodes every field it
@@ -146,6 +164,7 @@ team to delete tests.
 | `Stages.swift` | asking for a site, and watching it crawl |
 | `ReportView.swift` | the report: cause cards, filters, pages |
 | `Library.swift` | reports kept on disk, and the sidebar that lists them |
+| `CrawlSettings.swift` | ⌘, — what a run does, and the query it becomes |
 | `PDF.swift` | the report on paper — A4 pages, the engine's areas, every affected page |
 | `Updates.swift` | releases, versions, and the command that moves between them |
 | `AtomReleases.swift` | the releases feed, for when the API has had enough |

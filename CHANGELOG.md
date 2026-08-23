@@ -6,6 +6,24 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The Mac app has settings.** `⌘,`, and only the flags that change what a run
+  *does* — where reports are kept and whether to check for updates are already
+  answered by the sidebar and the Versions sheet. **Speed** is the one that
+  earned it: gentle, normal or fast, one, six or twelve connections, named
+  rather than numbered because "6" is not a thing anybody knows they want and
+  "this site keeps refusing me" is. Gentle is what gets through a store
+  answering 429, and until now that was reachable only from the command line.
+  Also the default page limit, outbound link checking, a sitemap override, and
+  the browser and OS presets — fetched from a new `/agents` endpoint rather than
+  listed again in Swift, so adding a preset to `src/agents.mjs` adds it to the
+  menu.
+
+  Anything left at its default is not sent, so the engine's defaults stay
+  written down in the engine. The sitemap override is validated against the host
+  being audited, and the concurrency is clamped: on the hosted version those two
+  parameters would otherwise decide how many connections a stranger's site
+  receives and which machines it can be pointed at.
+
 - **`--json` carries the grouping.** The Worker's `?format=json` sent `causes`
   and the CLI's `--json` did not, so a machine reading a report from the command
   line got a different document from one reading the hosted version — against

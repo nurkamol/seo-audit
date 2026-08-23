@@ -9,7 +9,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { handle, authorized, sameSecret, targetFor, pageLimit, progressText } from '../worker/index.mjs';
+import {
+  handle, authorized, sameSecret, targetFor, pageLimit, progressText,
+  crawlConcurrency, sitemapOverride, agentFor,
+} from '../worker/index.mjs';
 
 const SECRET = 'hunter2-hunter2';
 const env = (extra = {}) => ({ AUDIT_TOKEN: SECRET, ...extra });
@@ -123,7 +126,96 @@ test('the page ceiling holds whatever the form asks for', () => {
   assert.equal(pageLimit('-3', {}), 150);
 });
 
+test('how hard to crawl is bounded, and 1 is a real answer', () => {
+  // 1 is the setting that gets through a store answering 429, so it has to
+  // survive the clamp rather than being read as "unset".
+  assert.equal(crawlConcurrency('1', {}), 1);
+  assert.equal(crawlConcurrency('6', {}), 6);
+  assert.equal(crawlConcurrency('999', {}), 12, 'a parameter that decides how many connections a stranger receives is bounded');
+  assert.equal(crawlConcurrency('999', { MAX_CONCURRENCY: '3' }), 3);
+  // Absent or nonsense means the engine's own default, not zero.
+  assert.equal(crawlConcurrency(null, {}), 6);
+  assert.equal(crawlConcurrency('nonsense', {}), 6);
+  assert.equal(crawlConcurrency('0', {}), 6);
+  assert.equal(crawlConcurrency('-4', {}), 6);
+});
+
+test('a sitemap override cannot point off the site being audited', () => {
+  // Without this the hosted version is a fetcher for anything the machine it
+  // runs on can reach, which is the whole shape of a server-side request
+  // forgery.
+  assert.equal(sitemapOverride('/sitemaps/all.xml', 'https://x.test/'), 'https://x.test/sitemaps/all.xml');
+  assert.equal(sitemapOverride('https://x.test/s.xml', 'https://x.test/'), 'https://x.test/s.xml');
+  assert.equal(sitemapOverride('https://evil.test/s.xml', 'https://x.test/'), null);
+  assert.equal(sitemapOverride('http://169.254.169.254/latest/meta-data/', 'https://x.test/'), null);
+  assert.equal(sitemapOverride(null, 'https://x.test/'), null);
+  // Anything that is not a URL is read as a path on the site being audited,
+  // which is where a sitemap would be — it still cannot leave the host.
+  assert.equal(
+    new URL(sitemapOverride('not a url at all', 'https://x.test/')).host,
+    'x.test',
+  );
+});
+
+test('a user agent is chosen from the presets, never invented', () => {
+  const q = (s) => new URLSearchParams(s);
+  assert.match(agentFor(q('browser=chrome&os=macos'), {}), /Macintosh/);
+  assert.match(agentFor(q('browser=googlebot'), {}), /Googlebot/);
+
+  // A name that is not a preset falls back to the deployment's own setting
+  // rather than being passed through — this parameter must never become a way
+  // to set an arbitrary header.
+  assert.equal(agentFor(q('browser=<script>'), { USER_AGENT: 'configured' }), 'configured');
+  assert.equal(agentFor(q('browser=chrome&os=Plan9'), { USER_AGENT: 'configured' }), 'configured');
+  assert.equal(agentFor(q(''), { USER_AGENT: 'configured' }), 'configured');
+  // A combination that cannot exist is refused by agents.mjs, and a refusal is
+  // not a reason to fail the run.
+  assert.equal(agentFor(q('browser=safari&os=windows'), { USER_AGENT: 'configured' }), 'configured');
+});
+
+test('the presets are served rather than copied into every client', async () => {
+  // Behind the same gate as everything else. The Mac app never sees the gate:
+  // src/serve.mjs mints a token and adds the header on the way through.
+  assert.equal((await handle(get('/agents'), env())).status, 401, 'the gate holds here too');
+
+  const res = await handle(get('/agents', { token: SECRET }), env());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.browsers.includes('googlebot'));
+  assert.ok(body.systems.includes('macos'));
+});
+
 // --- the run ----------------------------------------------------------------
+
+test('what the settings say reaches the audit, and defaults are left alone', async () => {
+  // The Mac app's Settings assembles these. If they stopped arriving, a gentle
+  // crawl would silently be a normal one — and the whole reason that setting
+  // exists is a store that only answers at one connection.
+  const record = {};
+  await read(await handle(
+    get('/stream?url=https://example.com&limit=25&concurrency=1&external=1'
+        + '&browser=googlebot&sitemap=%2Fsitemaps%2Fall.xml', { token: SECRET }),
+    env(),
+    null,
+    { audit: fakeAudit(record), report: () => '' },
+  ));
+  assert.equal(record.opts.concurrency, 1);
+  assert.equal(record.opts.checkExternal, true);
+  assert.equal(record.opts.sitemap, 'https://example.com/sitemaps/all.xml');
+  assert.match(record.opts.userAgent, /Googlebot/);
+
+  // Asking for nothing must not pin the engine's defaults from out here: a
+  // default written down in two places is a default that changes in one.
+  const plain = {};
+  await read(await handle(
+    get('/stream?url=https://example.com', { token: SECRET }),
+    env(),
+    null,
+    { audit: fakeAudit(plain), report: () => '' },
+  ));
+  assert.equal(plain.opts.checkExternal, false);
+  assert.equal(plain.opts.sitemap, null);
+});
 
 test('a stream carries the progress and then the report', async () => {
   const record = {};

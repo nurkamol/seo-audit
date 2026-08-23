@@ -22,12 +22,14 @@ enum Links {
 @main
 struct SeoAuditApp: App {
     @StateObject private var engine = Engine()
+    @StateObject private var settings = CrawlSettings()
     @State private var showingAbout = false
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(engine)
+                .environmentObject(settings)
                 .frame(minWidth: 880, minHeight: 620)
                 .sheet(isPresented: $showingAbout) { AboutSheet() }
                 .onReceive(NotificationCenter.default.publisher(for: .showAbout)) { _ in showingAbout = true }
@@ -57,6 +59,14 @@ struct SeoAuditApp: App {
                 Button("Release notes") { Links.open(Links.changelog) }
                 Button("Report an issue") { Links.open(Links.issues) }
             }
+        }
+
+        // ⌘, — the flags that change what a run does. Deliberately only those:
+        // where reports are kept and whether to check for updates are already
+        // answered by the sidebar and the Versions sheet.
+        Settings {
+            SettingsScene(settings: settings)
+                .environmentObject(engine)
         }
     }
 }

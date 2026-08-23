@@ -13,6 +13,7 @@
 import { audit } from '../src/audit.mjs';
 import { html as htmlReport, markdown as markdownReport, csv as csvReport } from '../src/report.mjs';
 import { causePayload } from '../src/causes.mjs';
+import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
 // 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
@@ -95,6 +96,50 @@ export function targetFor(input, env) {
 }
 
 /** How many pages this deployment will crawl, whatever the form asked for. */
+/** How hard to crawl. Clamped, because a request parameter that sets how many
+ *  connections a stranger's site receives is a parameter worth bounding — and
+ *  because 1 is a real answer: a site answering 429 gets through at 1 and does
+ *  not at 6. */
+export function crawlConcurrency(requested, env) {
+  const ceiling = Number.parseInt(env.MAX_CONCURRENCY ?? '', 10) || 12;
+  const asked = Number.parseInt(requested ?? '', 10);
+  if (!Number.isFinite(asked) || asked < 1) return 6;
+  return Math.min(asked, ceiling);
+}
+
+/** A sitemap somewhere unusual, but only on the site being audited. An
+ *  unchecked URL here would make this a fetcher for anything the host it runs
+ *  on can reach, which is the whole shape of a server-side request forgery. */
+export function sitemapOverride(requested, target) {
+  if (!requested) return null;
+  try {
+    const asked = new URL(requested, target);
+    return asked.host === new URL(target).host ? asked.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Who to say we are. The presets live in src/agents.mjs and are named here
+ *  rather than spelled out, so there is one table of user-agent strings. An
+ *  unknown name falls back to the deployment's own setting rather than being
+ *  invented. */
+export function agentFor(params, env) {
+  const browser = params.get('browser');
+  const system = params.get('os');
+  if (!browser || !BROWSER_NAMES.includes(browser)) return env.USER_AGENT;
+  if (system && !OS_NAMES.includes(system)) return env.USER_AGENT;
+  try {
+    // `userAgentFor` returns { ua, ignoredOs } — the flag matters to the CLI,
+    // which prints it; here only the string is wanted.
+    return userAgentFor(browser, system ?? undefined)?.ua ?? env.USER_AGENT;
+  } catch {
+    // agents.mjs refuses combinations that cannot exist — Safari on Windows —
+    // and a refusal is not a reason to fail a whole run.
+    return env.USER_AGENT;
+  }
+}
+
 export function pageLimit(requested, env) {
   const ceiling = Number.parseInt(env.MAX_PAGES ?? '', 10) || MAX_PAGES;
   const asked = Number.parseInt(requested ?? '', 10);
@@ -260,6 +305,16 @@ export async function handle(request, env, ctx, deps = {}) {
 
   // The findings, handed back and rendered. The native app holds the JSON it
   // was streamed and asks for a format when somebody exports; re-rendering here
+  // Which browsers and systems can be pretended to be. A client building a menu
+  // asks rather than carrying its own copy of the list, so adding a preset to
+  // src/agents.mjs adds it everywhere instead of in one place and then, later
+  // and differently, in another.
+  if (url.pathname === '/agents') {
+    return new Response(JSON.stringify({ browsers: BROWSER_NAMES, systems: OS_NAMES }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
   // means every writer stays in src/report.mjs and the app owns no formatting
   // at all. No crawl happens — this is the same run, written differently.
   if (url.pathname === '/render' && request.method === 'POST') {
@@ -306,7 +361,10 @@ export async function handle(request, env, ctx, deps = {}) {
       try {
         const { findings, meta } = await run(target.url, {
           limit: pageLimit(url.searchParams.get('limit'), env),
-          userAgent: env.USER_AGENT,
+          concurrency: crawlConcurrency(url.searchParams.get('concurrency'), env),
+          checkExternal: url.searchParams.get('external') === '1',
+          sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
+          userAgent: agentFor(url.searchParams, env),
           // Switched off rather than left to fail — see NO_CERTIFICATE_CHECK.
           readCertificateExpiry: async () => null,
           onProgress: (event) => send('progress', progressText(event, origin)),
