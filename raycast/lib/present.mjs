@@ -13,6 +13,8 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import { categoryOf } from '../../src/areas.mjs';
+
 /** The named speeds the macOS app offers, so the two windows mean the same
  *  thing by "Gentle". The numbers live here once. */
 export const SPEEDS = { gentle: 1, normal: 6, fast: 12 };
@@ -110,7 +112,11 @@ export function causeRows(report) {
     title: cause.title,
     subtitle: cause.scope,
     tone: cause.level,
-    area: cause.area ?? 'Other',
+    // Asked of the engine when the stored report predates `area` travelling
+    // with causes. Defaulting to 'Other' threw away something the engine knows:
+    // a report kept before 1.24.0 listed every finding under Other, including
+    // `no-editorial-links`, which has been in Links the whole time.
+    area: cause.area ?? categoryOf(cause.id),
     pages: cause.pages ?? [],
     checkId: cause.id,
   }));

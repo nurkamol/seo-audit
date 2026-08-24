@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **`tls-not-checked` was in "Other".** It is the note the hosted Worker leaves
+  where the certificate checks would have been, and `tls-expiring` and
+  `tls-expired` are both under **Site & security**. It belongs beside them.
+
 ### Changed
 - **The icon is the logo, not a drawing of it.** The one that shipped was
   redrawn from the reference rather than taken from it — flat instead of glossy,
@@ -81,6 +86,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `@raycast/api` is a dependency of that folder and nowhere else — the same
   arrangement `worker/` has with Wrangler. `raycast/` is absent from `files` in
   `package.json`, so the npx payload is still just the CLI.
+
+  Two things running it found. A crawl showed a path and no horizon —
+  "Reading /docs/plugins/" could be the second page or the last — so it counts
+  now: **"12 of at most 25 pages"**. Bounded is the difference between slow and
+  stuck, and slow is honest for a crawl. And a report kept before areas
+  travelled with causes listed everything under **Other**, including
+  `no-editorial-links`, which has been in Links the whole time; the area is
+  asked of the engine when a stored file does not carry one.
 
   **It builds and lints.** `ray build` and `ray lint` both pass, which is more
   than could be said when it was written: the first build found seven type

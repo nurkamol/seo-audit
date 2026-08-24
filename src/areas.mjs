@@ -111,7 +111,10 @@ const CATEGORY_OF = {
 
   // Site & security
   'favicon-broken': 'Site & security', 'favicon-missing': 'Site & security',
-  'mixed-content': 'Site & security', 'tls-expiring': 'Site & security',
+  'mixed-content': 'Site & security', 'tls-not-checked': 'Site & security',
+  // The note the hosted Worker leaves where the certificate checks would
+  // have been. It belongs beside them, not in Other.
+  'tls-expiring': 'Site & security',
   'tls-expired': 'Site & security', 'url-uppercase': 'Site & security',
   'url-underscore': 'Site & security', 'url-space': 'Site & security',
   'header-strict-transport-security': 'Site & security',

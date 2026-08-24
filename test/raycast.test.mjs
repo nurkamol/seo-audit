@@ -182,3 +182,27 @@ test('Gentle means the same number of connections in both windows', () => {
   assert.deepEqual(found, SPEEDS,
     'raycast/lib/present.mjs and CrawlSettings.swift disagree about what Gentle, Normal and Fast mean');
 });
+
+test('a stored report from before areas travelled with it still groups properly', () => {
+  // A report kept before 1.24.0 has causes without an `area`. Defaulting those
+  // to "Other" put every finding in one bucket — including no-editorial-links,
+  // which has been in Links the whole time. The engine knows; ask it.
+  const old = {
+    meta: { pages: 3 },
+    findings: [],
+    causes: [
+      { id: 'no-editorial-links', title: 'No links inside the content', level: 'info',
+        section: '/', scope: 'once', pages: ['https://x.test/'] },
+      { id: 'tls-not-checked', title: 'Certificate expiry was not checked', level: 'info',
+        section: '/', scope: 'once', pages: ['https://x.test/'] },
+    ],
+  };
+  const rows = causeRows(old);
+  assert.deepEqual(rows.map((r) => r.area), ['Links', 'Site & security'],
+    'the area comes from the engine when the file does not carry one');
+
+  // And a report that does carry one is taken at its word rather than
+  // recomputed, so a future area never silently disagrees with a stored one.
+  const carried = causeRows({ causes: [{ ...old.causes[0], area: 'Content' }] });
+  assert.equal(carried[0].area, 'Content');
+});

@@ -47,8 +47,15 @@ export default function Command(
 export function Report({ site }: { site: string }) {
   const [report, setReport] = useState<Report | null>(null);
   const [progress, setProgress] = useState("Starting…");
+  // A crawl is minutes and a launcher is not built for minutes. A path on its
+  // own — "Reading /docs/plugins/" — is motion without a horizon: it could be
+  // the second page or the last. A count against the ceiling makes the wait
+  // bounded, which is the difference between slow and stuck.
+  const [done, setDone] = useState(0);
   const [working, setWorking] = useState(true);
   const [failed, setFailed] = useState<string | null>(null);
+
+  const options = crawlOptions(getPreferenceValues());
 
   useEffect(() => {
     if (!site) {
@@ -59,7 +66,6 @@ export function Report({ site }: { site: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const options = crawlOptions(getPreferenceValues());
         const { findings, meta } = await audit(site, {
           ...options,
           onProgress: (
@@ -67,9 +73,12 @@ export function Report({ site }: { site: string }) {
           ) => {
             if (cancelled) return;
             // The same events the terminal prints, said shorter.
-            if (event.phase === "crawl" && event.url)
-              setProgress(`Reading ${new URL(event.url).pathname}`);
-            else if (event.detail) setProgress(event.detail);
+            if (event.phase === "crawl" && event.url) {
+              setDone((n) => n + 1);
+              setProgress(new URL(event.url).pathname);
+            } else if (event.detail) {
+              setProgress(event.detail);
+            }
           },
         });
         if (cancelled) return;
@@ -102,8 +111,14 @@ export function Report({ site }: { site: string }) {
       {working && (
         <List.EmptyView
           icon={Icon.MagnifyingGlass}
-          title={progress}
-          description="Every page in the sitemap, not just the home page. Nothing leaves this machine."
+          title={
+            done > 0 ? `${done} of at most ${options.limit} pages` : progress
+          }
+          description={
+            done > 0
+              ? `Reading ${progress} · a crawl takes minutes, which is why Preview exists. Nothing leaves this machine.`
+              : "Every page in the sitemap, not just the home page. Nothing leaves this machine."
+          }
         />
       )}
 
