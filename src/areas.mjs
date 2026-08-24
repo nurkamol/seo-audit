@@ -78,7 +78,8 @@ const CATEGORY_OF = {
   'img-lazy-priority': 'Images',
 
   // Social
-  'og-missing': 'Social', 'og-webp': 'Social', 'og-no-dimensions': 'Social',
+  'og-title-missing': 'Social', 'og-description-missing': 'Social',
+  'og-image-missing': 'Social', 'og-webp': 'Social', 'og-no-dimensions': 'Social',
   'og-image-relative': 'Social', 'og-image-broken': 'Social', 'og-image-heavy': 'Social',
 
   // Structured data

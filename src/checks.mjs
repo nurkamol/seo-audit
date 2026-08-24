@@ -426,9 +426,23 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   }
 
   // --- Social -------------------------------------------------------------
-  for (const tag of ['og:title', 'og:description', 'og:image']) {
-    if (!doc.og[tag]) out.push(f('warn', 'og-missing', `Missing ${tag}`,
-      'Shared links will preview with whatever the platform scrapes.', url));
+  // One id per tag, not one for all three. They shared `og-missing` until a run
+  // against a real site printed "Missing og:description ×6" over four pages —
+  // three of which were missing only the description, and one missing all
+  // three. The grouping takes its title from whichever finding it saw first, so
+  // a row named one tag and counted another two. Every finding was true and the
+  // summary above them was not, which is the failure grouping exists to avoid.
+  //
+  // They are also three different repairs: a missing og:image is a picture
+  // somebody has to make, and a missing og:title is one line of template. Being
+  // able to `--ignore og-image-missing` and keep the other two is worth an id.
+  const OG_REQUIRED = [
+    ['og:title', 'og-title-missing', 'Shared links fall back to the page title, if the platform finds one.'],
+    ['og:description', 'og-description-missing', 'Shared links preview with whatever text the platform scrapes.'],
+    ['og:image', 'og-image-missing', 'Shared links preview with no picture, which is most of what gets clicked.'],
+  ];
+  for (const [tag, id, consequence] of OG_REQUIRED) {
+    if (!doc.og[tag]) out.push(f('warn', id, `Missing ${tag}`, consequence, url));
   }
   const ogImage = doc.og['og:image'];
   // The Open Graph spec requires an absolute URL. A scraper has no page context

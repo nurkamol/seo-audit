@@ -3411,3 +3411,57 @@ test('an empty run still renders both formats', () => {
   assert.ok(markdown([], meta).includes('Nothing to report'));
   assert.ok(html([], meta).includes('Nothing to report'));
 });
+
+// The three Open Graph tags are three checks, not one.
+//
+// They shared the id `og-missing` until a run against a real site printed
+// "Missing og:description x6" over four pages — three missing only the
+// description, one missing all three. A group takes its title from the finding
+// it saw first, so the row named one tag and counted another two. Nothing it
+// said was false; the sentence above it was.
+test('each missing Open Graph tag is its own finding', () => {
+  const bare = page('<html><head><title>A page</title></head><body><main><p>hi</p></main></body></html>');
+  const missing = ids(pageChecks(bare)).filter((id) => id.startsWith('og-'));
+  assert.deepEqual(
+    missing.sort(),
+    ['og-description-missing', 'og-image-missing', 'og-title-missing'],
+  );
+
+  // The half that matters: a page carrying all three raises none of them.
+  const complete = page(`<html><head><title>A page</title>
+    <meta property="og:title" content="A page">
+    <meta property="og:description" content="What it is about.">
+    <meta property="og:image" content="https://x.test/card.png">
+    </head><body><main><p>hi</p></main></body></html>`);
+  assert.deepEqual(ids(pageChecks(complete)).filter((id) => /^og-\w+-missing$/.test(id)), []);
+
+  // And one absent tag raises exactly one finding, titled for the tag that is
+  // actually absent rather than for whichever was checked first.
+  const partial = page(`<html><head><title>A page</title>
+    <meta property="og:title" content="A page">
+    <meta property="og:description" content="What it is about.">
+    </head><body><main><p>hi</p></main></body></html>`);
+  const one = pageChecks(partial).filter((f) => /^og-\w+-missing$/.test(f.id));
+  assert.equal(one.length, 1);
+  assert.equal(one[0].id, 'og-image-missing');
+  assert.equal(one[0].title, 'Missing og:image');
+});
+
+// A config written against the old id keeps working. Splitting a check was our
+// decision; a build that passed yesterday should not fail today because of it.
+test('an ignore rule for the retired og-missing still silences all three', () => {
+  const findings = [
+    { id: 'og-title-missing', url: 'https://x.test/a/' },
+    { id: 'og-description-missing', url: 'https://x.test/a/' },
+    { id: 'og-image-missing', url: 'https://x.test/b/' },
+    { id: 'thin-content', url: 'https://x.test/a/' },
+  ];
+  const [kept, silenced] = applyIgnores(findings, ['og-missing']);
+  assert.equal(silenced, 3);
+  assert.deepEqual(ids(kept), ['thin-content']);
+
+  // And the new ids are individually ignorable, which is the point of splitting
+  // them: a site that deliberately ships no og:image can silence that alone.
+  const [rest] = applyIgnores(findings, ['og-image-missing']);
+  assert.deepEqual(ids(rest), ['og-title-missing', 'og-description-missing', 'thin-content']);
+});

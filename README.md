@@ -650,7 +650,9 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | The canonical target isn't `noindex` — a page that hands its indexing to one leaves the index with it | error |
 | Page 2 of an archive names itself, not page 1 — Google's guidance is "Don't use the first page of a paginated sequence as the canonical page", and a sitemap almost never lists these pages, so they're read where they're linked | error |
 | The canonical target isn't itself canonicalised elsewhere — Google needn't follow a chain | warning |
-| `og:title`, `og:description`, `og:image` present | warning |
+| `og:title` present — shared links otherwise fall back to the page title | warning |
+| `og:description` present — shared links otherwise preview whatever the platform scrapes | warning |
+| `og:image` present — shared links otherwise preview with no picture | warning |
 | `og:image` is an absolute URL — a scraper has no page to resolve a relative one against | error |
 | `og:image` is not WebP — LinkedIn won't render it, WhatsApp is unreliable | warning |
 | `og:image` declares width and height | note |

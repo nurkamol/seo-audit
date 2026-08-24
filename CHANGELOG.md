@@ -5,6 +5,31 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **One row named one Open Graph tag and counted three.** A run against a real
+  site printed `Missing og:description ×6` over four pages — three of which were
+  missing only the description, one missing all three tags — and listed that one
+  page three times. Every finding under it was true. The sentence above them was
+  not, and a summary that misreports is the thing grouping exists to prevent.
+
+  The cause: `og:title`, `og:description` and `og:image` were pushed under one
+  id, and a group takes its title from the finding it saw first. They are now
+  `og-title-missing`, `og-description-missing` and `og-image-missing` — three
+  ids, because they are three different repairs. A missing `og:image` is a
+  picture somebody has to make; a missing `og:title` is one line of template.
+  Splitting them also makes each separately ignorable, so a site that ships no
+  `og:image` on purpose can silence that without silencing the other two.
+
+  `--ignore og-missing` keeps working and still silences all three. Splitting a
+  check is our decision, not the decision of whoever wrote that config, and an
+  upgrade that promises to be compatible should not start failing their build.
+
+  Not generalised, and the reason is worth writing down: four other ids also
+  carry more than one title — `img-alt-long`, `img-dimensions`, `heading-skip`,
+  `anchor-ambiguous` — and all four are correct. They are the same problem with
+  the page's own numbers in the title. A test asserting one id, one title would
+  have flagged the four right ones and this was the only wrong one.
+
 ### Changed
 - **`npx @nurkamol/seo-audit` is the install the site and README lead with.**
   The repository form still works and is still documented, pinned — but it

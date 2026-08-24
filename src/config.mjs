@@ -41,9 +41,20 @@ export function matchGlob(pattern, path) {
 
 /** A rule matches a finding when the id matches and, if the rule names URLs,
  *  one of them matches the finding's path. */
+// Ids that used to be one check. A config in somebody's repository is written
+// against the ids that existed when they wrote it, and splitting a check is our
+// decision, not theirs — so the old id keeps silencing what it used to silence.
+// The alternative is a check they had accepted starting to fail their build on
+// an upgrade that promised to be compatible.
+const RETIRED_IDS = {
+  // Split in 1.32.0: one id covered three tags, so a group named one of them
+  // and counted all three.
+  'og-missing': ['og-title-missing', 'og-description-missing', 'og-image-missing'],
+};
+
 function ruleMatches(rule, finding) {
   const id = typeof rule === 'string' ? rule : rule.id;
-  if (id !== finding.id) return false;
+  if (id !== finding.id && !RETIRED_IDS[id]?.includes(finding.id)) return false;
   const urls = typeof rule === 'string' ? null : rule.urls;
   if (!urls?.length) return true;
   if (!finding.url) return false;
