@@ -6,6 +6,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A Help pane in the macOS app.** Written as the questions the app actually
+  raises — why a crawl takes minutes, why the page count differs from the
+  sitemap's, where the score is, why performance is blank until it is switched
+  on, what leaves the machine — rather than a tour of the controls. A control
+  that needs explaining is better renamed; a *decision* is what needs saying,
+  and this app makes several that surprise people.
+
+  Folded away rather than expanded: a wall of prose in a settings window is a
+  wall nobody reads, and a list of questions is scannable.
+
 - **`--search-console-login`.** The three Search Console credentials were
   documented for a year and there was never a way to obtain the third, which is
   the actual reason `--search-console` had never run against the live API: not

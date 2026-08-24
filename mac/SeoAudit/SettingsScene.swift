@@ -22,7 +22,7 @@ struct SettingsScene: View {
     /// The panes, in the order somebody meets them: what a run does, then what
     /// it did, then the app itself.
     enum Pane: String, CaseIterable, Identifiable {
-        case crawl, coverage, identity, performance, silenced, reports, updates
+        case crawl, coverage, identity, performance, silenced, reports, updates, help
 
         var id: String { rawValue }
 
@@ -35,6 +35,7 @@ struct SettingsScene: View {
             case .silenced: "Silenced"
             case .reports: "Reports"
             case .updates: "Updates"
+            case .help: "Help"
             }
         }
 
@@ -47,6 +48,7 @@ struct SettingsScene: View {
             case .silenced: "bell.slash"
             case .reports: "tray.full"
             case .updates: "arrow.down.circle"
+            case .help: "questionmark.circle"
             }
         }
 
@@ -61,6 +63,7 @@ struct SettingsScene: View {
             case .silenced: .gray
             case .reports: .teal
             case .updates: .indigo
+            case .help: .pink
             }
         }
 
@@ -73,6 +76,7 @@ struct SettingsScene: View {
             case .silenced: "Checks you have decided you can live with."
             case .reports: "Every finished run, kept on this machine."
             case .updates: "New versions, and how to move between them."
+            case .help: "What this reads, what it will not guess, and where a run goes."
             }
         }
     }
@@ -140,6 +144,7 @@ struct SettingsScene: View {
         case .silenced: SilencedPane(settings: settings)
         case .reports: ReportsPane(library: library)
         case .updates: UpdatesPane(updates: updates)
+        case .help: HelpPane()
         }
     }
 }
@@ -444,5 +449,123 @@ private extension View {
         self.font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// What somebody asks the first time, answered where they are rather than in a
+/// README they would have to go and find.
+///
+/// Written as questions the app actually raises — why a crawl takes minutes,
+/// why a page count differs from the sitemap's, why performance is missing
+/// unless it is switched on — rather than a tour of the controls. A control
+/// that needs explaining is better renamed; a *decision* is what needs saying.
+private struct HelpPaneAnswer: Identifiable {
+    let id = UUID()
+    let question: String
+    let answer: String
+}
+
+private struct HelpPane: View {
+    private typealias Answer = HelpPaneAnswer
+
+    private let basics: [Answer] = [
+        .init(question: "Where do the pages come from?",
+              answer: "The sitemap, and every URL in it — not just the home page. That is the whole "
+                    + "reason this exists: a language switcher that 404s on every translated article "
+                    + "is invisible to a grader that only ever opens the front door. If there is no "
+                    + "sitemap, it follows links from the home page instead."),
+        .init(question: "Why does a crawl take minutes?",
+              answer: "Because it reads every page, politely. The speed setting is how many requests "
+                    + "run at once; Gentle exists for shared hosting that starts refusing under load. "
+                    + "A run is kept when it finishes, so a crawl only ever has to happen once."),
+        .init(question: "Why are there fewer pages than my sitemap lists?",
+              answer: "The page limit, which is on the Crawl pane. The report says how many were left "
+                    + "out rather than quietly stopping — a run that saw half the site and does not "
+                    + "say so reads exactly like a healthy one."),
+        .init(question: "What is a cause, and why not a list of problems?",
+              answer: "One broken template on forty pages is one thing to fix, not forty. Findings are "
+                    + "grouped by what has to change and ordered worst first, then by how much of the "
+                    + "site points at them. Open a cause to see every page it is on."),
+    ]
+
+    private let judgement: [Answer] = [
+        .init(question: "Where is my score out of 100?",
+              answer: "There isn't one, deliberately. A score invites optimising for the grader rather "
+                    + "than the reader, which is the failure the commercial tools encourage. Errors, "
+                    + "warnings and notes are counted instead, and each says what it costs."),
+        .init(question: "Why is performance blank?",
+              answer: "Because nothing here measures it. A crawler cannot see rendering, and a "
+                    + "plausible wrong number is worse than none. Switch on the Performance pane and "
+                    + "it asks Google's PageSpeed Insights for Google's own field measurement — real "
+                    + "numbers, or no numbers."),
+        .init(question: "Something is reported that I am happy with.",
+              answer: "Right-click it and silence the check. It stays silenced on this machine, and "
+                    + "every report still says how many findings were silenced — a check somebody "
+                    + "quietened must never read like one that passed."),
+        .init(question: "A finding looks wrong.",
+              answer: "Say so. A check that cries wolf gets the whole report ignored, so anything "
+                    + "sometimes legitimate is a note rather than an error, and false positives are "
+                    + "treated as bugs in the tool rather than facts about the site."),
+    ]
+
+    private let privacy: [Answer] = [
+        .init(question: "Does anything leave this machine?",
+              answer: "Only requests to the site being audited. No account, no telemetry, no server in "
+                    + "between. The one exception is named and opt-in: turning on Performance sends "
+                    + "the URLs you chose to Google's PageSpeed Insights, because that is whose "
+                    + "measurement it is."),
+        .init(question: "Where are my reports kept?",
+              answer: "In Application Support on this machine, as the engine's own JSON — the same "
+                    + "file the command line writes. Nothing is uploaded, and the Reports pane will "
+                    + "show you the folder."),
+        .init(question: "Is this the same as the command line?",
+              answer: "The same engine, imported rather than reimplemented, so a report from this "
+                    + "window and one from seo-audit --json are the same report. That is the rule "
+                    + "that lets this project have five front ends without them drifting apart."),
+    ]
+
+    var body: some View {
+        Group {
+            Section("Getting a report") { ForEach(basics) { QuestionRow(answer: $0) } }
+            Section("What it will and will not say") { ForEach(judgement) { QuestionRow(answer: $0) } }
+            Section("Where things go") { ForEach(privacy) { QuestionRow(answer: $0) } }
+
+            Section {
+                LabeledContent("More, and the source") {
+                    Link("github.com/nurkamol/seo-audit",
+                         destination: URL(string: "https://github.com/nurkamol/seo-audit")!)
+                }
+                LabeledContent("Every check, in a table") {
+                    Link("The README",
+                         destination: URL(string: "https://github.com/nurkamol/seo-audit#what-it-checks")!)
+                }
+                LabeledContent("Something wrong?") {
+                    Link("Open an issue",
+                         destination: URL(string: "https://github.com/nurkamol/seo-audit/issues/new")!)
+                }
+            } footer: {
+                Text("A false positive is a bug worth reporting. So is a check that fires on something "
+                     + "you cannot act on.").footnote()
+            }
+        }
+    }
+}
+
+/// One question, folded away. Expanded by default they would be a wall of prose
+/// nobody reads; a list of questions is scannable, and the answer is one click
+/// from the question it belongs to.
+private struct QuestionRow: View {
+    let answer: HelpPaneAnswer
+
+    var body: some View {
+        DisclosureGroup {
+            Text(answer.answer)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        } label: {
+            Text(answer.question).font(.body)
+        }
     }
 }

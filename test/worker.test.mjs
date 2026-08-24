@@ -197,13 +197,26 @@ test('what a run can be told to do is served, reasons included', async () => {
   const body = await res.json();
 
   assert.ok(body.run.some((o) => o.flag === '--concurrency' && o.query === 'concurrency'));
-  // The half that is usually missing: what is not there, and why. Picked
-  // because it needs an OAuth client rather than a decision, so it will be the
-  // last one standing — this assertion had to be moved off --psi once the
-  // window reached it, which is the table working.
-  const console_ = body.notInApp.find((o) => o.flag === '--search-console');
-  assert.ok(console_, 'a flag the window does not reach is still listed');
-  assert.match(console_.reason, /OAuth/, 'with the reason, not just its absence');
+  // The half that is usually missing: what is not there, and why.
+  //
+  // This assertion has now been re-pointed twice — off `--psi` when the window
+  // reached it, then off `--search-console` when its reason stopped mentioning
+  // OAuth — which is the table working and the test being too specific about
+  // it. So it asserts the property that matters instead: every absence carries
+  // a reason somebody can read. `--search-console-login` is the spot check,
+  // because opening a browser to write a credential is a terminal errand and
+  // will not become a control in a window.
+  assert.ok(body.notInApp.length, 'a flag the window does not reach is still listed');
+  for (const entry of body.notInApp) {
+    assert.ok(entry.flag.startsWith('--'), 'each absence names its flag');
+    assert.ok(
+      typeof entry.reason === 'string' && entry.reason.split(' ').length >= 5,
+      `${entry.flag} is listed as absent without a reason worth reading`,
+    );
+  }
+  const login = body.notInApp.find((o) => o.flag === '--search-console-login');
+  assert.ok(login, 'the sign-in errand is listed as something the window does not do');
+  assert.match(login.reason, /browser|credential/, 'with the reason, not just its absence');
 });
 
 test('silenced checks are a list of ids, not an open field', () => {

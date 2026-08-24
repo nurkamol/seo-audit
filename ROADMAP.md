@@ -37,8 +37,18 @@ Four things chosen together, one shipped:
       and nothing above it, so `../../src/audit.mjs` could not come along. PR
       raycast/extensions#30488, awaiting a maintainer.
 
-- [ ] **Run `--search-console` against a live property** — see below; still the
-      one thing here that has never been proven against the real API.
+- [x] **Run `--search-console` against a live property** — done, against
+      `sc-domain:nurkamol.com`, and it found what a fake never could. The report
+      said "1 of this crawl's findings are on pages Google has shown, 98 times
+      between them" when that page had 13; the other 85 were on pages the crawl
+      never touched. Nothing false except the sentence joining two unrelated
+      numbers.
+
+      The login, the token exchange, listing properties and the searchAnalytics
+      query have all now run against Google rather than a stub. Getting the
+      third credential was the actual blocker — three variables documented for a
+      year with no way to obtain one of them — so `--search-console-login` does
+      the loopback flow and `docs/search-console.md` covers the rest.
 
 Empty, and this time it stayed empty for more than a day's work. Everything the
 professional-tool plan queued has shipped: grouping, ordering by reach, a report
