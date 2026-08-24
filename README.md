@@ -207,6 +207,26 @@ in Swift — a check written twice is a check that drifts. `Report.swift` keeps
 that seam explicit, so a Swift engine would be one more conformance and no
 change to anything above it.
 
+### In Raycast
+
+```
+Preview a Site     how big is this, and is it the right one — ~1s, 3 requests
+Audit a Site       crawl it and list what to change, worst first
+Recent Reports     runs the macOS app has already kept
+```
+
+`raycast/` is a Raycast extension that imports the engine the same way the
+Worker does — `import { preview } from "../../src/audit.mjs"` — so it
+re-implements nothing and its reports match the terminal's. Raycast runs Node,
+so unlike the hosted version the certificate checks work there.
+
+**Preview is the command it exists for.** A crawl takes minutes and a launcher
+is built for the second you spend in it, so the headline command is the engine's
+`--dry-run`: how many URLs the sitemap lists, how many would be checked, and
+where the weight of the site is. Auditing is capped by preference, and a
+thousand-page site is told to use the app or the terminal rather than left
+spinning.
+
 ### What the pages actually do in Google
 
 ```bash

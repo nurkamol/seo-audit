@@ -55,6 +55,7 @@ read as its `src`.
 | `src/psi.mjs` | PageSpeed Insights |
 | `src/baseline.mjs` | Serialise and diff runs |
 | `src/report.mjs` | Terminal, Markdown, HTML, the baseline diff view, and the portfolio table |
+| `raycast/` | The Raycast extension. Imports `audit` and `preview`; `@raycast/api` is its dependency and nobody else's |
 | `worker/index.mjs` | The optional hosted front end. Imports `audit` and `html`; re-implements nothing. Web-standard APIs only, so `node --test` can run it |
 
 ## Adding a check
@@ -110,8 +111,11 @@ Optional, and not on the main path — the CLI is. Two rules keep it honest:
    passing one. Anything else that turns out not to work there gets the same
    treatment, never a silent omission.
 
-`worker/` is deliberately absent from `files` in `package.json`: the npx
-payload stays the CLI, and the deploy flow clones the repository anyway.
+`worker/` and `raycast/` are deliberately absent from `files` in
+`package.json`: the npx payload stays the CLI, and the deploy flow clones the
+repository anyway. `@raycast/api` is the same arrangement as Wrangler — a front
+end's dependency, installed only by somebody working on that front end, never
+reaching anybody who runs `npx github:nurkamol/seo-audit`.
 Wrangler is never a dependency — Cloudflare runs `npx wrangler deploy` on their
 side. To try it locally you need Node 22 (wrangler refuses below that, even
 though the CLI itself is happy on 18):

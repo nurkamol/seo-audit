@@ -1,0 +1,82 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "seo-audit",
+  "title": "SEO Audit",
+  "description": "Crawl a site's whole sitemap and check every page for the SEO, metadata and structured-data problems single-URL graders miss. Nothing leaves this machine.",
+  "icon": "icon.png",
+  "author": "nurkamol",
+  "categories": ["Developer Tools", "Web"],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "preview",
+      "title": "Preview a Site",
+      "subtitle": "SEO Audit",
+      "description": "How big is this site, and is it the right one — three requests, about a second.",
+      "mode": "view"
+    },
+    {
+      "name": "audit",
+      "title": "Audit a Site",
+      "subtitle": "SEO Audit",
+      "description": "Crawl a site and list what to change, worst first.",
+      "mode": "view",
+      "arguments": [
+        { "name": "site", "placeholder": "example.com", "type": "text", "required": true }
+      ]
+    },
+    {
+      "name": "reports",
+      "title": "Recent Reports",
+      "subtitle": "SEO Audit",
+      "description": "Runs kept by the macOS app and by this extension.",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "limit",
+      "title": "Pages per run",
+      "description": "A launcher is a poor place to wait out a crawl of a thousand pages. Big sites belong in the app or the terminal.",
+      "type": "textfield",
+      "default": "25",
+      "required": false
+    },
+    {
+      "name": "speed",
+      "title": "Speed",
+      "description": "Gentle is one connection at a time — the setting that gets through a site answering HTTP 429.",
+      "type": "dropdown",
+      "default": "normal",
+      "required": false,
+      "data": [
+        { "title": "Gentle — 1 connection", "value": "gentle" },
+        { "title": "Normal — 6 connections", "value": "normal" },
+        { "title": "Fast — 12 connections", "value": "fast" }
+      ]
+    },
+    {
+      "name": "checkExternal",
+      "title": "Outbound links",
+      "label": "Check that links to other sites still resolve",
+      "description": "Slower, and only a 404, 410 or no answer is reported.",
+      "type": "checkbox",
+      "default": false,
+      "required": false
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.77.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^1.0.11",
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.4.0"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "lint": "ray lint"
+  }
+}

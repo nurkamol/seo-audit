@@ -5,6 +5,37 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **A Raycast extension**, in `raycast/`. Three commands — **Preview a Site**,
+  **Audit a Site**, **Recent Reports** — and it re-implements nothing:
+  `import { preview } from "../../src/audit.mjs"` is the same line
+  `worker/index.mjs` uses, so a report from a launcher and one from
+  `seo-audit --json` are the same report. Raycast runs Node, so unlike the
+  hosted Worker it gets `node:tls` and the certificate checks work there.
+
+  **Preview is the command it exists for.** A crawl takes minutes and a launcher
+  is built for the second you spend in it — running a seven-minute job behind a
+  keystroke is the obvious idea and the wrong one. Preview is the engine's
+  `--dry-run`: three requests and about a second for how many URLs are listed,
+  how many would be checked, and where the weight of the site is. Auditing is
+  capped by preference at 25 pages, and a bigger site is pointed at the app or
+  the terminal rather than left spinning.
+
+  **Recent Reports reads the folder the macOS app writes**, so a crawl finished
+  in the window is in the launcher a second later with nothing synchronised or
+  exported. Read-only: deleting somebody's seven minutes behind a single Return
+  is not a good trade, and the app has the confirmation.
+
+  Everything that is not React lives in `raycast/lib/present.mjs` — plain ESM,
+  no `@raycast/api` import in it — so `node --test` runs it. Ten tests, and one
+  of them guards the single thing the extension duplicates: Swift's
+  `CrawlSettings.Speed` and `SPEEDS` are the same three numbers in two
+  languages, and two people reading "Gentle" should get the same crawl.
+
+  `@raycast/api` is a dependency of that folder and nowhere else — the same
+  arrangement `worker/` has with Wrangler. `raycast/` is absent from `files` in
+  `package.json`, so the npx payload is still just the CLI.
+
 ## [1.28.0] — 2026-08-24
 
 ### Added
