@@ -25,18 +25,24 @@ final class Engine: ObservableObject, AuditEngine {
 
     /// Everything the engine needs, carried inside the bundle. A build made
     /// with --no-node has no node of its own and falls back to the machine's.
-    private var engine: (node: String, cli: String)? {
+    ///
+    /// Static because the Search Console pane needs the same pair to run a
+    /// one-off sign-in, and two copies of "where is the engine" would be two
+    /// answers the day the layout changes.
+    static var bundled: (node: String, cli: String)? {
         guard let resources = Bundle.main.resourceURL else { return nil }
         let cli = resources.appendingPathComponent("engine/bin/seo-audit.mjs").path
         guard FileManager.default.fileExists(atPath: cli) else { return nil }
 
-        let bundled = resources.appendingPathComponent("node").path
-        if FileManager.default.isExecutableFile(atPath: bundled) { return (bundled, cli) }
+        let node = resources.appendingPathComponent("node").path
+        if FileManager.default.isExecutableFile(atPath: node) { return (node, cli) }
 
         let installed = ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]
             .first { FileManager.default.isExecutableFile(atPath: $0) }
         return installed.map { ($0, cli) }
     }
+
+    private var engine: (node: String, cli: String)? { Self.bundled }
 
     func start() async {
         guard state == .starting, !process.isRunning else { return }

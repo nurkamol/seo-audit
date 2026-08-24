@@ -134,6 +134,26 @@ export function psiOptions(params, env) {
   };
 }
 
+/** The Search Console property a run should be ordered by.
+ *
+ *  Gated for a sharper reason than PageSpeed: the credentials belong to
+ *  whoever is running the server, not to whoever sent the request. A deployed
+ *  Worker honouring `?search-console=` would let a stranger name any property
+ *  that account can read and get its impressions back in the report — somebody
+ *  else's traffic data, from somebody else's Search Console. So it is off
+ *  unless the runtime says otherwise, and `--serve` says otherwise only because
+ *  it is bound to the loopback address and serves the person who started it.
+ */
+export function searchConsoleProperty(params, env) {
+  if (env.ALLOW_SEARCH_CONSOLE !== '1') return {};
+  const asked = (params.get('search-console') ?? '').trim();
+  if (!asked) return {};
+  // A property is `sc-domain:example.com` or a URL, and nothing else. Anything
+  // shaped otherwise is not a property and is not worth a round trip.
+  if (!/^(sc-domain:[a-z0-9.-]+|https?:\/\/[^\s]+)$/i.test(asked) || asked.length > 253) return {};
+  return { searchConsole: asked };
+}
+
 /** How hard to crawl. Clamped, because a request parameter that sets how many
  *  connections a stranger's site receives is a parameter worth bounding — and
  *  because 1 is a real answer: a site answering 429 gets through at 1 and does
@@ -475,6 +495,7 @@ export async function handle(request, env, ctx, deps = {}) {
           // that passed.
           ignore: idList(url.searchParams.get('ignore')),
           ...psiOptions(url.searchParams, env),
+          ...searchConsoleProperty(url.searchParams, env),
           sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
           userAgent: agentFor(url.searchParams, env),
           // Switched off rather than left to fail — see NO_CERTIFICATE_CHECK.

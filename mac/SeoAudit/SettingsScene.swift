@@ -22,7 +22,7 @@ struct SettingsScene: View {
     /// The panes, in the order somebody meets them: what a run does, then what
     /// it did, then the app itself.
     enum Pane: String, CaseIterable, Identifiable {
-        case crawl, coverage, identity, performance, silenced, reports, updates, help
+        case crawl, coverage, identity, performance, searchConsole, silenced, reports, updates, help
 
         var id: String { rawValue }
 
@@ -32,6 +32,7 @@ struct SettingsScene: View {
             case .coverage: "Coverage"
             case .identity: "Identify as"
             case .performance: "Performance"
+            case .searchConsole: "Search Console"
             case .silenced: "Silenced"
             case .reports: "Reports"
             case .updates: "Updates"
@@ -45,6 +46,7 @@ struct SettingsScene: View {
             case .coverage: "square.grid.3x3"
             case .identity: "person.crop.square"
             case .performance: "speedometer"
+            case .searchConsole: "chart.line.uptrend.xyaxis"
             case .silenced: "bell.slash"
             case .reports: "tray.full"
             case .updates: "arrow.down.circle"
@@ -60,6 +62,7 @@ struct SettingsScene: View {
             case .coverage: .blue
             case .identity: .purple
             case .performance: .green
+            case .searchConsole: .red
             case .silenced: .gray
             case .reports: .teal
             case .updates: .indigo
@@ -73,6 +76,7 @@ struct SettingsScene: View {
             case .coverage: "How many pages, and what else to follow."
             case .identity: "Who the crawler says it is."
             case .performance: "Measured by Google, never estimated here."
+            case .searchConsole: "What these pages actually do in Google, rather than a proxy for it."
             case .silenced: "Checks you have decided you can live with."
             case .reports: "Every finished run, kept on this machine."
             case .updates: "New versions, and how to move between them."
@@ -141,6 +145,7 @@ struct SettingsScene: View {
         case .coverage: CoveragePane(settings: settings)
         case .identity: IdentityPane(settings: settings, engine: engine)
         case .performance: PerformancePane(settings: settings)
+        case .searchConsole: SearchConsolePane(settings: settings)
         case .silenced: SilencedPane(settings: settings)
         case .reports: ReportsPane(library: library)
         case .updates: UpdatesPane(updates: updates)
@@ -554,18 +559,157 @@ private struct HelpPane: View {
 /// One question, folded away. Expanded by default they would be a wall of prose
 /// nobody reads; a list of questions is scannable, and the answer is one click
 /// from the question it belongs to.
+///
+/// The row is the target, not the chevron. `DisclosureGroup` only hit-tests its
+/// own triangle, which leaves a full-width row that looks clickable everywhere
+/// and answers in one corner — the kind of thing that reads as the app being
+/// broken rather than as a small disclosure control.
 private struct QuestionRow: View {
     let answer: HelpPaneAnswer
+    @State private var expanded = false
 
     var body: some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded: $expanded) {
             Text(answer.answer)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 2)
         } label: {
-            Text(answer.question).font(.body)
+            Text(answer.question)
+                .font(.body)
+                // The whole width, and a shape to hit: without `contentShape`
+                // only the glyphs themselves take a click, so the gaps between
+                // words do nothing.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
+        }
+    }
+}
+
+/// The one pane that needs an account, and says so.
+///
+/// Everything else this app orders by is derived from the site's own markup —
+/// how many links point at a page, how far it is from the home page. Those are
+/// proxies. Impressions are not: a broken canonical on a page with four
+/// thousand impressions a month is a different sentence from the same canonical
+/// on a page nobody has been shown.
+///
+/// Signing in runs the engine's own `--search-console-login`, which does the
+/// loopback OAuth flow and writes the refresh token to `~/.config/seo-audit`.
+/// The token never comes back through this process, and is never displayed:
+/// this window asks for a sign-in and reads the list of properties that comes
+/// out of it.
+private struct SearchConsolePane: View {
+    @ObservedObject var settings: CrawlSettings
+
+    @State private var signingIn = false
+    @State private var properties: [String] = []
+    @State private var problem: String?
+
+    var body: some View {
+        Group {
+            Section {
+                TextField("sc-domain:example.com", text: $settings.searchConsoleProperty)
+                    .textFieldStyle(.roundedBorder)
+            } header: {
+                Text("Property")
+            } footer: {
+                Text("Exactly as Search Console names it. A domain property is "
+                     + "\"sc-domain:example.com\", not a URL — that mismatch is the usual reason the "
+                     + "call comes back empty. Leave it blank and no account is used at all.")
+                    .footnote()
+            }
+
+            Section {
+                LabeledContent("Google account") {
+                    Button(signingIn ? "Signing in…" : "Sign in…") { Task { await signIn() } }
+                        .disabled(signingIn)
+                }
+
+                if let problem {
+                    Text(problem)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ForEach(properties, id: \.self) { property in
+                    LabeledContent {
+                        Button("Use this") { settings.searchConsoleProperty = property }
+                            .disabled(settings.searchConsoleProperty == property)
+                    } label: {
+                        Text(property).font(.system(.body, design: .monospaced))
+                    }
+                }
+            } footer: {
+                Text("Opens a browser once. The refresh token is written to "
+                     + "~/.config/seo-audit/.env, outside any repository, and never shown here — a "
+                     + "token on screen is a token in a screenshot.")
+                    .footnote()
+            }
+
+            Section {
+                Text("Findings then sort by impressions where Google knows the page, and by how much "
+                     + "of the site links to it where it does not. The window is 28 days ending three "
+                     + "days ago, because Search Console reports its most recent days incompletely.")
+                    .footnote()
+            }
+        }
+    }
+
+    /// Runs the engine's sign-in and keeps only what is safe to show: the names
+    /// of the properties this account can read. A token that can read nothing
+    /// looks exactly like one that works, right up until a run says the
+    /// property was not found — so the list is the point, not a tick.
+    private func signIn() async {
+        guard let engine = Engine.bundled else {
+            problem = "This build has no engine to run."
+            return
+        }
+        signingIn = true
+        problem = nil
+        defer { signingIn = false }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: engine.node)
+        process.arguments = [engine.cli, "--search-console-login"]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = out
+
+        do {
+            try process.run()
+            let data = try out.fileHandleForReading.readToEnd() ?? Data()
+            process.waitUntilExit()
+            let text = String(decoding: data, as: UTF8.self)
+
+            // The engine prints one indented line per property, "name  (role)".
+            let found = text
+                .split(separator: "\n")
+                .compactMap { line -> String? in
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    guard trimmed.contains("("), trimmed.hasPrefix("sc-domain:") || trimmed.hasPrefix("http")
+                    else { return nil }
+                    return trimmed.components(separatedBy: "  ").first?.trimmingCharacters(in: .whitespaces)
+                }
+
+            if found.isEmpty {
+                // Whatever went wrong, the engine already said it in a sentence
+                // written for a person. Repeating it beats inventing a worse one.
+                problem = text
+                    .split(separator: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .last { !$0.isEmpty }
+                    ?? "Sign-in did not finish."
+            } else {
+                properties = found
+                if settings.searchConsoleProperty.isEmpty { settings.searchConsoleProperty = found[0] }
+            }
+        } catch {
+            problem = error.localizedDescription
         }
     }
 }

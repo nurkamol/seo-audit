@@ -6,6 +6,25 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A Search Console pane in the macOS app**, and the whole Help row is now the
+  click target rather than its chevron. `DisclosureGroup` only hit-tests its own
+  triangle, which left a full-width row that looked clickable everywhere and
+  answered in one corner — that reads as the app being broken, not as a small
+  control.
+
+  The pane takes the property and offers a sign-in, which runs the engine's own
+  `--search-console-login` through the bundled Node. The token never passes
+  through the app and is never displayed: a token on screen is a token in a
+  screenshot. What comes back is the list of properties the account can read,
+  each with a button to use it, because a token that can read nothing looks
+  exactly like one that works until a run says the property was not found.
+
+  The hosted Worker will **not** honour `?search-console=` unless the runtime
+  sets `ALLOW_SEARCH_CONSOLE`, and `--serve` sets it only because it binds to
+  the loopback address. The credentials belong to whoever started the server, so
+  a deployed Worker accepting a property name would hand a stranger somebody
+  else's traffic data. Gated, shape-checked, and tested.
+
 - **A Help pane in the macOS app.** Written as the questions the app actually
   raises — why a crawl takes minutes, why the page count differs from the
   sitemap's, where the score is, why performance is blank until it is switched

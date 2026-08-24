@@ -100,6 +100,12 @@ final class CrawlSettings: ObservableObject {
         }
     }
 
+    /// The Search Console property to order findings by, exactly as Search
+    /// Console names it — `sc-domain:example.com` for a domain property, a URL
+    /// for a URL-prefix one. Empty means do not ask, which is the default: this
+    /// is the only thing in the app that needs an account.
+    @AppStorage("seo-audit.gsc.property") var searchConsoleProperty = ""
+
     @AppStorage("seo-audit.psi.mode") var performance: Performance = .off
     @AppStorage("seo-audit.psi.sample") var performanceSample = 3
     @AppStorage("seo-audit.psi.desktop") var performanceOnDesktop = false
@@ -151,6 +157,9 @@ final class CrawlSettings: ObservableObject {
         if !trimmed.isEmpty { items.append(.init(name: "sitemap", value: trimmed)) }
 
         if !ignored.isEmpty { items.append(.init(name: "ignore", value: ignored.joined(separator: ","))) }
+
+        let property = searchConsoleProperty.trimmingCharacters(in: .whitespaces)
+        if !property.isEmpty { items.append(.init(name: "search-console", value: property)) }
 
         if performance != .off {
             items.append(.init(name: "psi", value: performance.targets.joined(separator: ",")))

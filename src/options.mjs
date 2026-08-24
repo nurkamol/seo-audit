@@ -30,6 +30,7 @@ export const OPTIONS = [
   { flag: '--browser', query: 'browser', app: true },
   { flag: '--os', query: 'os', app: true },
   { flag: '--user-agent', query: 'userAgent', app: true },
+  { flag: '--search-console', query: 'search-console', app: true },
   { flag: '--write-sitemap', query: 'sitemap-out', app: true, via: 'the Export menu' },
   { flag: '--ignore', query: 'ignore', app: true, via: 'right-clicking a finding, and the Settings list' },
   { flag: '--psi', query: 'psi', app: true, via: 'Settings → Performance' },
@@ -59,7 +60,6 @@ export const OPTIONS = [
 
 
   // --- not yet, and that is a decision rather than an oversight ------------
-  { flag: '--search-console', query: null, app: 'not yet — it has run against the live API now, so what is left is a pane for the property and a way to reach --search-console-login from a window' },
   { flag: '--search-console-login', query: null, app: 'no — it opens a browser and writes a credential to disk, which is a terminal errand, not a control in a window' },
   { flag: '--against', query: null, app: 'not yet — the window compares two kept runs instead of two live deployments' },
   { flag: '--compare-as', query: null, app: 'not yet — it fetches a sample of pages a second time, and the window has no control for spending that' },

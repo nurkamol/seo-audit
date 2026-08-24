@@ -38,6 +38,11 @@ export async function serve({ port = 4321, host = '127.0.0.1', maxPages, allowed
     // this unset, where a stranger passing ?psi= would be spending somebody
     // else's.
     ALLOW_PSI: '1',
+    // Same reasoning, sharper stakes: these credentials read somebody's Search
+    // Console. On the loopback address the person running the server is the
+    // person whose account it is; a deployed Worker leaves this unset, where
+    // `?search-console=` would hand a stranger somebody else's traffic data.
+    ALLOW_SEARCH_CONSOLE: '1',
   };
 
   const server = createServer(async (incoming, outgoing) => {

@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   handle, authorized, sameSecret, targetFor, pageLimit, progressText,
-  crawlConcurrency, sitemapOverride, agentFor, idList, psiOptions,
+  crawlConcurrency, sitemapOverride, agentFor, idList, psiOptions, searchConsoleProperty,
 } from '../worker/index.mjs';
 
 const SECRET = 'hunter2-hunter2';
@@ -449,4 +449,37 @@ test('progress reads as a line of text, with the origin taken off the front', ()
     'links      404      5ms  https://other.test/gone',
   );
   assert.equal(progressText({ phase: 'checks', detail: '12 findings' }, 'https://x.test'), 'checks     12 findings');
+});
+
+// Search Console is off unless the runtime says otherwise, and the reason is
+// sharper than the one for PageSpeed.
+//
+// The credentials belong to whoever started the server, not to whoever sent the
+// request. A deployed Worker honouring `?search-console=` would let a stranger
+// name any property that account can read and get its impressions back — other
+// people's traffic data, out of other people's Search Console. `--serve` turns
+// it on only because it binds to the loopback address and serves the person who
+// started it.
+test('a request cannot name a Search Console property unless the runtime allows it', () => {
+  const q = (v) => new URLSearchParams(v === null ? {} : { 'search-console': v });
+  const on = { ALLOW_SEARCH_CONSOLE: '1' };
+
+  // The gate, which is the whole point.
+  assert.deepEqual(searchConsoleProperty(q('sc-domain:example.com'), {}), {});
+  assert.deepEqual(searchConsoleProperty(q('sc-domain:example.com'), { ALLOW_PSI: '1' }), {});
+
+  assert.deepEqual(searchConsoleProperty(q('sc-domain:example.com'), on), {
+    searchConsole: 'sc-domain:example.com',
+  });
+  assert.deepEqual(searchConsoleProperty(q('https://example.com/'), on), {
+    searchConsole: 'https://example.com/',
+  });
+
+  // A property is one of two shapes. Anything else is not worth a round trip,
+  // and some of it is somebody trying their luck.
+  for (const junk of ['../../etc/passwd', 'file:///etc/passwd', 'sc-domain:', '<script>', 'a b', '']) {
+    assert.deepEqual(searchConsoleProperty(q(junk), on), {}, `${junk} should be refused`);
+  }
+  assert.deepEqual(searchConsoleProperty(q('sc-domain:' + 'a'.repeat(300)), on), {});
+  assert.deepEqual(searchConsoleProperty(q(null), on), {});
 });
