@@ -52,7 +52,7 @@ export default function Command() {
       setWorking(true);
       setFailed(null);
       try {
-        const found = await preview(site, crawlOptions(getPreferenceValues()));
+        const found = await preview(site, crawlOptions(getPreferenceValues<Preferences>()));
         if (!cancelled) setPlan(found);
       } catch (error) {
         if (!cancelled) {

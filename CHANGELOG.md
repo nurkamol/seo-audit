@@ -5,7 +5,32 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **`npx @nurkamol/seo-audit` is the install the site and README lead with.**
+  The repository form still works and is still documented, pinned — but it
+  clones 16 MB of app sources, screenshots and tests to reach a 115 kB crawler,
+  measured rather than guessed. `npm i -g` is written down too, for anyone who
+  would rather type `seo-audit`.
+
 ### Fixed
+- **A Raycast preference could do nothing and nobody would know.** The
+  extension's hand-written `Preferences` type listed three of the thirteen
+  preferences `crawlOptions()` actually reads; the other ten were invisible to
+  every caller. It is now `ExtensionPreferences`, which the Raycast build
+  generates from the manifest, so it cannot disagree with what the manifest
+  says — and the two components that read preferences had been calling
+  `getPreferenceValues()` untyped, which is what the change surfaced
+  immediately. `Arguments.Audit` replaces a second hand-copied shape.
+
+  Types only cover half of it: `present.mjs` is plain ESM so `node --test` can
+  run it, so a test now checks in both directions that every preference the
+  manifest declares is read and that nothing reads a preference the manifest
+  does not declare. A setting that quietly does nothing is the same failure
+  `src/options.mjs` exists to prevent for the macOS window.
+
+  Found by Greptile on the Store submission, which is worth recording: it
+  called the type duplication a maintainability nit, and the count made it a
+  defect.
 - **A release no longer starts by failing.** The macOS job builds on a tag and
   attaches the app to that tag's release — a release the documented procedure
   created afterwards, by hand. So every release began the same way: a red

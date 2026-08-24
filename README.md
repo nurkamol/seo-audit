@@ -30,8 +30,18 @@
 
 ```bash
 # Or anywhere, with nothing installed
+npx @nurkamol/seo-audit https://example.com
+
+# Or from the repository, pinned to a major version. Same tool — but this clones
+# 16 MB of app sources and tests to get at a 115 kB crawler.
 npx github:nurkamol/seo-audit@v1 https://example.com
+
+# Or keep it, if you would rather just type `seo-audit`
+npm install -g @nurkamol/seo-audit
 ```
+
+Every `npx github:…` in the examples below works as `npx @nurkamol/seo-audit`
+or as a plain `seo-audit`; they are the same bytes, fetched differently.
 
 <p align="center"><img src="docs/terminal.svg" alt="Example output" width="820"></p>
 

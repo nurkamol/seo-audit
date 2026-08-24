@@ -163,12 +163,18 @@
   </p>
   <div class="badges">
     <a href="https://github.com/nurkamol/seo-audit/releases"><img src="https://img.shields.io/github/v/release/nurkamol/seo-audit?color=ea580c" alt="latest release"></a>
+    <a href="https://www.npmjs.com/package/@nurkamol/seo-audit"><img src="https://img.shields.io/npm/v/%40nurkamol%2Fseo-audit?color=cb3837&amp;label=npm" alt="on npm"></a>
     <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="zero dependencies">
     <img src="https://img.shields.io/badge/node-%E2%89%A518-3c873a" alt="node 18 or newer">
     <a href="https://github.com/nurkamol/seo-audit/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT"></a>
   </div>
-  <pre class="command"><code>npx github:nurkamol/seo-audit@v1 https://example.com</code></pre>
-  <p class="quiet">Nothing to install. Node 18 or newer, and no dependencies at all.</p>
+  <pre class="command"><code>npx @nurkamol/seo-audit https://example.com</code></pre>
+  <p class="quiet">
+    Nothing to install. Node 18 or newer, and no dependencies at all. Or run it straight
+    from the repository, pinned to a major version:
+    <code>npx github:nurkamol/seo-audit@v1</code> — same tool, though that one clones 16 MB
+    of app sources and tests to get at a 115 kB crawler.
+  </p>
 
   <aside class="callout">
     <h2>Not a terminal person? There is a window.</h2>
@@ -269,8 +275,10 @@
     <tr><th>Where</th><th>How</th></tr>
     <tr>
       <td><b>Terminal</b></td>
-      <td><code>npx github:nurkamol/seo-audit@v1 https://example.com</code><br>
-        <span class="quiet">Reports as terminal output, Markdown, HTML, JSON or CSV.</span></td>
+      <td><code>npx @nurkamol/seo-audit https://example.com</code><br>
+        <span class="quiet">Reports as terminal output, Markdown, HTML, JSON or CSV.
+        <code>npm i -g @nurkamol/seo-audit</code> if you would rather type
+        <code>seo-audit</code>.</span></td>
     </tr>
     <tr>
       <td><b>CI</b></td>

@@ -375,3 +375,38 @@ test('every engine subpath the extension imports is exported', async () => {
     await import(specifier);
   }
 });
+
+// Every preference the manifest declares has to be read by `crawlOptions()`.
+//
+// TypeScript cannot check this half: `present.mjs` is plain ESM on purpose, so
+// `node --test` can run it, and a preference nothing reads is a setting that
+// silently does nothing — the same failure `src/options.mjs` exists to prevent
+// for the macOS window. It has already happened once here in the other
+// direction: the hand-written `Preferences` type listed three of thirteen.
+test('every preference the manifest declares is read, and no others', () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL('../raycast/package.json', import.meta.url), 'utf8'),
+  );
+  const declared = new Set([
+    ...(manifest.preferences ?? []).map((p) => p.name),
+    ...manifest.commands.flatMap((c) => (c.preferences ?? []).map((p) => p.name)),
+  ]);
+
+  const source = readFileSync(
+    new URL('../raycast/lib/present.mjs', import.meta.url),
+    'utf8',
+  );
+  const body = source.slice(source.indexOf('export function crawlOptions'));
+  const read = new Set(
+    [...body.matchAll(/\bpreferences\.([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]),
+  );
+
+  assert.ok(declared.size > 5, 'found no declared preferences to check');
+
+  for (const name of declared) {
+    assert.ok(read.has(name), `the manifest declares "${name}" and nothing reads it`);
+  }
+  for (const name of read) {
+    assert.ok(declared.has(name), `crawlOptions reads "${name}", which the manifest does not declare`);
+  }
+});
