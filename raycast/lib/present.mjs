@@ -14,21 +14,72 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { categoryOf } from '../../src/areas.mjs';
+import { userAgentFor } from '../../src/agents.mjs';
 
 /** The named speeds the macOS app offers, so the two windows mean the same
  *  thing by "Gentle". The numbers live here once. */
 export const SPEEDS = { gentle: 1, normal: 6, fast: 12 };
 
-/** Preferences arrive from Raycast as strings, including the numbers.
- *  A limit of "" or "banana" is the default rather than NaN pages. */
+/** A whole number from a text field, or the default. Raycast hands every
+ *  preference back as a string, including the ones that are numbers, and
+ *  somebody will type a word into one. */
+const count = (raw, fallback, ceiling) => {
+  const asked = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(asked) && asked > 0 ? Math.min(asked, ceiling) : fallback;
+};
+
+/** A comma or newline separated list, trimmed, with the blanks dropped. */
+const list = (raw) =>
+  (raw ?? '')
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+/** Everything a run is, from the preferences.
+ *
+ *  Anything left at its default is **left out** rather than sent explicitly, so
+ *  the engine's defaults stay written down in the engine — the same rule the
+ *  macOS app's settings follow. An option that is set here is one somebody
+ *  chose. */
 export function crawlOptions(preferences = {}) {
-  const asked = Number.parseInt(preferences.limit ?? '', 10);
-  const limit = Number.isFinite(asked) && asked > 0 ? Math.min(asked, 5000) : 25;
-  return {
-    limit,
+  const options = {
+    limit: count(preferences.limit, 25, 5000),
     concurrency: SPEEDS[preferences.speed] ?? SPEEDS.normal,
     checkExternal: preferences.checkExternal === true,
   };
+
+  const sitemap = (preferences.sitemap ?? '').trim();
+  if (sitemap) options.sitemap = sitemap;
+
+  const exclude = list(preferences.exclude);
+  if (exclude.length) options.exclude = exclude;
+
+  const since = (preferences.since ?? '').trim();
+  if (since) options.since = since;
+
+  const ignore = list(preferences.ignore);
+  if (ignore.length) options.ignore = ignore;
+
+  // A string of your own wins over the two menus, and the engine is never left
+  // to guess which was meant — the same rule the macOS app applies.
+  const own = (preferences.userAgent ?? '').trim();
+  if (own) {
+    options.userAgent = own;
+  } else if (preferences.browser) {
+    const chosen = userAgentFor(preferences.browser, preferences.os || undefined);
+    if (chosen?.ua) options.userAgent = chosen.ua;
+  }
+
+  // Performance is off unless asked for. `/**` is every crawled page, sampled
+  // by the engine; `/` is the home page and needs no sample.
+  const mode = preferences.performance ?? 'off';
+  if (mode !== 'off') {
+    options.psi = mode === 'sample' ? ['/**'] : ['/'];
+    if (mode === 'sample') options.psiSample = count(preferences.performanceSample, 3, 10);
+    options.psiStrategy = preferences.performanceDesktop === true ? 'desktop' : 'mobile';
+  }
+
+  return options;
 }
 
 /** What somebody types, as something `audit()` will accept. `null` when it is

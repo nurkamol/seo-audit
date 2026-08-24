@@ -46,10 +46,44 @@ which is the rule that lets this project have five front ends at all.
 Raycast runs Node, so unlike the hosted Worker this gets `node:tls` and the
 certificate checks work here.
 
-**One thing is duplicated**, and it has a test: the three named speeds. Swift's
-`CrawlSettings.Speed` and `SPEEDS` in `lib/present.mjs` are the same three
-numbers in two languages, and `npm test` fails if they drift, because two people
-reading "Gentle" in two windows should get the same crawl.
+**Two things are duplicated**, and both have tests. The three named speeds:
+Swift's `CrawlSettings.Speed` and `SPEEDS` in `lib/present.mjs` are the same
+numbers in two languages, and two people reading "Gentle" in two windows should
+get the same crawl. And the browser and system menus, because a dropdown in a
+static manifest cannot read `src/agents.mjs` at runtime — `npm test` fails if
+either drifts.
+
+## What it reaches
+
+Every flag that shapes a run, through `⌘,` preferences:
+
+| | |
+|---|---|
+| Pages per run | `--limit`, capped — a launcher is a poor place to wait out a thousand pages |
+| Speed | `--concurrency` as Gentle / Normal / Fast |
+| Outbound links | `--check-external` |
+| Sitemap | `--sitemap` |
+| Exclude | `--exclude`, one pattern per line or comma separated |
+| Only what changed since | `--since` |
+| Identify as / On / Or your own | `--browser`, `--os`, `--user-agent` |
+| Performance | `--psi`, `--psi-sample`, `--psi-strategy` |
+| Silenced checks | `--ignore` — copy an id off any finding with `⌘.` |
+
+**Export** (`⌘E`) writes HTML, Markdown, CSV, JSON or the corrected sitemap to
+`~/Downloads`, using the engine's own writers — the same `html()`, `markdown()`
+and `csv()` the command line calls. When the engine refuses to build a sitemap,
+because the crawl did not see the whole site, the refusal is shown rather than a
+file that would delete pages from somebody's site.
+
+Anything left at its default is **not sent**, so the engine's defaults stay
+written down in the engine.
+
+Not reachable, and each for a reason: `--baseline` and `--against` want two runs
+picked and compared, which is a screen rather than a preference; `--compare-as`
+fetches a sample twice; `--settle` waits out a deploy; `--redirects` and
+`--config` are files a repository commits; `--fail-on` needs an exit code a
+launcher does not have; `--search-console` needs an OAuth client and has never
+run against the live API.
 
 ## `@raycast/api` is a dependency, and only here
 

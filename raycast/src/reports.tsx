@@ -12,7 +12,8 @@
 import { useEffect, useState } from "react";
 import { Action, ActionPanel, Color, Icon, List, open } from "@raycast/api";
 
-import { causePayload } from "../lib/engine";
+import { causePayload, type Report } from "../lib/engine";
+import { ExportActions } from "./exports";
 import type { KeptReport } from "../lib/present.mjs";
 import {
   appIsInstalled,
@@ -85,12 +86,16 @@ function Kept({ row }: { row: KeptReport }) {
   // The grouping is recomputed rather than trusted from the file: a report
   // written before `causes` travelled with it still opens, which is the point
   // of keeping the engine's exact JSON rather than this app's idea of it.
-  const report = stored
+  // A file with no `meta` is a file that is not a report, whatever else is in
+  // it — so it stays null and the empty state below says so, rather than being
+  // half-assembled into something the export writers would have to refuse.
+  const report: Report | null = stored?.meta
     ? {
-        ...stored,
+        meta: stored.meta,
+        findings: stored.findings ?? [],
         causes:
           stored.causes ??
-          causePayload(stored.findings ?? [], stored.meta?.pages ?? 0),
+          causePayload(stored.findings ?? [], stored.meta.pages),
       }
     : null;
   const causes = causeRows(report);
@@ -131,6 +136,7 @@ function Kept({ row }: { row: KeptReport }) {
           ]}
           actions={
             <ActionPanel>
+              <ExportActions report={report} host={row.host} />
               {cause.pages[0] && (
                 <Action.OpenInBrowser
                   title="Open First Page"

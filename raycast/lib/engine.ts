@@ -54,10 +54,21 @@ export interface Meta {
   sitemap?: string;
 }
 
+/** The corrected sitemap, when a run asked for one. `xml` is null when the
+ *  engine refused — a crawl that did not see the whole site — and `refused`
+ *  says why, which is the half worth showing. */
+export interface RebuiltSitemap {
+  xml: string | null;
+  urls: string[];
+  added: string[];
+  refused: string | null;
+}
+
 export interface Report {
   meta: Meta;
   findings: Finding[];
   causes: Cause[];
+  sitemap?: RebuiltSitemap;
 }
 
 /** What `--dry-run` answers. `wouldCheck` is null when there is no sitemap:
@@ -80,6 +91,13 @@ export interface Plan {
 
 export interface CrawlOptions {
   limit?: number;
+  exclude?: string[];
+  since?: string;
+  ignore?: string[];
+  psi?: string[];
+  psiSample?: number;
+  psiStrategy?: "mobile" | "desktop";
+  writeSitemap?: boolean;
   concurrency?: number;
   checkExternal?: boolean;
   sitemap?: string;
@@ -99,7 +117,8 @@ export interface CrawlOptions {
 // exercises these against the real engine rather than against the types.
 
 export const audit = rawAudit as unknown as
-  (target: string, options?: CrawlOptions) => Promise<{ findings: Finding[]; meta: Meta }>;
+  (target: string, options?: CrawlOptions) =>
+    Promise<{ findings: Finding[]; meta: Meta; sitemap?: RebuiltSitemap }>;
 
 export const preview = rawPreview as unknown as
   (target: string, options?: CrawlOptions) => Promise<Plan>;

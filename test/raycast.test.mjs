@@ -18,6 +18,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 import {
   SPEEDS, crawlOptions, normalise, previewRows, causeRows, summaryLine, keptReports, readReport,
 } from '../raycast/lib/present.mjs';
+import { FORMATS, filenameFor, render } from '../raycast/lib/exports.mjs';
+import { BROWSER_NAMES, OS_NAMES } from '../src/agents.mjs';
 
 test('preferences arrive as strings, and nonsense is the default rather than NaN', () => {
   assert.deepEqual(crawlOptions({ limit: '40', speed: 'gentle', checkExternal: true }),
@@ -205,4 +207,107 @@ test('a stored report from before areas travelled with it still groups properly'
   // recomputed, so a future area never silently disagrees with a stored one.
   const carried = causeRows({ causes: [{ ...old.causes[0], area: 'Content' }] });
   assert.equal(carried[0].area, 'Content');
+});
+
+test('every preference reaches the engine, and defaults are left out', () => {
+  // Left out rather than sent explicitly: the engine's defaults stay written
+  // down in the engine, and an option that is present is one somebody chose.
+  assert.deepEqual(Object.keys(crawlOptions({})).sort(),
+    ['checkExternal', 'concurrency', 'limit']);
+
+  const all = crawlOptions({
+    limit: '40', speed: 'gentle', checkExternal: true,
+    sitemap: '/sitemaps/all.xml',
+    exclude: '/tag/**, /page/*\n/collections/*/products/*',
+    since: '2026-08-17',
+    ignore: 'thin-content, img-srcset',
+    browser: 'googlebot', os: 'macos',
+    performance: 'sample', performanceSample: '5', performanceDesktop: true,
+  });
+
+  assert.equal(all.limit, 40);
+  assert.equal(all.concurrency, 1);
+  assert.equal(all.sitemap, '/sitemaps/all.xml');
+  assert.deepEqual(all.exclude, ['/tag/**', '/page/*', '/collections/*/products/*'],
+    'commas and newlines both separate, because both are what people type');
+  assert.equal(all.since, '2026-08-17');
+  assert.deepEqual(all.ignore, ['thin-content', 'img-srcset']);
+  assert.match(all.userAgent, /Googlebot/);
+  assert.deepEqual(all.psi, ['/**']);
+  assert.equal(all.psiSample, 5);
+  assert.equal(all.psiStrategy, 'desktop');
+});
+
+test('a user agent of your own wins, and the home page needs no sample', () => {
+  const own = crawlOptions({ userAgent: '  MyBot/1.0  ', browser: 'chrome', os: 'macos' });
+  assert.equal(own.userAgent, 'MyBot/1.0', 'trimmed, and the menus are not consulted');
+
+  const home = crawlOptions({ performance: 'homepage' });
+  assert.deepEqual(home.psi, ['/']);
+  assert.equal(home.psiSample, undefined, 'one page is not a sample');
+  assert.equal(home.psiStrategy, 'mobile', 'which is what Google indexes with');
+
+  // A combination that cannot exist is refused by the engine, and a refusal is
+  // not a reason to fail the run.
+  assert.equal(crawlOptions({ browser: 'safari', os: 'windows' }).userAgent, undefined);
+});
+
+test('the browser and system menus are the engine’s lists, not a copy', () => {
+  // A dropdown in a static manifest cannot read agents.mjs at runtime, so this
+  // is the one other thing the extension duplicates. Guarded like SPEEDS is.
+  const manifest = JSON.parse(readFileSync(join(root, 'raycast/package.json'), 'utf8'));
+  const values = (name) =>
+    manifest.preferences.find((p) => p.name === name).data
+      .map((d) => d.value)
+      .filter(Boolean);
+
+  assert.deepEqual(values('browser'), BROWSER_NAMES,
+    'raycast/package.json and src/agents.mjs disagree about the browsers');
+  assert.deepEqual(values('os'), OS_NAMES,
+    'raycast/package.json and src/agents.mjs disagree about the systems');
+});
+
+test('a report is written in every format the engine can write', () => {
+  const report = {
+    meta: { origin: 'https://x.test', pages: 2, date: '2026-08-24' },
+    findings: [{ level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/1' }],
+    causes: [],
+  };
+
+  assert.deepEqual(FORMATS.map((f) => f.id), ['html', 'markdown', 'csv', 'json', 'sitemap']);
+  for (const format of ['html', 'markdown', 'csv', 'json']) {
+    const { text, refused } = render(format, report);
+    assert.equal(refused, null, `${format} should write`);
+    assert.ok(text.length > 50, `${format} wrote almost nothing`);
+  }
+  assert.match(render('html', report).text, /^<!doctype html>/i);
+  assert.match(render('json', report).text, /"findings"/);
+
+  // A name somebody can find again, and that sorts.
+  assert.equal(filenameFor('csv', 'jekyllrb.com', new Date('2026-08-24T10:00:00Z')),
+    'seo-audit-jekyllrb.com-2026-08-24.csv');
+  assert.match(filenameFor('html', 'a site/with slashes'), /^seo-audit-a-site-with-slashes-/);
+});
+
+test('a sitemap the engine refused to build carries the refusal, not an empty file', () => {
+  const base = { meta: { origin: 'https://x.test', pages: 2 }, findings: [], causes: [] };
+
+  // Never asked for.
+  assert.match(render('sitemap', base).refused, /did not build one/);
+
+  // Asked for and refused — a sitemap missing real pages is worse than one
+  // listing dead ones, so the reason travels instead of a file.
+  const refused = render('sitemap', {
+    ...base,
+    sitemap: { xml: null, urls: [], added: [], refused: 'The crawl stopped at its limit.' },
+  });
+  assert.equal(refused.text, null);
+  assert.match(refused.refused, /stopped at its limit/);
+
+  const written = render('sitemap', {
+    ...base,
+    sitemap: { xml: '<?xml version="1.0"?>', urls: ['https://x.test/'], added: [], refused: null },
+  });
+  assert.match(written.text, /^<\?xml/);
+  assert.equal(written.refused, null);
 });

@@ -31,6 +31,7 @@ import {
   normalise,
   summaryLine,
 } from "../lib/present.mjs";
+import { ExportActions } from "./exports";
 
 const TONE: Record<string, { icon: Icon; tint: Color }> = {
   error: { icon: Icon.XMarkCircle, tint: Color.Red },
@@ -66,8 +67,12 @@ export function Report({ site }: { site: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const { findings, meta } = await audit(site, {
+        const { findings, meta, sitemap } = await audit(site, {
           ...options,
+          // Asked for during the run: rebuilding it needs the status, robots
+          // directive and canonical of every page, none of which survives past
+          // the crawl. It costs one already-cached request.
+          writeSitemap: true,
           onProgress: (
             event: Parameters<NonNullable<CrawlOptions["onProgress"]>>[0],
           ) => {
@@ -86,6 +91,7 @@ export function Report({ site }: { site: string }) {
           meta,
           findings,
           causes: causePayload(findings, meta.pages),
+          sitemap,
         });
       } catch (error) {
         if (!cancelled)
@@ -160,6 +166,10 @@ export function Report({ site }: { site: string }) {
                 ]}
                 actions={
                   <ActionPanel>
+                    <ExportActions
+                      report={report}
+                      host={site ? new URL(site).host : ""}
+                    />
                     {row.pages[0] && (
                       <Action.OpenInBrowser
                         title="Open First Page"
