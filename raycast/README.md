@@ -85,6 +85,41 @@ fetches a sample twice; `--settle` waits out a deploy; `--redirects` and
 launcher does not have; `--search-console` needs an OAuth client and has never
 run against the live API.
 
+## Before this can go to the Store
+
+Checked against
+[Prepare an Extension for Store](https://developers.raycast.com/basics/prepare-an-extension-for-store).
+Three things are outstanding and one of them is a blocker.
+
+**Blocker — the engine is outside the extension folder.** `lib/engine.ts`
+imports `../../src/audit.mjs`, and a Store submission is a pull request
+containing `extensions/seo-audit/` and nothing else, so that path will not exist
+there. It builds here because the repository is around it. The fix is for the
+engine to be a published npm package the extension depends on, which is the
+`Publish to public npm` item on the roadmap — the two questions turn out to be
+one. Vendoring a copy of `src/` into this folder would also build, and would put
+a second copy of ninety checks in the repository, which is the thing this
+project refuses everywhere else.
+
+**`author` must be a Raycast account username.** It currently says `nurkamol`,
+which is the GitHub one. If they differ, this is what gets the submission
+returned.
+
+**Screenshots.** `metadata/` is empty. The Store wants at least three, 2000×1250,
+captured with Raycast's own Window Capture and its *Save to Metadata* option.
+
+Everything else conforms: MIT, one-sentence description, 512×512 icon,
+`Developer Tools` and `Web` categories, `platforms: ["macOS"]`, commands named
+`<verb> <noun>` with no articles, no duplicated subtitles, Title Case action
+titles, an ellipsis on the Export submenu, a `CHANGELOG.md` in the Store's
+format, placeholders on every search bar, a custom `EmptyView` on every command,
+no analytics, no keychain, no bundled binaries, and `package-lock.json`
+committed.
+
+`ray lint` passes with one warning: it wants the title Title Cased as
+"Seo Audit". It is an acronym, the Apple Style Guide the same page cites keeps
+acronyms capitalised, and it stays.
+
 ## `@raycast/api` is a dependency, and only here
 
 The command line has none and never will: `npx github:nurkamol/seo-audit` is the

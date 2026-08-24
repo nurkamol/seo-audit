@@ -6,6 +6,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **The Raycast extension is checked against the Store guidelines.** Six things
+  had to change. Commands may not contain articles, so *Preview a Site* and
+  *Audit a Site* are **Preview Site** and **Audit Site**. Subtitles may not
+  duplicate the title, and all three were the extension's own name, which
+  Raycast already shows beside them — gone. The description had to be one
+  sentence and was two. A root command may not set its own `navigationTitle`,
+  and *Audit Site* did. Submenus take an ellipsis, so Export is **Export…**.
+  And `platforms: ["macOS"]` was missing, which it is not: this reads the folder
+  the macOS app writes.
+
+  Two fixes were not from the guidelines but from reading the code beside them.
+  *Open in SEO Audit* only launched the app — it cannot be told which report to
+  show — so it says **Open the SEO Audit App**, because a control that
+  overstates what it does is worse than one that does less. And a preview that
+  said *"185 past the limit of 25"* offered no way to raise the limit; every
+  command now has **Open Extension Preferences** on `⌘,`.
+
+  `CHANGELOG.md` and `metadata/` exist for the Store. `raycast/README.md` lists
+  what is still outstanding, including the one that blocks submission: the
+  extension imports the engine from outside its own folder, and a Store
+  submission contains that folder alone.
+
+### Changed
 - **The app screenshot on the website is the app that exists.** It was twelve
   commits stale — 1.24.0, before the **Preview** button, the **Compare** menu,
   the sitemap export and the real logo, none of which a visitor could see. It is

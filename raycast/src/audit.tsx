@@ -109,11 +109,7 @@ export function Report({ site }: { site: string }) {
   const areas = [...new Set(rows.map((row) => row.area))];
 
   return (
-    <List
-      isLoading={working}
-      navigationTitle={site ? new URL(site).host : "Audit"}
-      searchBarPlaceholder="Filter what to change"
-    >
+    <List isLoading={working} searchBarPlaceholder="Filter what to change">
       {working && (
         <List.EmptyView
           icon={Icon.MagnifyingGlass}

@@ -32,7 +32,7 @@ export function ExportActions({
 }) {
   return (
     <ActionPanel.Submenu
-      title="Export"
+      title="Export…"
       icon={Icon.Download}
       shortcut={{ modifiers: ["cmd"], key: "e" }}
     >

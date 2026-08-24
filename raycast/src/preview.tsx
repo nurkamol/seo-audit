@@ -14,6 +14,7 @@ import {
   Icon,
   List,
   getPreferenceValues,
+  openExtensionPreferences,
 } from "@raycast/api";
 
 // The engine itself. Not a copy of it, not a description of it — the same
@@ -122,6 +123,15 @@ export default function Command() {
                       target={<AuditFrom site={site} />}
                     />
                   )}
+                  <Action
+                    // A preview that says "185 past the limit of 25" and offers
+                    // no way to change the limit is a dead end with a number on
+                    // it.
+                    title="Open Extension Preferences"
+                    icon={Icon.Gear}
+                    shortcut={{ modifiers: ["cmd"], key: "," }}
+                    onAction={openExtensionPreferences}
+                  />
                   <Action.CopyToClipboard
                     title="Copy Line"
                     content={`${row.title} — ${row.subtitle}`}

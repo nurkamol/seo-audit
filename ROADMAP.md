@@ -14,6 +14,17 @@ Four things chosen together, one shipped:
 - [x] **`--write-sitemap`** — and it refuses on any crawl that did not see the
       whole site, because a sitemap missing real pages is worse than one listing
       dead ones.
+- [ ] **Publish to public npm.** `seo-audit` is free on the registry, checked.
+      It would make the headline command `npx seo-audit https://example.com`
+      instead of `npx github:nurkamol/seo-audit@v1 …`, and — the better reason —
+      it would ship **115 KB and 27 files** instead of a git clone of the whole
+      tree. The CLI is 388 KB of a repository that is mostly four other front
+      ends: everybody running `npx` today downloads a Swift app's source, a
+      website, a Raycast extension and 341 tests to run a crawler. `files` in
+      `package.json` already declares exactly what should go; npm honours it and
+      a clone cannot. Costs: the name is a permanent commitment, unpublishing is
+      restricted to 72 hours, and it needs an `NPM_TOKEN` and a publish step on
+      tag so it cannot drift from a release.
 - [ ] **Run `--search-console` against a live property** — see below; still the
       one thing here that has never been proven against the real API.
 
@@ -233,6 +244,13 @@ handed 464 findings about navigation that works.
 - **Image weight** — flag images that are heavy for their rendered size. Needs the layout, so it means either a headless browser or a `sizes` heuristic; the honest version is not cheap.
 
 ## Considered and rejected
+
+- **GitHub Packages.** The repository page offers it and it is the wrong
+  registry for this. `npm.pkg.github.com` requires an authentication token to
+  install, **even for a public package**, so somebody would need a GitHub PAT
+  and an `.npmrc` before they could run a crawler. That breaks the one promise
+  the whole thing is built on. Publishing to **public npm** is a different
+  question and a live one — see Next.
 
 - **A pure-Swift engine, so the macOS app carries no Node.** The seam is there —
   `AuditEngine` is one method, and a Swift engine would be a second conformance

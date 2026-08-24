@@ -10,7 +10,15 @@
 // seven minutes behind a single Return is not a good trade.
 
 import { useEffect, useState } from "react";
-import { Action, ActionPanel, Color, Icon, List, open } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Color,
+  Icon,
+  List,
+  open,
+  openExtensionPreferences,
+} from "@raycast/api";
 
 import { causePayload, type Report } from "../lib/engine";
 import { ExportActions } from "./exports";
@@ -65,13 +73,22 @@ export default function Command() {
               />
               {appIsInstalled() && (
                 <Action
-                  title="Open in Seo Audit"
+                  // "Open in" would be a lie: the app cannot be told which
+                  // report to show, so this only launches it. A control that
+                  // overstates what it does is worse than one that does less.
+                  title="Open the Seo Audit App"
                   icon={Icon.Window}
                   onAction={() => open("/Applications/SEO Audit.app")}
                 />
               )}
               <Action.ShowInFinder title="Show the JSON" path={row.path} />
               <Action.CopyToClipboard title="Copy Path" content={row.path} />
+              <Action
+                title="Open Extension Preferences"
+                icon={Icon.Gear}
+                shortcut={{ modifiers: ["cmd"], key: "," }}
+                onAction={openExtensionPreferences}
+              />
             </ActionPanel>
           }
         />
