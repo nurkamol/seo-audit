@@ -7,7 +7,7 @@
 // the tested half.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -408,5 +408,39 @@ test('every preference the manifest declares is read, and no others', () => {
   }
   for (const name of read) {
     assert.ok(declared.has(name), `crawlOptions reads "${name}", which the manifest does not declare`);
+  }
+});
+
+// README images live in media/, never in metadata/.
+//
+// `metadata/` is the Store's screenshot gallery and nothing else; the
+// guidelines say linked media goes in a top-level `media` folder, and the
+// submission checklist asks you to confirm it. Ours pointed at `metadata/` with
+// that box ticked, which is the worst version of the mistake: not noticed, and
+// asserted as checked.
+test('the extension README links no image inside metadata/', () => {
+  const root = new URL('../raycast/', import.meta.url);
+  const readme = readFileSync(new URL('README.md', root), 'utf8');
+
+  const linked = [...readme.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m) => m[1]);
+  assert.ok(linked.length > 0, 'found no images in the README to check');
+
+  for (const path of linked) {
+    assert.ok(
+      !path.startsWith('metadata/'),
+      `README links ${path}; linked media belongs in media/, not the Store gallery`,
+    );
+    if (!/^https?:/.test(path)) {
+      // A link to a file that is not there renders as a broken image on the
+      // Store page, which nothing else here would catch.
+      assert.ok(existsSync(new URL(path, root)), `README links ${path}, which does not exist`);
+    }
+  }
+
+  // Paths named in prose rot the same way — `lib/seo-audit.d.ts` outlived the
+  // file by a rename, and the README is the Store page, so a reader's first
+  // impression was a filename that is not there.
+  for (const [, named] of readme.matchAll(/`((?:lib|src|assets|media|metadata)\/[\w./-]+)`/g)) {
+    assert.ok(existsSync(new URL(named, root)), `README names ${named}, which does not exist`);
   }
 });
