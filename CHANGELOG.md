@@ -3,6 +3,28 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **A release no longer starts by failing.** The macOS job builds on a tag and
+  attaches the app to that tag's release — a release the documented procedure
+  created afterwards, by hand. So every release began the same way: a red
+  `release not found`, a `gh release create`, a re-run. A failure that is part
+  of the normal procedure is a failure nobody reads, and the next one, which is
+  real, reads exactly the same.
+
+  It now creates the release when it is missing, titled from the tag's own
+  annotation with that version's CHANGELOG section as the notes — both already
+  written by the time a tag is pushed, so neither becomes a second copy to keep
+  in step. A tag with no CHANGELOG section gets a warning and generated notes
+  rather than a lost build, because by then the app is already sitting there
+  signed.
+
+  The section is found with `index()` rather than a regex, which is the bug that
+  was there to be written: `## [1.31.0]` interpolated into a pattern makes
+  `[1.31.0]` a character class matching the digits `0`, `1` and `3`. It would
+  not have errored. It would have published the wrong section, or none.
+
 ## [1.31.0] — 2026-08-24
 
 ### Added

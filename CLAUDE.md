@@ -134,9 +134,21 @@ pricing page rather than trusting the sentence you are editing.
 ```bash
 # bump version in package.json, write the CHANGELOG entry, then:
 git tag -a v0.4.0 -m "…" && git push --follow-tags
-gh release create v0.4.0 --title "…" --notes-file <changelog section>
 git tag -f -a v1 -m "…" && git push -f origin v1   # only if compatible
 ```
+
+That is the whole procedure. Pushing the version tag runs three workflows and
+none of them needs a hand:
+
+- **`macOS app`** builds and signs the app, **creates the GitHub release** if it
+  does not exist — titled from the tag's annotation, with that version's
+  CHANGELOG section as the notes — attaches the zip, and points the Homebrew
+  cask at the checksum it just built. Write the CHANGELOG entry before tagging
+  and the release writes itself; forget to, and the job says so in a warning and
+  falls back to generated notes rather than failing with the app already built.
+- **`npm`** publishes `@nurkamol/seo-audit` with provenance, and skips silently
+  if that version is already on the registry.
+- **`test`** runs the suite against the tag.
 
 `v1` floats forward with every backwards-compatible release, because projects
 reference `uses: nurkamol/seo-audit@v1`. A breaking change — a renamed flag, a

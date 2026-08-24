@@ -75,6 +75,49 @@ jobs:
           echo "sha=$(shasum -a 256 "$name" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           ls -lh "$name"
 
+      # The release used to be created by hand after the tag was pushed, which
+      # meant this job raced it and lost: every release began with a red
+      # `release not found`, a `gh release create`, and a re-run. A failure that
+      # is part of the normal procedure is a failure nobody reads, and the next
+      # one — a real one — reads the same.
+      - name: Make sure the release exists
+        run: |
+          tag="v${{ steps.package.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists"
+            exit 0
+          fi
+
+          # Both halves are already written by the time a tag is pushed: the
+          # notes are that version's CHANGELOG section, and the title is the
+          # tag's own annotation. Neither becomes a second place to keep the
+          # same sentence up to date.
+          #
+          # `index()` rather than a regex: the heading is `## [1.31.0] — date`,
+          # and a version interpolated into a pattern makes `[1.31.0]` a
+          # character class that matches the digits `0`, `1` and `3`. It would
+          # not error — it would quietly publish the wrong section, or none.
+          awk -v v="${{ steps.package.outputs.version }}" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+
+          title="$(git tag -l --format='%(contents:subject)' "$tag")"
+          [ -n "$title" ] || title="${{ steps.package.outputs.version }}"
+
+          if [ -s notes.md ]; then
+            gh release create "$tag" --title "$title" --notes-file notes.md
+          else
+            # A tag with no CHANGELOG section is worth saying out loud, but not
+            # worth losing the build over — the app is already sitting here
+            # built and signed.
+            echo "::warning::no CHANGELOG section for ${{ steps.package.outputs.version }} — using generated notes"
+            gh release create "$tag" --title "$title" --generate-notes
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Attach it to the release
         run: gh release upload "v${{ steps.package.outputs.version }}" "${{ steps.package.outputs.name }}" --clobber
         env:
