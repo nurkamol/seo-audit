@@ -6,6 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The commands on the website have a Copy button.** A command is there to be
+  run, which means it is there to be copied, and the brew block is three lines
+  nobody should be retyping. `innerText` rather than `textContent`, so those
+  three arrive with their newlines instead of running together into something
+  that is not a command. The button is added by script, so a page without
+  JavaScript shows the command and no dead control; it appears on hover *and* on
+  keyboard focus, because a control only a mouse can find is one some people do
+  not have; and it stays visible on touch, which has no hover at all. If the
+  clipboard refuses — an insecure context, or a browser that says no — it
+  selects the command and says **Press ⌘C**, which is still the difference
+  between one keystroke and retyping it.
+
+  The example report output deliberately has no button. Nobody wants to copy
+  that.
+
 - **A Raycast extension**, in `raycast/`. Three commands — **Preview a Site**,
   **Audit a Site**, **Recent Reports** — and it re-implements nothing:
   `import { preview } from "../../src/audit.mjs"` is the same line
