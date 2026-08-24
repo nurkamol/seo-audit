@@ -67,15 +67,14 @@ cp -R "$here/bin" "$here/src" "$here/worker" "$here/package.json" "$app/Contents
 # --- the icon --------------------------------------------------------------
 # Drawn from the same mark the reports carry, at every size macOS asks for.
 #
-# Rasterised from the SVG rather than from a checked-in PNG, because `sips`
-# reads SVG and keeps the alpha channel, and the PNG did not have one: it had
-# been flattened onto white, so the transparent margin around the squircle came
-# out opaque and macOS drew a white frame around the icon. The SVG is the
-# source of record now and there is no second copy to go stale.
+# From docs/icon@1024.png, which is the logo itself rather than a drawing of
+# it. It carries its own alpha — the corners outside the squircle are
+# transparent — which is the thing that went wrong when a flattened copy of it
+# was checked in and macOS drew a white frame around the icon.
 iconset="$out/icon.iconset"
 rm -rf "$iconset"; mkdir -p "$iconset"
 master="$out/icon-master.png"
-sips -s format png -Z 1024 "$here/docs/icon.svg" --out "$master" >/dev/null
+cp "$here/docs/icon@1024.png" "$master"
 cp "$master" "$iconset/icon_512x512@2x.png"
 for size in 16 32 128 256 512; do
   sips -s format png -z $size $size "$master" --out "$iconset/icon_${size}x${size}.png" >/dev/null

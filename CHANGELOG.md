@@ -5,6 +5,28 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **The icon is the logo, not a drawing of it.** The one that shipped was
+  redrawn from the reference rather than taken from it — flat instead of glossy,
+  a different arrowhead, no dots on the trend line. Two reasons, and I gave the
+  weaker one more room than it deserved: gloss is a 2010 idiom whose specular
+  highlight is the first thing to go at 16 pixels, which is true and was not the
+  main point. The main point was that the reference is stock art of unknown
+  licence, and this repository is MIT and public. That is the owner's call to
+  make, and it has been made.
+
+  So the original is now the source: masked to the macOS squircle with the same
+  path the app already shipped, so the corners outside it are transparent and
+  nothing draws a white frame around it. It is the icon in the app, on the
+  website, and in the Raycast extension — one logo in three places rather than
+  a drawing in two and a photograph in none.
+
+  It costs something, and the number is worth stating: the `.icns` goes from
+  **189 KB to 1.0 MB**, because a glossy gradient does not quantise the way a
+  flat glyph does. In the bundled app that is nothing; in the `--no-node` build
+  it is a third of 3.5 MB. And at 32 pixels the gloss and the thin trend line do
+  soften — visibly, not theoretically.
+
 ### Added
 - **The commands on the website have a Copy button.** A command is there to be
   run, which means it is there to be copied, and the brew block is three lines
