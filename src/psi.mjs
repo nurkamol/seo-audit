@@ -11,10 +11,7 @@
 //
 // A key is optional but raises the quota well above the anonymous limit. Set
 // PSI_API_KEY, or put it in ~/.config/seo-audit/.env — never in the repo.
-import { readFileSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { matchGlob } from './config.mjs';
+import { matchGlob, readSecret } from './config.mjs';
 
 const ENDPOINT = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
 
@@ -34,11 +31,9 @@ const CWV = {
 };
 
 export function findKey() {
-  if (process.env.PSI_API_KEY) return process.env.PSI_API_KEY;
-  const dotfile = join(homedir(), '.config', 'seo-audit', '.env');
-  if (!existsSync(dotfile)) return null;
-  const match = readFileSync(dotfile, 'utf8').match(/^\s*PSI_API_KEY\s*=\s*(\S+)/m);
-  return match?.[1] ?? null;
+  // Shared with the Search Console credentials rather than copied. The copy
+  // this file did not have was broken for months without anything noticing.
+  return readSecret('PSI_API_KEY');
 }
 
 async function run(url, strategy, key) {

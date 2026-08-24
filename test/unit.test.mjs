@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { attr, bodyKind, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
-import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
+import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite, readSecret } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
@@ -3571,4 +3571,29 @@ test('twitter-image-broken stays quiet where it should', async () => {
       url.startsWith('http://') ? { status: 301, location: url.replace('http://', 'https://') } : { status: 200 },
   );
   assert.ok(!redirected.includes('twitter-image-broken'));
+});
+
+// One secret loader, because there were two and one of them was broken.
+//
+// `console.mjs` built its pattern with `new RegExp` and a template literal,
+// where `\\s` survives as an escaped backslash rather than as whitespace. It
+// compiled, it never threw, and it could not match a line of a real `.env` —
+// so Search Console's dotfile fallback had never worked. Nothing said so,
+// because its only tests injected credentials and used a fake API. This is the
+// half of `--search-console` that can be proven without a Google account.
+test('readSecret reads a dotfile line, and the environment beats it', () => {
+  const dotfile = () => 'PSI_API_KEY=abc123\n  GSC_CLIENT_ID = xyz.apps.googleusercontent.com \n# a comment\n';
+
+  assert.equal(readSecret('PSI_API_KEY', {}, dotfile), 'abc123');
+  // Whitespace either side of the name and the `=` is normal in a hand-edited
+  // file, and was the case the broken pattern claimed to handle.
+  assert.equal(readSecret('GSC_CLIENT_ID', {}, dotfile), 'xyz.apps.googleusercontent.com');
+  assert.equal(readSecret('PSI_API_KEY', { PSI_API_KEY: 'from-env' }, dotfile), 'from-env');
+  assert.equal(readSecret('GSC_CLIENT_SECRET', {}, dotfile), null);
+
+  // No file at all is not an error, it is an unconfigured machine.
+  assert.equal(readSecret('PSI_API_KEY', {}, () => { throw new Error('ENOENT'); }), null);
+
+  // A name that is a prefix of another must not match it.
+  assert.equal(readSecret('PSI_API', {}, dotfile), null);
 });

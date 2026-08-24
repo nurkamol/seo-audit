@@ -3,6 +3,24 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Search Console could never read its credentials from the dotfile.** It had
+  its own copy of the loader that `psi.mjs` uses, and its copy built the pattern
+  with `new RegExp` and a template literal, where `\\s` survives as an escaped
+  backslash rather than as whitespace. The regex compiled to
+  `/^\\s*GSC_CLIENT_ID\\s*=.../m` — a literal backslash followed by `s` — so it
+  could not match a line of a real `.env`. It never threw. Only environment
+  variables ever worked.
+
+  Nothing caught it because the only tests for that path injected credentials
+  and used a fake API, which is exactly what "never run against the live API"
+  hides. There is now one loader in `config.mjs` that both callers use, and it
+  is tested against a dotfile with the whitespace a hand-edited file actually
+  has — including a name that is a prefix of another, which the broken pattern
+  would also have got wrong.
+
 ## [1.32.0] — 2026-08-24
 
 ### Added

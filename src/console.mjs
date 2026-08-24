@@ -9,23 +9,17 @@
 // Opt-in, and the only thing in this tool that needs an account. Credentials
 // are read the way the PageSpeed key is — the environment first, then
 // ~/.config/seo-audit/.env — and never from the repository.
-import { readFileSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { readSecret } from './config.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://searchconsole.googleapis.com/webmasters/v3/sites';
 
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
-/** One credential, environment first. */
-export function findCredential(name, env = process.env, read = readFileSync) {
-  if (env[name]) return env[name];
-  const dotfile = join(homedir(), '.config', 'seo-audit', '.env');
-  if (!existsSync(dotfile)) return null;
-  const match = read(dotfile, 'utf8').match(new RegExp(`^\\\\s*${name}\\\\s*=\\\\s*(\\\\S+)`, 'm'));
-  return match?.[1] ?? null;
-}
+/** One credential, environment first. The loader is shared with the PageSpeed
+ *  key: this file had its own copy, and its copy could not read the dotfile at
+ *  all. */
+export const findCredential = readSecret;
 
 /** All three, or a sentence saying which is missing. */
 export function credentials(env = process.env) {

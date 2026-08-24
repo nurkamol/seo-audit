@@ -22,6 +22,34 @@
 //     ]
 //   }
 import { readFileSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+/**
+ * One secret, environment first, then `~/.config/seo-audit/.env`.
+ *
+ * Deliberately outside this repository, which is public. There were two copies
+ * of this — one in `psi.mjs`, one in `console.mjs` — and the second built its
+ * pattern with `new RegExp` and a template literal, where `\\\\s` survives as an
+ * escaped backslash rather than as whitespace. It compiled, it never threw, and
+ * it could not match a single line of a real `.env`. Search Console's dotfile
+ * fallback had therefore never worked, and nothing said so because the only
+ * tests it had used a fake API and injected credentials.
+ */
+export function readSecret(name, env = process.env, read = readFileSync) {
+  if (env[name]) return env[name];
+  let text;
+  try {
+    // A missing file and an unreadable one are the same answer, and catching
+    // beats an `existsSync` guard: it is one syscall rather than two, it closes
+    // the gap between the two calls, and it lets a test hand in its own reader
+    // without the real filesystem deciding whether the test runs.
+    text = read(join(homedir(), '.config', 'seo-audit', '.env'), 'utf8');
+  } catch {
+    return null;
+  }
+  return text.match(new RegExp(`^\\s*${name}\\s*=\\s*(\\S+)`, 'm'))?.[1] ?? null;
+}
 
 const FILENAMES = ['seo-audit.config.json', '.seo-audit.json'];
 
