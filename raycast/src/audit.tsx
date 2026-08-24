@@ -9,11 +9,28 @@
 // then by how much of the site points at it.
 
 import { useEffect, useState } from "react";
-import { Action, ActionPanel, Color, Icon, List, LaunchProps, getPreferenceValues } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Color,
+  Icon,
+  List,
+  LaunchProps,
+  getPreferenceValues,
+} from "@raycast/api";
 
-import { audit } from "../../src/audit.mjs";
-import { causePayload } from "../../src/causes.mjs";
-import { causeRows, crawlOptions, normalise, summaryLine } from "../lib/present.mjs";
+import {
+  audit,
+  causePayload,
+  type CrawlOptions,
+  type Report,
+} from "../lib/engine";
+import {
+  causeRows,
+  crawlOptions,
+  normalise,
+  summaryLine,
+} from "../lib/present.mjs";
 
 const TONE: Record<string, { icon: Icon; tint: Color }> = {
   error: { icon: Icon.XMarkCircle, tint: Color.Red },
@@ -21,12 +38,14 @@ const TONE: Record<string, { icon: Icon; tint: Color }> = {
   info: { icon: Icon.Info, tint: Color.Blue },
 };
 
-export default function Command(props: LaunchProps<{ arguments: { site: string } }>) {
+export default function Command(
+  props: LaunchProps<{ arguments: { site: string } }>,
+) {
   return <Report site={normalise(props.arguments.site) ?? ""} />;
 }
 
 export function Report({ site }: { site: string }) {
-  const [report, setReport] = useState<any>(null);
+  const [report, setReport] = useState<Report | null>(null);
   const [progress, setProgress] = useState("Starting…");
   const [working, setWorking] = useState(true);
   const [failed, setFailed] = useState<string | null>(null);
@@ -43,17 +62,25 @@ export function Report({ site }: { site: string }) {
         const options = crawlOptions(getPreferenceValues());
         const { findings, meta } = await audit(site, {
           ...options,
-          onProgress: (event: any) => {
+          onProgress: (
+            event: Parameters<NonNullable<CrawlOptions["onProgress"]>>[0],
+          ) => {
             if (cancelled) return;
             // The same events the terminal prints, said shorter.
-            if (event.phase === "crawl" && event.url) setProgress(`Reading ${new URL(event.url).pathname}`);
+            if (event.phase === "crawl" && event.url)
+              setProgress(`Reading ${new URL(event.url).pathname}`);
             else if (event.detail) setProgress(event.detail);
           },
         });
         if (cancelled) return;
-        setReport({ meta, findings, causes: causePayload(findings, meta.pages) });
+        setReport({
+          meta,
+          findings,
+          causes: causePayload(findings, meta.pages),
+        });
       } catch (error) {
-        if (!cancelled) setFailed(error instanceof Error ? error.message : String(error));
+        if (!cancelled)
+          setFailed(error instanceof Error ? error.message : String(error));
       } finally {
         if (!cancelled) setWorking(false);
       }
@@ -81,7 +108,11 @@ export function Report({ site }: { site: string }) {
       )}
 
       {!working && failed && (
-        <List.EmptyView icon={Icon.XMarkCircle} title="The audit stopped" description={failed} />
+        <List.EmptyView
+          icon={Icon.XMarkCircle}
+          title="The audit stopped"
+          description={failed}
+        />
       )}
 
       {!working && !failed && rows.length === 0 && (
@@ -93,19 +124,33 @@ export function Report({ site }: { site: string }) {
       )}
 
       {areas.map((area) => (
-        <List.Section key={area} title={area} subtitle={area === areas[0] ? summaryLine(report) : undefined}>
+        <List.Section
+          key={area}
+          title={area}
+          subtitle={area === areas[0] ? summaryLine(report) : undefined}
+        >
           {rows
             .filter((row) => row.area === area)
             .map((row) => (
               <List.Item
                 key={row.id}
-                icon={{ source: TONE[row.tone]?.icon ?? Icon.Dot, tintColor: TONE[row.tone]?.tint ?? Color.SecondaryText }}
+                icon={{
+                  source: TONE[row.tone]?.icon ?? Icon.Dot,
+                  tintColor: TONE[row.tone]?.tint ?? Color.SecondaryText,
+                }}
                 title={row.title}
                 subtitle={row.subtitle}
-                accessories={[{ text: String(row.pages.length), icon: Icon.Document }]}
+                accessories={[
+                  { text: String(row.pages.length), icon: Icon.Document },
+                ]}
                 actions={
                   <ActionPanel>
-                    {row.pages[0] && <Action.OpenInBrowser title="Open First Page" url={row.pages[0]} />}
+                    {row.pages[0] && (
+                      <Action.OpenInBrowser
+                        title="Open First Page"
+                        url={row.pages[0]}
+                      />
+                    )}
                     <Action.CopyToClipboard
                       title="Copy Affected Pages"
                       content={row.pages.join("\n")}
@@ -116,7 +161,7 @@ export function Report({ site }: { site: string }) {
                       shortcut={{ modifiers: ["cmd"], key: "." }}
                     />
                     <Action.CopyToClipboard
-                      title="Copy Whole Report as Json"
+                      title="Copy Whole Report as JSON"
                       content={JSON.stringify(report, null, 2)}
                       shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
                     />

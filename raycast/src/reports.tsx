@@ -12,11 +12,18 @@
 import { useEffect, useState } from "react";
 import { Action, ActionPanel, Color, Icon, List, open } from "@raycast/api";
 
-import { causePayload } from "../../src/causes.mjs";
-import { appIsInstalled, causeRows, keptReports, readReport, summaryLine } from "../lib/present.mjs";
+import { causePayload } from "../lib/engine";
+import type { KeptReport } from "../lib/present.mjs";
+import {
+  appIsInstalled,
+  causeRows,
+  keptReports,
+  readReport,
+  summaryLine,
+} from "../lib/present.mjs";
 
 export default function Command() {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<KeptReport[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,7 +57,11 @@ export default function Command() {
           accessories={[{ date: row.when }]}
           actions={
             <ActionPanel>
-              <Action.Push title="Open" icon={Icon.Eye} target={<Kept row={row} />} />
+              <Action.Push
+                title="Open"
+                icon={Icon.Eye}
+                target={<Kept row={row} />}
+              />
               {appIsInstalled() && (
                 <Action
                   title="Open in Seo Audit"
@@ -58,7 +69,7 @@ export default function Command() {
                   onAction={() => open("/Applications/SEO Audit.app")}
                 />
               )}
-              <Action.ShowInFinder title="Show the Json" path={row.path} />
+              <Action.ShowInFinder title="Show the JSON" path={row.path} />
               <Action.CopyToClipboard title="Copy Path" content={row.path} />
             </ActionPanel>
           }
@@ -69,18 +80,26 @@ export default function Command() {
 }
 
 /// One kept run, grouped the way every other front end groups it.
-function Kept({ row }: { row: any }) {
+function Kept({ row }: { row: KeptReport }) {
   const stored = readReport(row.path);
   // The grouping is recomputed rather than trusted from the file: a report
   // written before `causes` travelled with it still opens, which is the point
   // of keeping the engine's exact JSON rather than this app's idea of it.
   const report = stored
-    ? { ...stored, causes: stored.causes ?? causePayload(stored.findings ?? [], stored.meta?.pages ?? 0) }
+    ? {
+        ...stored,
+        causes:
+          stored.causes ??
+          causePayload(stored.findings ?? [], stored.meta?.pages ?? 0),
+      }
     : null;
   const causes = causeRows(report);
 
   return (
-    <List navigationTitle={row.host} searchBarPlaceholder="Filter what to change">
+    <List
+      navigationTitle={row.host}
+      searchBarPlaceholder="Filter what to change"
+    >
       {!report && (
         <List.EmptyView
           icon={Icon.XMarkCircle}
@@ -92,17 +111,40 @@ function Kept({ row }: { row: any }) {
         <List.Item
           key={cause.id}
           icon={{
-            source: cause.tone === "error" ? Icon.XMarkCircle : cause.tone === "warn" ? Icon.ExclamationMark : Icon.Info,
-            tintColor: cause.tone === "error" ? Color.Red : cause.tone === "warn" ? Color.Orange : Color.Blue,
+            source:
+              cause.tone === "error"
+                ? Icon.XMarkCircle
+                : cause.tone === "warn"
+                  ? Icon.ExclamationMark
+                  : Icon.Info,
+            tintColor:
+              cause.tone === "error"
+                ? Color.Red
+                : cause.tone === "warn"
+                  ? Color.Orange
+                  : Color.Blue,
           }}
           title={cause.title}
           subtitle={cause.subtitle}
-          accessories={[{ text: String(cause.pages.length), icon: Icon.Document }]}
+          accessories={[
+            { text: String(cause.pages.length), icon: Icon.Document },
+          ]}
           actions={
             <ActionPanel>
-              {cause.pages[0] && <Action.OpenInBrowser title="Open First Page" url={cause.pages[0]} />}
-              <Action.CopyToClipboard title="Copy Affected Pages" content={cause.pages.join("\n")} />
-              <Action.CopyToClipboard title="Copy Summary" content={summaryLine(report)} />
+              {cause.pages[0] && (
+                <Action.OpenInBrowser
+                  title="Open First Page"
+                  url={cause.pages[0]}
+                />
+              )}
+              <Action.CopyToClipboard
+                title="Copy Affected Pages"
+                content={cause.pages.join("\n")}
+              />
+              <Action.CopyToClipboard
+                title="Copy Summary"
+                content={summaryLine(report)}
+              />
             </ActionPanel>
           }
         />

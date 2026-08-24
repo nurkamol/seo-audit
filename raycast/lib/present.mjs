@@ -44,8 +44,15 @@ export function normalise(text) {
   }
 }
 
+/**
+ * @typedef {{ id: string, title: string, subtitle: string, tone: string }} Row
+ * @typedef {{ id: string, title: string, subtitle: string, tone: string,
+ *             area: string, pages: string[], checkId: string }} CauseRow
+ */
+
 /** A preview, as rows. Refusals come first and say what to do, because a
- *  preview that cannot answer is more useful than one that guesses. */
+ *  preview that cannot answer is more useful than one that guesses.
+ *  @returns {Row[]} */
 export function previewRows(plan) {
   if (!plan) return [];
   if (!plan.reachable) {
@@ -94,7 +101,8 @@ export function previewRows(plan) {
   return rows;
 }
 
-/** The work, worst first — the engine's own ordering, untouched. */
+/** The work, worst first — the engine's own ordering, untouched.
+ *  @returns {CauseRow[]} */
 export function causeRows(report) {
   if (!report?.causes) return [];
   return report.causes.map((cause) => ({

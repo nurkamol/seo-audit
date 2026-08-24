@@ -7,11 +7,19 @@
 // actually has before spending the minutes.
 
 import { useEffect, useState } from "react";
-import { Action, ActionPanel, Color, Icon, List, getPreferenceValues } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Color,
+  Icon,
+  List,
+  getPreferenceValues,
+} from "@raycast/api";
 
 // The engine itself. Not a copy of it, not a description of it — the same
 // module `bin/seo-audit.mjs` and `worker/index.mjs` import.
-import { preview } from "../../src/audit.mjs";
+import { preview, type Plan } from "../lib/engine";
+import { Report as AuditReport } from "./audit";
 import { crawlOptions, normalise, previewRows } from "../lib/present.mjs";
 
 const TONE: Record<string, { icon: Icon; tint: Color }> = {
@@ -23,7 +31,7 @@ const TONE: Record<string, { icon: Icon; tint: Color }> = {
 
 export default function Command() {
   const [text, setText] = useState("");
-  const [plan, setPlan] = useState<any>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
   const [working, setWorking] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -80,15 +88,29 @@ export default function Command() {
       )}
 
       {site && failed && (
-        <List.EmptyView icon={Icon.XMarkCircle} title="Could not look" description={failed} />
+        <List.EmptyView
+          icon={Icon.XMarkCircle}
+          title="Could not look"
+          description={failed}
+        />
       )}
 
       {rows.length > 0 && (
-        <List.Section title={plan?.origin ?? site ?? ""} subtitle={plan?.sitemap ?? undefined}>
+        <List.Section
+          title={plan?.origin ?? site ?? ""}
+          subtitle={plan?.sitemap ?? undefined}
+        >
           {rows.map((row) => (
             <List.Item
               key={row.id}
-              icon={TONE[row.tone] ? { source: TONE[row.tone].icon, tintColor: TONE[row.tone].tint } : Icon.Dot}
+              icon={
+                TONE[row.tone]
+                  ? {
+                      source: TONE[row.tone].icon,
+                      tintColor: TONE[row.tone].tint,
+                    }
+                  : Icon.Dot
+              }
               title={row.title}
               subtitle={row.subtitle}
               actions={
@@ -100,9 +122,15 @@ export default function Command() {
                       target={<AuditFrom site={site} />}
                     />
                   )}
-                  <Action.CopyToClipboard title="Copy Line" content={`${row.title} — ${row.subtitle}`} />
+                  <Action.CopyToClipboard
+                    title="Copy Line"
+                    content={`${row.title} — ${row.subtitle}`}
+                  />
                   {plan?.sitemap && (
-                    <Action.OpenInBrowser title="Open Sitemap" url={plan.sitemap} />
+                    <Action.OpenInBrowser
+                      title="Open Sitemap"
+                      url={plan.sitemap}
+                    />
                   )}
                 </ActionPanel>
               }
@@ -114,8 +142,9 @@ export default function Command() {
   );
 }
 
-/// Pushed from a preview, so the site does not have to be typed twice.
+/// Pushed from a preview, so the site does not have to be typed twice. A plain
+/// import rather than `require()` inside the component: this is an ES module,
+/// and audit.tsx does not import back, so there is no cycle to work around.
 function AuditFrom({ site }: { site: string }) {
-  const Audit = require("./audit").Report;
-  return <Audit site={site} />;
+  return <AuditReport site={site} />;
 }

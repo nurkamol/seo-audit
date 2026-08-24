@@ -75,11 +75,22 @@ The components are thin over it on purpose: what can be wrong quietly is a
 preference that parses to `NaN` pages, a library row pointing at a file that is
 gone, or a refusal drawn as a result, and all three are in the tested half.
 
-## What has not been run
+## Types
 
-Honestly: the React surface. Building a Raycast extension needs `@raycast/api`
-installed and the Raycast CLI, and nothing here has been through `ray build`.
-The engine path, the preferences, the row-building and the library reading have
-all been exercised against real sites and real files; the components have been
-written and not launched. First person to run `npm run dev` should expect to
-find something.
+`lib/engine.ts` is the only place that says what the engine returns. The engine
+is plain ESM with no declarations and stays that way — the command line's whole
+premise is that it runs under `npx` with nothing installed, and emitting types
+would mean a build step. TypeScript infers something from the JavaScript and
+what it infers is narrower than the truth, so that file widens it, once.
+
+It ends in three assertions rather than annotations, and the reason is written
+there: `level` is one of exactly three strings — every `f('warn', …)` in
+`src/checks.mjs` passes a literal — but TypeScript reading plain JavaScript can
+only see `string`. The narrow type is true and unprovable from here. The
+alternative is `string` everywhere, re-narrowed at every icon lookup in every
+component: one honest assertion traded for several dishonest ones. What keeps it
+from rotting is `test/raycast.test.mjs`, which runs against the real engine
+rather than against the types.
+
+`lib/present.d.mts` does the same for `present.mjs`, which stays `.mjs` so
+`node --test` can run it.

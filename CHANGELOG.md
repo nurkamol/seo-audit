@@ -82,6 +82,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   arrangement `worker/` has with Wrangler. `raycast/` is absent from `files` in
   `package.json`, so the npx payload is still just the CLI.
 
+  **It builds and lints.** `ray build` and `ray lint` both pass, which is more
+  than could be said when it was written: the first build found seven type
+  errors, a `require()` sitting inside a component in an ES module, and a type
+  imported under the same name as a component declared beside it. The fix was
+  `lib/engine.ts` — one place that says what the engine returns, rather than a
+  cast at each call site where four components would each hold their own opinion
+  and three would go out of date.
+
 ## [1.28.0] — 2026-08-24
 
 ### Added
