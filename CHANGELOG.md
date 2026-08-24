@@ -5,6 +5,45 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.30.0] — 2026-08-24
+
+### Added
+- **The Raycast extension reaches every flag that shapes a run, and writes every
+  format the engine can.** It shipped in 1.29.0 sending three options of about
+  twelve and offering no file export at all, while the engine sitting next to it
+  had `html()`, `markdown()`, `csv()` and a sitemap rebuilder. That is a demo of
+  a front end rather than one.
+
+  Preferences now carry the **sitemap override**, **exclude patterns**,
+  **`--since`**, the **browser and system menus**, a **user agent of your own**,
+  **PageSpeed** with its sample and strategy, and the **silenced-check list**.
+  Anything left at its default is left out rather than sent, so the engine's
+  defaults stay written down in the engine — the same rule the macOS app's
+  settings follow.
+
+  **Export on `⌘E`** writes HTML, Markdown, CSV, JSON or the corrected sitemap
+  to Downloads through the engine's own writers, so a file exported from a
+  launcher and one written by `seo-audit --csv` are the same file. The run asks
+  for the sitemap while it still can: rebuilding one needs the status, robots
+  directive and canonical of every page, and none of that survives the crawl.
+  When the engine refuses to build one — a crawl that did not see the whole
+  site — the refusal is shown rather than a file that would delete pages from
+  somebody's site.
+
+  Checked against a real run rather than argued: six pages of jekyllrb.com, six
+  findings silenced by the ignore preference, four formats written, and the
+  sitemap refused with *"run again with `--limit 210`"* carried through intact.
+
+  The browser and system menus are the second thing the extension duplicates —
+  a dropdown in a static manifest cannot read `src/agents.mjs` at runtime — so
+  they are generated from it and guarded by a test, like the three named speeds
+  already were. `raycast/README.md` lists what is **not** reachable and why, the
+  way `src/options.mjs` does for the window.
+
+  `bin/`, `src/`, `action.yml`, `worker/` and `mac/` are byte for byte what
+  1.29.0 shipped. Nothing reaches an npx or Homebrew user from this release.
+
+
 ## [1.29.0] — 2026-08-24
 
 ### Added
