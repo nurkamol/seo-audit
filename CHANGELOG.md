@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.31.0] — 2026-08-24
 
 ### Added
 - **The engine is published to npm as `seo-audit`.** Not for its own sake: a
@@ -60,12 +60,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   extension imports the engine from outside its own folder, and a Store
   submission contains that folder alone.
 
-### Changed
 - **The app screenshot on the website is the app that exists.** It was twelve
   commits stale — 1.24.0, before the **Preview** button, the **Compare** menu,
   the sitemap export and the real logo, none of which a visitor could see. It is
   a 25-page run of jekyllrb.com now: 171 findings as 55 things to change, with
   the counts, the cause cards and both menus in frame.
+
 
 ## [1.30.0] — 2026-08-24
 

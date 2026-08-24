@@ -56,5 +56,21 @@ jobs:
       - name: What is about to be published
         run: npm pack --dry-run
 
+      # The first release of a package cannot use trusted publishing, because
+      # the trust is configured against a package that already exists. So the
+      # first one is published by hand and its tag arrives here after the fact.
+      # Failing on that would mean a red run for a release that shipped fine.
+      - name: Is this version already on the registry
+        id: already
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          if npm view "seo-audit@$pkg" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::seo-audit@$pkg is already on the registry — nothing to do"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
+        if: steps.already.outputs.published == 'false'
         run: npm publish --provenance --access public

@@ -241,7 +241,7 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.77.0",
-    "seo-audit": "^1.30.0"
+    "seo-audit": "^1.31.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.11",

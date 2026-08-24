@@ -8,7 +8,7 @@
 //
 // A symlink in raycast/node_modules pointing at this repository is the whole
 // fix. It costs no network, works on a fresh clone and in CI, and leaves
-// raycast/package.json saying `^1.30.0` — which is what the Store needs to see.
+// raycast/package.json saying `^1.31.0` — which is what the Store needs to see.
 //
 // Run by `pretest`, so the tests can never quietly stop covering the extension.
 
