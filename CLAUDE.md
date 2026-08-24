@@ -55,7 +55,7 @@ read as its `src`.
 | `src/psi.mjs` | PageSpeed Insights |
 | `src/baseline.mjs` | Serialise and diff runs |
 | `src/report.mjs` | Terminal, Markdown, HTML, the baseline diff view, and the portfolio table |
-| `raycast/` | The Raycast extension. Imports `audit` and `preview`; `@raycast/api` is its dependency and nobody else's |
+| `raycast/` | The Raycast extension. Imports the engine as `@nurkamol/seo-audit`, never `../../src` — a Store submission is that folder and nothing above it. `npm test` symlinks the package so a checkout still builds. After touching anything in there run `npm run lint` **in that folder**: `npm test` does not, and `ray publish` refuses on a Prettier complaint the build is happy with |
 | `worker/index.mjs` | The optional hosted front end. Imports `audit` and `html`; re-implements nothing. Web-standard APIs only, so `node --test` can run it |
 
 ## Adding a check
