@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { attr, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
+import { attr, bodyKind, parseHtml, parseSitemap, countWords } from '../src/parse.mjs';
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
@@ -3464,4 +3464,56 @@ test('an ignore rule for the retired og-missing still silences all three', () =>
   // them: a site that deliberately ships no og:image can silence that alone.
   const [rest] = applyIgnores(findings, ['og-image-missing']);
   assert.deepEqual(ids(rest), ['og-title-missing', 'og-description-missing', 'thin-content']);
+});
+
+// A URL the server calls HTML that is not HTML.
+//
+// fitculturepilates.com serves an XML document at /locations.kml with
+// `Content-Type: text/html`. The crawl believed the header, parsed it as a
+// page, and reported thirteen things — no title, no h1, no viewport, no
+// charset, thin content, three missing Open Graph tags. All true about a
+// document that was never a page, and none of them the thing to fix.
+test('XML served as text/html is reported once, not as a broken page', () => {
+  const res = {
+    ok: true, status: 200, ms: 5,
+    headers: new Headers({ 'content-type': 'text/html; charset=UTF-8' }),
+  };
+  const xml = '<?xml version="1.0"?><urlset><url><loc>https://a.test/</loc></url></urlset>';
+  const found = pageChecks({ url: 'https://x.test/locations.kml', res, html: xml, doc: null });
+
+  assert.deepEqual(ids(found), ['body-not-html']);
+  assert.match(found[0].title, /body is XML/);
+});
+
+test('body-not-html stays quiet on everything that is not that', () => {
+  const asHtml = (body) => ({
+    url: 'https://x.test/p/',
+    res: { ok: true, status: 200, ms: 5, headers: new Headers({ 'content-type': 'text/html' }) },
+    html: body,
+    doc: null,
+  });
+
+  // XHTML opens with an XML prologue and is HTML. Firing here would silence
+  // every real check on a real page, which is far worse than the noise this
+  // removes.
+  const xhtml = '<?xml version="1.0"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head></head></html>';
+  assert.equal(bodyKind(xhtml), null);
+  assert.deepEqual(ids(pageChecks(asHtml(xhtml))), []);
+
+  // A fragment with no <html> wrapper is still HTML.
+  assert.equal(bodyKind('<div>a fragment</div>'), null);
+  // A byte-order mark before the doctype is still HTML.
+  assert.equal(bodyKind('\ufeff<!DOCTYPE html><html></html>'), null);
+  // Something that merely starts with a brace is not JSON.
+  assert.equal(bodyKind('{not json at all'), null);
+
+  // And a PDF correctly labelled as one raises nothing: the mismatch is the
+  // finding, not the file type.
+  const pdf = {
+    url: 'https://x.test/a.pdf',
+    res: { ok: true, status: 200, ms: 5, headers: new Headers({ 'content-type': 'application/pdf' }) },
+    html: '%PDF-1.7',
+    doc: null,
+  };
+  assert.deepEqual(ids(pageChecks(pdf)), []);
 });

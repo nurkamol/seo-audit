@@ -12,7 +12,7 @@
 
 import { linkGraph, key as graphKey } from './graph.mjs';
 
-import { attr, stripMarkupInAttributes } from './parse.mjs';
+import { attr, bodyKind, stripMarkupInAttributes } from './parse.mjs';
 import { cluster } from './dupes.mjs';
 
 // Defaults, overridable per site under `limits` in the config file. A
@@ -264,6 +264,23 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     out.push(f('error', 'page-status', 'Page did not return 200',
       res.error ? `Request failed: ${res.error}` : `HTTP ${res.status}`, url));
     return out;
+  }
+  // A URL the server calls HTML that is not HTML. The body was already read, so
+  // this costs no request — and it matters, because Google indexes whatever
+  // comes back under `text/html` as a page.
+  //
+  // Raised *instead of* the page checks below, not alongside them. A sitemap
+  // listing an XML file labelled text/html was reported for having no title, no
+  // h1, no viewport, no charset, thin content and three missing Open Graph tags
+  // — thirteen true statements about a document that was never a page, and not
+  // one of them the thing to fix.
+  if (!doc && res.ok) {
+    const kind = bodyKind(page.html);
+    if (kind && /text\/html/i.test(res.headers?.get?.('content-type') ?? '')) {
+      out.push(f('warn', 'body-not-html', `Served as HTML, but the body is ${kind}`,
+        'The server sends Content-Type: text/html, so this is crawled and indexed as a page. ' +
+          'Either serve it with its own content type or take it out of the sitemap.', url));
+    }
   }
   if (!doc) return out;
 

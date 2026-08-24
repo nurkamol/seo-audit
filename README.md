@@ -633,6 +633,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Check | Level |
 |---|---|
 | Page returns 200 and is not a redirect listed in the sitemap | error |
+| The body is actually HTML — an XML or JSON file served as `text/html` is crawled and indexed as a page | warning |
 | A page the server answers `429` to is reported as rate limited, never as a page that failed — the crawl waits, slows down and comes back first | note |
 | `noindex` on a page the sitemap advertises | error |
 | `X-Robots-Tag: noindex` — the same instruction as a header, invisible in the HTML | error |

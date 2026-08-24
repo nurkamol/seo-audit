@@ -1,6 +1,6 @@
 // Orchestration: find the pages, fetch them, run the checks.
 import { Fetcher, mapLimit } from './http.mjs';
-import { parseHtml, parseSitemap } from './parse.mjs';
+import { bodyKind, parseHtml, parseSitemap } from './parse.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
 import { redirectChecks } from './redirects.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
@@ -125,7 +125,8 @@ async function crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups,
         url: final.url,
         res: final,
         html: final.body,
-        doc: final.ok && isHtml ? parseHtml(final.body, final.url) : null,
+        // Same as the sitemap path: the header is a claim, the body is the fact.
+        doc: final.ok && isHtml && !bodyKind(final.body) ? parseHtml(final.body, final.url) : null,
       };
     });
 
@@ -326,7 +327,10 @@ export async function audit(target, opts = {}) {
         url: pageUrl,
         res,
         html: res.body,
-        doc: res.ok && isHtml ? parseHtml(res.body, pageUrl) : null,
+        // `isHtml` is the server's claim; `bodyKind` is what actually came
+        // back. A sitemap that lists an XML file the server labels text/html
+        // otherwise gets parsed as a page and reported for having no h1.
+        doc: res.ok && isHtml && !bodyKind(res.body) ? parseHtml(res.body, pageUrl) : null,
       };
     });
   } else {
@@ -411,7 +415,7 @@ export async function audit(target, opts = {}) {
   let home = null;
   if (!pages.some((p) => p.doc && p.res.ok && new URL(p.url).pathname.replace(/\/$/, '') === '')) {
     const { final } = await fetcher.chain(origin);
-    if (final.ok && /text\/html/i.test(final.headers.get('content-type') ?? '')) {
+    if (final.ok && /text\/html/i.test(final.headers.get('content-type') ?? '') && !bodyKind(final.body)) {
       home = { url: final.url, doc: parseHtml(final.body, final.url) };
     }
   }

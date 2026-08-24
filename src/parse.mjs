@@ -345,3 +345,34 @@ export function parseSitemap(xml) {
 
   return { urls: locs, sitemaps: [], entries };
 }
+
+/**
+ * What a response body actually is, when the server has already claimed it is
+ * HTML. Returns `null` for anything that might be HTML, and a noun for the
+ * cases that provably are not.
+ *
+ * Deliberately conservative — it answers on positive evidence only. A fragment
+ * with no `<html>` wrapper is still HTML; a page behind a byte-order mark is
+ * still HTML; and XHTML opens with `<?xml` and *is* HTML, which is why the
+ * markers are checked before the prologue. Guessing wrong here would silence
+ * every check on a real page, which is a worse failure than the noise it is
+ * meant to remove.
+ */
+export function bodyKind(body) {
+  if (typeof body !== 'string') return null;
+  const head = body.replace(/^﻿/, '').trimStart().slice(0, 2048);
+  if (!head) return null;
+  // Any of these and it is HTML, whatever it opened with.
+  if (/<!doctype\s+html|<html[\s>]|<head[\s>]|<body[\s>]/i.test(head)) return null;
+  if (/^%PDF-/.test(head)) return 'a PDF';
+  if (/^<\?xml[\s?]/i.test(head) || /^<(urlset|sitemapindex|rss|feed|kml|svg)[\s>]/i.test(head)) return 'XML';
+  if (/^[[{]/.test(head)) {
+    try {
+      JSON.parse(body);
+      return 'JSON';
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}

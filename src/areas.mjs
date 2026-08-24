@@ -29,7 +29,7 @@ export const CATEGORIES = [
 const CATEGORY_OF = {
   // Indexability
   noindex: 'Indexability', 'x-robots-noindex': 'Indexability', 'nofollow-page': 'Indexability',
-  'page-status': 'Indexability', unreachable: 'Indexability', 'nothing-crawlable': 'Indexability',
+  'page-status': 'Indexability', 'body-not-html': 'Indexability', unreachable: 'Indexability', 'nothing-crawlable': 'Indexability',
   'crawl-rate-limited': 'Indexability',
   'rate-limited': 'Indexability',
   'canonical-missing': 'Indexability', 'canonical-multiple': 'Indexability',

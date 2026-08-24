@@ -5,6 +5,23 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`body-not-html` — a URL the server calls HTML that is not HTML.** The body
+  is already read, so it costs no request, and it replaces the checks it
+  silences rather than joining them. A real site serves an XML document at
+  `/locations.kml` with `Content-Type: text/html`; the crawl believed the header
+  and reported thirteen things — no title, no h1, no viewport, no charset, thin
+  content, three Open Graph tags — every one of them true about a document that
+  was never a page, and not one of them the thing to fix. Now it is one finding
+  saying what is actually wrong, and the reason it matters: Google indexes
+  whatever comes back under `text/html`.
+
+  It answers on positive evidence only. XHTML opens with an XML prologue and is
+  HTML; a fragment with no `<html>` wrapper is HTML; a byte-order mark before
+  the doctype is HTML; something merely starting with a brace is not JSON. All
+  four are tested, because guessing wrong here would silence every check on a
+  real page — a far worse failure than the noise it removes.
+
 ### Fixed
 - **One row named one Open Graph tag and counted three.** A run against a real
   site printed `Missing og:description ×6` over four pages — three of which were
