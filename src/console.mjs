@@ -138,3 +138,189 @@ export async function searchConsole(origin, findings, opts = {}) {
         'is known, and by how much of the site links to a page where it is not.', origin),
   ];
 }
+
+// --- Getting a refresh token ------------------------------------------------
+//
+// The three variables above were documented for a year and there was never a
+// way to obtain the third one. That is why `--search-console` has never run
+// against the live API: not the code, the paperwork in front of it.
+//
+// Loopback OAuth, which is what Google's own docs call the installed-app flow.
+// A desktop client may redirect to any port on 127.0.0.1 without registering
+// it, so this listens on an ephemeral one, and the browser does the signing in.
+// The token is written to the same file the key lives in and is never printed:
+// a refresh token in a terminal is a refresh token in a scrollback buffer.
+
+import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { randomBytes } from 'node:crypto';
+
+const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+
+export const DOTFILE = join(homedir(), '.config', 'seo-audit', '.env');
+
+/** Where the browser is sent. `prompt=consent` is not politeness: without it
+ *  Google returns no refresh token at all on a second authorisation, which is
+ *  the confusing half of this flow. Read-only scope, because this only ever
+ *  reads. */
+export function authUrl({ clientId, redirectUri, state }) {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: SCOPE,
+    access_type: 'offline',
+    prompt: 'consent',
+    state,
+  });
+  return `${AUTH_URL}?${params}`;
+}
+
+/** The code the browser came back with, traded for the long-lived half. */
+export async function exchangeCode({ clientId, clientSecret, code, redirectUri }, fetcher = fetch) {
+  const res = await fetcher(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.refresh_token) {
+    throw new Error(
+      data.error_description ??
+        data.error ??
+        'Google returned no refresh token. This happens when the account has authorised this ' +
+          'client before — revoke it at myaccount.google.com/permissions and try again.',
+    );
+  }
+  return data;
+}
+
+/** What this account can actually read. Printed after a login because a token
+ *  that works for nothing looks exactly like a token that works. */
+export async function listProperties(token, fetcher = fetch) {
+  const res = await fetcher(API, { headers: { authorization: `Bearer ${token}` } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status} listing properties`);
+  return (data.siteEntry ?? []).map((s) => ({ url: s.siteUrl, permission: s.permissionLevel }));
+}
+
+/** One line rewritten, the rest of the file untouched.
+ *
+ *  Kept pure and exported so it can be tested: this writes to the file holding
+ *  somebody's PageSpeed key, and clobbering that to save a Search Console token
+ *  would be a poor trade. */
+export function upsertSecret(text, name, value) {
+  const line = `${name}=${value}`;
+  const pattern = new RegExp(`^\\s*${name}\\s*=.*$`, 'm');
+  if (pattern.test(text)) return text.replace(pattern, line);
+  return text.length && !text.endsWith('\n') ? `${text}\n${line}\n` : `${text}${line}\n`;
+}
+
+function openBrowser(url) {
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  try {
+    spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const donePage = (heading, body) =>
+  `<!doctype html><meta charset="utf-8"><title>${heading}</title>` +
+  '<style>body{font:16px/1.6 -apple-system,system-ui,sans-serif;margin:20vh auto;max-width:32rem;' +
+  'padding:0 1.5rem;color:#111}h1{font-size:1.25rem;margin:0 0 .5rem}p{color:#555;margin:0}' +
+  '@media(prefers-color-scheme:dark){body{background:#111;color:#eee}p{color:#aaa}}</style>' +
+  `<h1>${heading}</h1><p>${body}</p>`;
+
+/**
+ * Sign in once, and write the refresh token where the audit will look for it.
+ *
+ * Interactive by nature, which is why it is not an Action input: a flag CI can
+ * accept and never satisfy is worse than no flag. The pieces that can be wrong
+ * quietly — the authorisation URL, the token exchange, rewriting a file that
+ * already holds somebody's PageSpeed key — are separate exported functions with
+ * tests. What is left here is a socket and a browser.
+ */
+export async function login({
+  fetcher = fetch,
+  openUrl = openBrowser,
+  onNote = () => {},
+  dotfile = DOTFILE,
+  timeout = 300_000,
+  // Injectable for the same reason the certificate reader is: otherwise the
+  // only way to exercise this is to have real credentials on the machine, and
+  // a test that needs those is a test nobody runs.
+  client,
+} = {}) {
+  const clientId = client?.clientId ?? readSecret('GSC_CLIENT_ID');
+  const clientSecret = client?.clientSecret ?? readSecret('GSC_CLIENT_SECRET');
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'No OAuth client yet. In console.cloud.google.com: enable the Search Console API, then ' +
+        'create an OAuth client of type "Desktop app". Put its two values in ' +
+        `${dotfile} as GSC_CLIENT_ID and GSC_CLIENT_SECRET, and run this again.`,
+    );
+  }
+
+  const state = randomBytes(16).toString('hex');
+  const server = createServer();
+  // Port 0: a desktop client may redirect to any port on the loopback address
+  // without registering it, so nothing here has to be configured or be free.
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const redirectUri = `http://127.0.0.1:${server.address().port}/callback`;
+
+  const code = await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Nothing came back within ${Math.round(timeout / 1000)}s. Nothing was written.`)),
+      timeout,
+    );
+    server.on('request', (req, res) => {
+      const asked = new URL(req.url, redirectUri);
+      if (asked.pathname !== '/callback') {
+        res.writeHead(404).end();
+        return;
+      }
+      const returned = asked.searchParams.get('code');
+      const failed = asked.searchParams.get('error');
+      // The state is the only thing standing between this and a page on the
+      // internet quietly posting a code to a port on the machine.
+      const mismatched = asked.searchParams.get('state') !== state;
+      res.writeHead(failed || !returned || mismatched ? 400 : 200, { 'content-type': 'text/html; charset=utf-8' });
+      if (failed || !returned || mismatched) {
+        res.end(donePage('That did not work', 'Nothing was written. The terminal has the detail.'));
+        clearTimeout(timer);
+        reject(new Error(mismatched ? 'The reply did not match the request this started.' : (failed ?? 'No code came back.')));
+        return;
+      }
+      res.end(donePage('Signed in', 'You can close this tab and go back to the terminal.'));
+      clearTimeout(timer);
+      resolve(returned);
+    });
+
+    const url = authUrl({ clientId, redirectUri, state });
+    onNote(openUrl(url) ? `waiting on ${redirectUri}` : `open this and sign in:\n\n  ${url}\n`);
+  }).finally(() => server.close());
+
+  const granted = await exchangeCode({ clientId, clientSecret, code, redirectUri }, fetcher);
+
+  mkdirSync(dirname(dotfile), { recursive: true });
+  const existing = existsSync(dotfile) ? readFileSync(dotfile, 'utf8') : '';
+  // 0600, and never printed: a refresh token echoed to a terminal is a refresh
+  // token in a scrollback buffer and probably in a shell history file.
+  writeFileSync(dotfile, upsertSecret(existing, 'GSC_REFRESH_TOKEN', granted.refresh_token), { mode: 0o600 });
+
+  // A token that can read nothing looks exactly like a token that works, until
+  // an audit says the property was not found.
+  return { dotfile, properties: await listProperties(granted.access_token, fetcher) };
+}

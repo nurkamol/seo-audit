@@ -253,7 +253,31 @@ nobody has been shown.
 Opt-in, and the only thing in this tool that needs an account. It reads
 `GSC_CLIENT_ID`, `GSC_CLIENT_SECRET` and `GSC_REFRESH_TOKEN` from the
 environment or from `~/.config/seo-audit/.env`, deliberately outside any
-repository. A domain property is named `sc-domain:example.com` rather than by
+repository.
+
+Getting the third one used to be left as an exercise, which is why this had
+never run against the live API. Now:
+
+```bash
+# once, in console.cloud.google.com:
+#   enable the Search Console API, then create an OAuth client of type
+#   "Desktop app", and put its two values in ~/.config/seo-audit/.env
+#     GSC_CLIENT_ID=…apps.googleusercontent.com
+#     GSC_CLIENT_SECRET=…
+
+npx @nurkamol/seo-audit --search-console-login
+```
+
+That opens a browser, you sign in, and the refresh token is written to the same
+file at mode `600`. It is never printed — a token echoed to a terminal is a
+token in a scrollback buffer and probably in a shell history file. The scope is
+read-only. Afterwards it lists the properties the account can actually read,
+because a token that can read nothing looks exactly like one that works, right
+up until an audit reports the property was not found.
+
+Interactive by nature, so it is deliberately **not** a GitHub Action input: a
+flag CI can accept and never satisfy is worse than no flag. In CI, set the
+three variables as secrets. A domain property is named `sc-domain:example.com` rather than by
 its URL. Missing credentials, or a property the account cannot read, are a note
 and the rest of the audit is unaffected.
 

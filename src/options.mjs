@@ -60,6 +60,7 @@ export const OPTIONS = [
 
   // --- not yet, and that is a decision rather than an oversight ------------
   { flag: '--search-console', query: null, app: 'not yet — needs an OAuth client, and has never run against the live API' },
+  { flag: '--search-console-login', query: null, app: 'no — it opens a browser and writes a credential to disk, which is a terminal errand, not a control in a window' },
   { flag: '--against', query: null, app: 'not yet — the window compares two kept runs instead of two live deployments' },
   { flag: '--compare-as', query: null, app: 'not yet — it fetches a sample of pages a second time, and the window has no control for spending that' },
   { flag: '--compare-sample', query: null, app: 'not yet — see --compare-as' },

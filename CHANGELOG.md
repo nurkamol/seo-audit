@@ -5,6 +5,35 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`--search-console-login`.** The three Search Console credentials were
+  documented for a year and there was never a way to obtain the third, which is
+  the actual reason `--search-console` had never run against the live API: not
+  the code, the paperwork in front of it.
+
+  Loopback OAuth, which is what Google calls the installed-app flow — a desktop
+  client may redirect to any port on 127.0.0.1 without registering it, so this
+  listens on an ephemeral one and the browser does the signing in. Read-only
+  scope. The refresh token is written to `~/.config/seo-audit/.env` at mode
+  `600` and never printed, because a token echoed to a terminal is a token in a
+  scrollback buffer. It rewrites that one line and leaves the PageSpeed key
+  alone, which is tested, because clobbering somebody's key to save a token
+  would be a poor trade.
+
+  Then it lists the properties the account can read. A token that can read
+  nothing looks exactly like one that works, right up until an audit says the
+  property was not found.
+
+  Not a GitHub Action input, deliberately: it opens a browser, and a flag CI
+  can accept and never satisfy is worse than no flag. `src/options.mjs` records
+  the same answer for the macOS window.
+
+  The parts that can be wrong quietly are separate exported functions with
+  tests — the authorisation URL, the token exchange, the file rewrite — and the
+  loopback flow itself is exercised end to end with only Google faked,
+  including that a reply carrying the wrong `state` is refused and writes
+  nothing.
+
 ### Fixed
 - **Search Console could never read its credentials from the dotfile.** It had
   its own copy of the loader that `psi.mjs` uses, and its copy built the pattern

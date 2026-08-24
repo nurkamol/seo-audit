@@ -6,6 +6,9 @@ import assert from 'node:assert/strict';
 import { startFixtureSite } from './server.mjs';
 import { audit, preview } from '../src/audit.mjs';
 import { markdown, html } from '../src/report.mjs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 let site;
 let result;
@@ -394,4 +397,86 @@ test('a dead host with an expired certificate is told what is actually wrong', a
   // check says so rather than implying a result.
   assert.doesNotMatch(unknown.findings[0].detail, /certificate is valid/);
   assert.match(healthy.findings[0].detail, /certificate is valid/);
+});
+
+// --- signing in to Search Console -----------------------------------------
+//
+// The flow that made `--search-console` unprovable: the three credentials were
+// documented for a year with no way to obtain the third. The loopback server,
+// the state check and the file write are all exercised here — only Google is
+// faked, because only Google needs an account.
+
+test('the login flow writes a refresh token without disturbing the rest of the file', async () => {
+  const { login, upsertSecret } = await import('../src/console.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'seo-audit-gsc-'));
+  const dotfile = join(dir, '.env');
+  // A file that already holds the PageSpeed key. Clobbering it to save a
+  // Search Console token would be a poor trade.
+  writeFileSync(dotfile, 'PSI_API_KEY=keep-me\n');
+
+  const fetcher = async (url) => {
+    if (String(url).includes('/token')) {
+      return { ok: true, json: async () => ({ refresh_token: 'r3fr3sh', access_token: 'access' }) };
+    }
+    return {
+      ok: true,
+      json: async () => ({ siteEntry: [{ siteUrl: 'sc-domain:example.com', permissionLevel: 'siteOwner' }] }),
+    };
+  };
+
+  const result = await login({
+    fetcher,
+    dotfile,
+    client: { clientId: 'cid', clientSecret: 'secret' },
+    // Stand in for the browser: read the state out of the URL it was handed and
+    // call back the way Google would.
+    openUrl: (url) => {
+      const state = new URL(url).searchParams.get('state');
+      const redirect = new URL(new URL(url).searchParams.get('redirect_uri'));
+      redirect.searchParams.set('code', 'the-code');
+      redirect.searchParams.set('state', state);
+      fetch(redirect).catch(() => {});
+      return true;
+    },
+  });
+
+  assert.deepEqual(result.properties, [{ url: 'sc-domain:example.com', permission: 'siteOwner' }]);
+  const written = readFileSync(dotfile, 'utf8');
+  assert.match(written, /PSI_API_KEY=keep-me/);
+  assert.match(written, /GSC_REFRESH_TOKEN=r3fr3sh/);
+
+  // Rerunning replaces the line rather than appending a second one, or the
+  // file grows a new token on every login and the first one wins on read.
+  assert.equal(
+    upsertSecret(written, 'GSC_REFRESH_TOKEN', 'newer').match(/GSC_REFRESH_TOKEN/g).length,
+    1,
+  );
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('a reply that does not match the request is refused', async () => {
+  const { login } = await import('../src/console.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'seo-audit-gsc-'));
+  const dotfile = join(dir, '.env');
+
+  await assert.rejects(
+    login({
+      dotfile,
+      timeout: 5000,
+      client: { clientId: 'cid', clientSecret: 'secret' },
+      fetcher: async () => ({ ok: true, json: async () => ({}) }),
+      // A page on the internet cannot know the state, and without checking it
+      // this is a port on the machine accepting codes from anywhere.
+      openUrl: (url) => {
+        const redirect = new URL(new URL(url).searchParams.get('redirect_uri'));
+        redirect.searchParams.set('code', 'planted');
+        redirect.searchParams.set('state', 'not-the-state');
+        fetch(redirect).catch(() => {});
+        return true;
+      },
+    }),
+    /did not match the request/,
+  );
+  assert.equal(existsSync(dotfile), false, 'nothing should be written on a refused reply');
+  rmSync(dir, { recursive: true, force: true });
 });

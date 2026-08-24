@@ -82,6 +82,11 @@ const HELP = `
                        GSC_REFRESH_TOKEN in the environment or in
                        ~/.config/seo-audit/.env. A domain property is named
                        "sc-domain:example.com" rather than by its URL
+    --search-console-login
+                       sign in to Google once and write GSC_REFRESH_TOKEN to
+                       ~/.config/seo-audit/.env. Needs GSC_CLIENT_ID and
+                       GSC_CLIENT_SECRET there first, from an OAuth client of
+                       type "Desktop app". Opens a browser; not for CI
     --compare-as <name> fetch a sample of pages a second time as this browser
                        or crawler and report what changed. A page that differs
                        with the reader is cloaking, or bot protection misfiring
@@ -152,6 +157,7 @@ function parseArgs(argv) {
       const next = argv[i + 1];
       opts.serve = next && /^\d+$/.test(next) ? Number(argv[++i]) : true;
     }
+    else if (arg === '--search-console-login') opts.searchConsoleLogin = true;
     else if (arg === '--search-console') {
       // Optionally the property name, since a domain property is not a URL.
       const next = argv[i + 1];
@@ -315,6 +321,37 @@ if (opts.serve !== undefined) {
     process.stdin.on('close', () => process.exit(0));
   }
 } else {
+
+// --- sign in, and stop ----------------------------------------------------
+// Before anything that needs a URL: this takes none. It is the one thing here
+// that is interactive by nature, and the reason `--search-console` had never
+// run against the live API — the three variables were documented and there was
+// no way to obtain the third.
+if (opts.searchConsoleLogin) {
+  const { login } = await import('../src/console.mjs');
+  try {
+    const { dotfile, properties } = await login({
+      onNote: (note) => process.stderr.write(`  ${note}\n`),
+    });
+    process.stdout.write(`\n  Refresh token written to ${dotfile}\n`);
+    if (properties.length) {
+      process.stdout.write('\n  Properties this account can read:\n');
+      for (const p of properties) process.stdout.write(`    ${p.url}  (${p.permission})\n`);
+      process.stdout.write(`\n  Try: seo-audit https://example.com --search-console ${properties[0].url}\n\n`);
+    } else {
+      // A token that can read nothing looks exactly like one that works, right
+      // up until an audit reports the property was not found.
+      process.stdout.write(
+        '\n  This account can read no properties. Verify the site in Search Console first,\n' +
+          '  or sign in as the account that already has it.\n\n',
+      );
+    }
+    process.exit(properties.length ? 0 : 1);
+  } catch (err) {
+    process.stderr.write(`\n  ${err.message}\n\n`);
+    process.exit(1);
+  }
+}
 
 // Nothing to audit. If a person is there to ask, ask; otherwise this is a
 // script or a CI runner and the help text is the right answer.
