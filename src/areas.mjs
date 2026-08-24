@@ -80,7 +80,7 @@ const CATEGORY_OF = {
   // Social
   'og-title-missing': 'Social', 'og-description-missing': 'Social',
   'og-image-missing': 'Social', 'og-webp': 'Social', 'og-no-dimensions': 'Social',
-  'og-image-relative': 'Social', 'og-image-broken': 'Social', 'og-image-heavy': 'Social',
+  'og-image-relative': 'Social', 'og-image-broken': 'Social', 'twitter-image-broken': 'Social', 'og-image-heavy': 'Social',
 
   // Structured data
   'jsonld-invalid': 'Structured data', 'jsonld-no-type': 'Structured data',

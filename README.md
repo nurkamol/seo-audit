@@ -729,6 +729,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No page is linked but missing from the sitemap | warning |
 | The link and image sweeps say so when they stop at their cap rather than implying they checked everything | note |
 | Every `og:image` actually loads, and isn't too heavy to scrape | error / warning |
+| A declared `twitter:image` loads, when it differs from `og:image` — its *absence* is fine, X falls back to Open Graph | error |
 
 ---
 

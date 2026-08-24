@@ -14,17 +14,29 @@ Four things chosen together, one shipped:
 - [x] **`--write-sitemap`** — and it refuses on any crawl that did not see the
       whole site, because a sitemap missing real pages is worse than one listing
       dead ones.
-- [ ] **Publish to public npm.** `seo-audit` is free on the registry, checked.
-      It would make the headline command `npx seo-audit https://example.com`
-      instead of `npx github:nurkamol/seo-audit@v1 …`, and — the better reason —
-      it would ship **115 KB and 27 files** instead of a git clone of the whole
-      tree. The CLI is 388 KB of a repository that is mostly four other front
-      ends: everybody running `npx` today downloads a Swift app's source, a
-      website, a Raycast extension and 341 tests to run a crawler. `files` in
-      `package.json` already declares exactly what should go; npm honours it and
-      a clone cannot. Costs: the name is a permanent commitment, unpublishing is
-      restricted to 72 hours, and it needs an `NPM_TOKEN` and a publish step on
-      tag so it cannot drift from a release.
+- [x] **Publish to public npm** — as `@nurkamol/seo-audit`. npm refused the bare
+      `seo-audit`: too similar to `seoaudit`, an abandoned 2019 package whose
+      description is the words `#### Installation`. The scope is npm's own
+      remedy and the installed binary is still `seo-audit`.
+
+      It ships **115 KB and 27 files** instead of a 16 MB clone — measured, not
+      estimated: `npx github:` fetches a Swift app's source, a website, a
+      Raycast extension and 349 tests to run a crawler. `files` already declared
+      what should go; npm honours it and a clone cannot.
+
+      No `NPM_TOKEN`, which the plan above assumed. npm trusted publishing
+      exchanges GitHub's OIDC identity for permission to publish, so there is no
+      long-lived secret in this repository, and the package carries a provenance
+      attestation pointing at the commit it was built from. The first release
+      had to go up by hand — trust is configured against a package that already
+      exists — so the tag workflow skips a version already on the registry
+      rather than failing.
+
+- [x] **The Raycast extension submitted to the Store** — the reason the npm
+      question stopped being optional. A submission is `extensions/seo-audit/`
+      and nothing above it, so `../../src/audit.mjs` could not come along. PR
+      raycast/extensions#30488, awaiting a maintainer.
+
 - [ ] **Run `--search-console` against a live property** — see below; still the
       one thing here that has never been proven against the real API.
 
@@ -288,6 +300,13 @@ handed 464 findings about navigation that works.
   examined. Every check `h2` can support is a style opinion — "a long page with
   no subheadings" — and `heading-skip` already reports the structural fact. A
   missing `twitter:card` falls back to Open Graph correctly, so reporting its
-  absence would invent a defect. They stay parsed and unread deliberately; that
-  is now a decision rather than an oversight.
+  absence would invent a defect. `h2` stays parsed and unread deliberately; that
+  is a decision rather than an oversight.
+
+  One case this reasoning did not cover, added in 1.32.0: a `twitter:image`
+  that is **declared and does not load**, and differs from `og:image`. Nothing
+  falls back to anything there — the platform handed its own tag previews
+  blank. The rejection was of an *absence*, and a broken declaration is not an
+  absence. The distinction is worth keeping in mind the next time this section
+  is used to close a question.
 - **Ranking or backlink data.** That needs an index and a crawler at a scale this cannot approach. Ahrefs and Search Console already do it, free.

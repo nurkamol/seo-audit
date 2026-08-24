@@ -6,6 +6,18 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`twitter-image-broken` — a declared `twitter:image` that does not load.**
+  The absence of a Twitter card stays unreported and always will: X falls back
+  to Open Graph correctly, so reporting it would invent a defect. This is the
+  opposite case, and the roadmap's rejection of the first did not cover it —
+  nothing falls back to anything when the tag is present and 404s, and the one
+  platform handed its own tag previews blank.
+
+  Only when it differs from `og:image`, so one picture never produces two
+  findings, and only on 404/410/no-answer, because a 403 is hotlink protection
+  working. All four silent cases are tested: same picture, no tag at all, a
+  403, and a redirect to the real file.
+
 - **`body-not-html` — a URL the server calls HTML that is not HTML.** The body
   is already read, so it costs no request, and it replaces the checks it
   silences rather than joining them. A real site serves an XML document at

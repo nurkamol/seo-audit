@@ -710,5 +710,34 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     }
   }
 
+  // twitter:image, and only when it is a different picture from og:image.
+  //
+  // The *absence* of a Twitter card is deliberately not a finding and stays
+  // that way: X falls back to Open Graph correctly, so reporting it would
+  // invent a defect. A twitter:image that is declared and does not load is the
+  // opposite case — nothing falls back to anything, and the one platform that
+  // was handed its own tag previews blank. Same conservatism as above: a 403 is
+  // hotlink protection working.
+  const twitterImages = new Map();
+  for (const page of pages) {
+    const src = page.doc?.twitter?.['twitter:image'];
+    if (!src || !/^(https?:)?\/\//i.test(src)) continue;
+    // Identical to og:image means the sweep above already judged this picture.
+    // Two findings about one file is the noise this project keeps refusing.
+    if (src === page.doc?.og?.['og:image']) continue;
+    twitterImages.set(src, page.url);
+  }
+  const twitterResults = await mapLimit([...twitterImages.keys()], 4, async (src) => {
+    const { final } = await fetcher.chain(src);
+    return { src, final };
+  });
+  for (const { src, final } of twitterResults) {
+    if (final.status === 404 || final.status === 410 || final.status === 0) {
+      out.push(f('error', 'twitter-image-broken', 'twitter:image does not load',
+        `HTTP ${final.status || final.error} for ${src} — it differs from og:image, so X has nothing to fall back to.`,
+        twitterImages.get(src)));
+    }
+  }
+
   return out;
 }

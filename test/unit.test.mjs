@@ -3517,3 +3517,58 @@ test('body-not-html stays quiet on everything that is not that', () => {
   };
   assert.deepEqual(ids(pageChecks(pdf)), []);
 });
+
+// --- twitter:image, only when it is a different picture --------------------
+//
+// The *absence* of a Twitter card stays deliberately unreported: X falls back
+// to Open Graph correctly, so reporting it would invent a defect. A declared
+// twitter:image that does not load is the opposite — nothing falls back to
+// anything, and the platform that was handed its own tag previews blank.
+
+const twSite = (origin, twitter, og) =>
+  bareSite(origin, { twitter: { 'twitter:image': twitter }, og: og ? { 'og:image': og } : {} });
+
+test('a twitter:image that does not load is reported', async () => {
+  const origin = 'https://x.test';
+  const out = await siteChecks(
+    origin,
+    fakeFetcher((url) => (url.endsWith('/tw.png') ? { status: 404 } : notFound(url))),
+    twSite(origin, 'https://x.test/tw.png', 'https://x.test/og.png'),
+    { sitemapUrls: [`${origin}/p/`] },
+  );
+  assert.ok(out.some((f) => f.id === 'twitter-image-broken'));
+});
+
+test('twitter-image-broken stays quiet where it should', async () => {
+  const origin = 'https://x.test';
+  const sweep = async (pages, routes) =>
+    ids(await siteChecks(origin, fakeFetcher(routes), pages, { sitemapUrls: [`${origin}/p/`] }));
+
+  // The same picture as og:image, broken: one finding about one file, from the
+  // sweep that already judged it. Two would be the noise this keeps refusing.
+  const same = await sweep(
+    twSite(origin, 'https://x.test/og.png', 'https://x.test/og.png'),
+    (url) => (url.endsWith('/og.png') ? { status: 404 } : notFound(url)),
+  );
+  assert.ok(same.includes('og-image-broken'));
+  assert.ok(!same.includes('twitter-image-broken'));
+
+  // No twitter:image at all: the fallback to Open Graph is correct behaviour.
+  const absent = await sweep(bareSite(origin, { og: { 'og:image': 'https://x.test/og.png' } }), notFound);
+  assert.ok(!absent.includes('twitter-image-broken'));
+
+  // Hotlink protection is protection working, not a missing file.
+  const forbidden = await sweep(
+    twSite(origin, 'https://x.test/tw.png', 'https://x.test/og.png'),
+    (url) => (url.endsWith('/tw.png') ? { status: 403 } : notFound(url)),
+  );
+  assert.ok(!forbidden.includes('twitter-image-broken'));
+
+  // And one that redirects to the real file loads fine, as with og:image.
+  const redirected = await sweep(
+    twSite(origin, 'http://x.test/tw.png', 'https://x.test/og.png'),
+    (url) =>
+      url.startsWith('http://') ? { status: 301, location: url.replace('http://', 'https://') } : { status: 200 },
+  );
+  assert.ok(!redirected.includes('twitter-image-broken'));
+});
