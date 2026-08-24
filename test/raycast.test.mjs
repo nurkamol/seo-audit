@@ -339,9 +339,13 @@ test('the extension imports nothing above its own folder', () => {
   }
 
   // And what it imports instead has to be declared, or the Store's install
-  // resolves nothing.
+  // resolves nothing. The name is read rather than written down: it changed
+  // once already, when npm refused `seo-audit` as too close to an abandoned
+  // `seoaudit`, and a hardcoded copy here would have passed while the extension
+  // installed nothing.
   const manifest = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
-  assert.ok(manifest.dependencies['seo-audit'], 'the extension must depend on the engine');
+  const engine = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.ok(manifest.dependencies[engine.name], `the extension must depend on ${engine.name}`);
 });
 
 // The `exports` map is the contract the extension installs against: a subpath
@@ -352,15 +356,15 @@ test('every engine subpath the extension imports is exported', async () => {
     readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
   );
   const exported = new Set(
-    Object.keys(engine.exports).map((key) => key.replace(/^\./, 'seo-audit')),
+    Object.keys(engine.exports).map((key) => key.replace(/^\./, engine.name)),
   );
 
   const used = new Set();
   const dir = new URL('../raycast/lib/', import.meta.url);
   for (const name of readdirSync(dir)) {
     const source = readFileSync(new URL(name, dir), 'utf8');
-    for (const [, specifier] of source.matchAll(/from\s+['"](seo-audit[^'"]*)['"]/g)) {
-      used.add(specifier);
+    for (const [, specifier] of source.matchAll(/from\s+['"]([^'".][^'"]*)['"]/g)) {
+      if (specifier === engine.name || specifier.startsWith(engine.name + '/')) used.add(specifier);
     }
   }
 

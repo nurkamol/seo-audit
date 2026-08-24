@@ -64,9 +64,9 @@ jobs:
         id: already
         run: |
           pkg="$(node -p "require('./package.json').version")"
-          if npm view "seo-audit@$pkg" version >/dev/null 2>&1; then
+          if npm view "@nurkamol/seo-audit@$pkg" version >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::seo-audit@$pkg is already on the registry — nothing to do"
+            echo "::notice::@nurkamol/seo-audit@$pkg is already on the registry — nothing to do"
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi

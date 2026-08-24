@@ -13,8 +13,8 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { categoryOf } from 'seo-audit/areas';
-import { userAgentFor } from 'seo-audit/agents';
+import { categoryOf } from '@nurkamol/seo-audit/areas';
+import { userAgentFor } from '@nurkamol/seo-audit/agents';
 
 /** The named speeds the macOS app offers, so the two windows mean the same
  *  thing by "Gentle". The numbers live here once. */

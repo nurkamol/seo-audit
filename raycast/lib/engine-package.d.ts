@@ -11,9 +11,9 @@
 // what the engine returns, and it says so with assertions it explains. Two
 // files describing the same shapes would be two files to keep in step.
 
-declare module "seo-audit";
-declare module "seo-audit/causes";
-declare module "seo-audit/report";
-declare module "seo-audit/sitemap";
-declare module "seo-audit/areas";
-declare module "seo-audit/agents";
+declare module "@nurkamol/seo-audit";
+declare module "@nurkamol/seo-audit/causes";
+declare module "@nurkamol/seo-audit/report";
+declare module "@nurkamol/seo-audit/sitemap";
+declare module "@nurkamol/seo-audit/areas";
+declare module "@nurkamol/seo-audit/agents";

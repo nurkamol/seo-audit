@@ -117,7 +117,7 @@ and a plausible wrong number is worse than no number.
 ## The same engine as everything else
 
 ```ts
-import { preview } from "seo-audit";
+import { preview } from "@nurkamol/seo-audit";
 ```
 
 That one line is the whole architecture. The command line, the GitHub Action,
@@ -144,7 +144,7 @@ screen rather than a preference. `--compare-as` fetches a sample twice.
 repository commits. `--fail-on` needs an exit code a launcher does not have.
 `--search-console` needs an OAuth client and has never run against the live API.
 
-All of them are in the command line: `npx seo-audit example.com`.
+All of them are in the command line: `npx @nurkamol/seo-audit example.com`.
 
 ## Working on it
 

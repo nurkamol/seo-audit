@@ -12,15 +12,19 @@
 //
 // Run by `pretest`, so the tests can never quietly stop covering the extension.
 
-import { mkdirSync, symlinkSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, symlinkSync, rmSync, statSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// The name is read from the manifest rather than written here: it is scoped,
+// because npm refused the bare `seo-audit` as too close to an abandoned
+// `seoaudit`, and a scope is a directory the link has to sit inside.
+const { name } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const modules = join(root, 'raycast', 'node_modules');
-const link = join(modules, 'seo-audit');
+const link = join(modules, ...name.split('/'));
 
-mkdirSync(modules, { recursive: true });
+mkdirSync(dirname(link), { recursive: true });
 
 try {
   // `statSync` follows the link: if it resolves to this repository already,
@@ -32,4 +36,4 @@ try {
 }
 
 symlinkSync(root, link, 'dir');
-console.log('linked raycast/node_modules/seo-audit → the engine in this repository');
+console.log(`linked raycast/node_modules/${name} → the engine in this repository`);

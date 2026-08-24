@@ -6,14 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.31.0] — 2026-08-24
 
 ### Added
-- **The engine is published to npm as `seo-audit`.** Not for its own sake: a
-  Raycast Store submission is the extension folder and nothing above it, so
+- **The engine is published to npm as `@nurkamol/seo-audit`.** Not for its own
+  sake: a Raycast Store submission is the extension folder and nothing above it,
+  so
   `lib/engine.ts` importing `../../src/audit.mjs` was a blocker — it built here
   only because the repository happened to be around it. Copying `src/` into the
   extension would also have built, and would have put a second copy of ninety
   checks in this repository, which is the thing every front end here refuses.
   So the five modules the front ends actually use get named `exports`, and the
   extension depends on the package like anybody else would.
+
+  Scoped because npm refused the bare `seo-audit`: too similar to `seoaudit`,
+  an abandoned 2019 package whose description is the words `#### Installation`.
+  The scope is what npm itself suggests, and it matches how this project is
+  already referenced everywhere else — the repository, the cask, and
+  `uses: nurkamol/seo-audit@v1`. The installed binary is still `seo-audit`.
 
   `npx github:nurkamol/seo-audit` keeps working exactly as before, and there is
   still nothing to install and no build step. Releases publish from a tag with

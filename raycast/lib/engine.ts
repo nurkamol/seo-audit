@@ -16,8 +16,8 @@
 // destructure and none of the ones it reads off `opts` later. The annotations
 // below widen it deliberately.
 
-import { audit as rawAudit, preview as rawPreview } from "seo-audit";
-import { causePayload as rawCausePayload } from "seo-audit/causes";
+import { audit as rawAudit, preview as rawPreview } from "@nurkamol/seo-audit";
+import { causePayload as rawCausePayload } from "@nurkamol/seo-audit/causes";
 
 export type Level = "error" | "warn" | "info";
 
