@@ -231,6 +231,13 @@ export function progressText({ phase, status, ms, url, detail }, origin) {
 // The check is switched off rather than left to fail, and then *said*, because
 // a report that quietly contains two checks fewer than the CLI's is a report
 // that lies by omission. A missing finding reads exactly like a passing one.
+/** Whether this runtime can open the socket a certificate is read over.
+ *
+ *  A missing finding reads exactly like a passing one, so the runtime that
+ *  cannot run a check says so — and the runtime that can must not. `--serve`
+ *  sets this because it is Node; a deployed Worker leaves it unset. */
+export const canReadCertificates = (env) => env.CAN_READ_CERTIFICATES === '1';
+
 const NO_CERTIFICATE_CHECK = {
   level: 'info',
   id: 'tls-not-checked',
@@ -498,12 +505,19 @@ export async function handle(request, env, ctx, deps = {}) {
           ...searchConsoleProperty(url.searchParams, env),
           sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
           userAgent: agentFor(url.searchParams, env),
-          // Switched off rather than left to fail — see NO_CERTIFICATE_CHECK.
-          readCertificateExpiry: async () => null,
+          // Off where there is no socket to read a certificate over, and only
+          // there. This module runs in two places: Cloudflare, which cannot,
+          // and `--serve` under Node, which can — and the macOS window is the
+          // second one. It used to be switched off for both, so the app skipped
+          // a check it was perfectly able to run and then told people the
+          // report "was produced by the hosted version", which it was not.
+          ...(canReadCertificates(env) ? {} : { readCertificateExpiry: async () => null }),
           onProgress: (event) => send('progress', progressText(event, origin)),
           onNote: (note) => send('progress', `note       ${note}`),
         });
-        const all = [...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }];
+        const all = canReadCertificates(env)
+          ? findings
+          : [...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }];
 
         // A native client wants the findings, not a page. The grouping travels
         // with them, from the same causePayload() the CLI's --json calls, so

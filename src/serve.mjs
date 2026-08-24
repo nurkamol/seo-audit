@@ -43,6 +43,11 @@ export async function serve({ port = 4321, host = '127.0.0.1', maxPages, allowed
     // person whose account it is; a deployed Worker leaves this unset, where
     // `?search-console=` would hand a stranger somebody else's traffic data.
     ALLOW_SEARCH_CONSOLE: '1',
+    // This is Node, so `node:tls` works and the certificate checks are real.
+    // Cloudflare leaves this unset and gets the `tls-not-checked` note instead.
+    // The macOS window talks to this server, and was being handed a hosted
+    // runtime's limitation along with a note claiming to be the hosted version.
+    CAN_READ_CERTIFICATES: '1',
   };
 
   const server = createServer(async (incoming, outgoing) => {

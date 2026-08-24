@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   handle, authorized, sameSecret, targetFor, pageLimit, progressText,
-  crawlConcurrency, sitemapOverride, agentFor, idList, psiOptions, searchConsoleProperty,
+  crawlConcurrency, sitemapOverride, agentFor, idList, psiOptions, searchConsoleProperty, canReadCertificates,
 } from '../worker/index.mjs';
 
 const SECRET = 'hunter2-hunter2';
@@ -482,4 +482,22 @@ test('a request cannot name a Search Console property unless the runtime allows 
   }
   assert.deepEqual(searchConsoleProperty(q('sc-domain:' + 'a'.repeat(300)), on), {});
   assert.deepEqual(searchConsoleProperty(q(null), on), {});
+});
+
+// The certificate note belongs to the runtime that cannot run the check, and
+// to nothing else.
+//
+// This module runs in two places: Cloudflare, which has no socket to read a
+// certificate over, and `--serve` under Node, which does. It used to switch the
+// check off for both — so the macOS window, which talks to `--serve`, skipped a
+// check it could perfectly well run and then reported that "this report was
+// produced by the hosted version". A missing finding reads exactly like a
+// passing one, and a note claiming the wrong runtime is worse than either.
+test('only a runtime that cannot read a certificate says so', () => {
+  assert.equal(canReadCertificates({}), false, 'a deployed Worker cannot');
+  assert.equal(canReadCertificates({ ALLOW_PSI: '1' }), false, 'and no other flag grants it');
+  assert.equal(canReadCertificates({ CAN_READ_CERTIFICATES: '1' }), true, '--serve can');
+  // Set, but not to the one value that means yes.
+  assert.equal(canReadCertificates({ CAN_READ_CERTIFICATES: 'true' }), false);
+  assert.equal(canReadCertificates({ CAN_READ_CERTIFICATES: '0' }), false);
 });

@@ -3,6 +3,21 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The macOS app skipped the certificate checks and blamed the hosted
+  version.** `worker/index.mjs` runs in two places — Cloudflare, which has no
+  socket to read a certificate over, and `--serve` under Node, which does — and
+  it switched the check off for both. The window talks to `--serve`, so every
+  report it produced was missing `tls-expiring` and `tls-expired`, above a note
+  reading *"This report was produced by the hosted version"*. It was not.
+
+  Two failures in one: a check quietly not run, which reads exactly like a check
+  that passed, and a note naming a runtime that was not involved. `--serve` now
+  declares that it can read certificates and gets the real check; a deployed
+  Worker leaves it unset and keeps the note it has always deserved.
+
 ## [1.33.0] — 2026-08-24
 
 ### Added
