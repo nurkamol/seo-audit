@@ -193,7 +193,7 @@ brew install --cask seo-audit
 ./mac/build.sh --run
 ```
 
-<p align="center"><img src="docs/shots/app.png" alt="The macOS app showing a report: 25 pages, 169 findings, 50 things to change" width="820"></p>
+<p align="center"><img src="docs/shots/app.png" alt="The macOS app showing a report: 25 pages, 171 findings, 55 things to change" width="820"></p>
 
 SwiftUI throughout, Liquid Glass, and the report drawn natively: cause cards
 that expand into the pages they affect, filtering, search, and export as PDF,
