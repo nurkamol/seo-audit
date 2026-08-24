@@ -35,6 +35,27 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   real page — a far worse failure than the noise it removes.
 
 ### Fixed
+- **A dead site with an expired certificate is told what is actually wrong.**
+  `expired.badssl.com` came back as *"The site did not answer a single request …
+  The TLS connection succeeds but no response arrives … Cloudflare Bot Fight
+  Mode does exactly this."* Both halves were wrong: the TLS connection does not
+  succeed, and the cause is a certificate that ran out in 2015. The site checks
+  that would have named it never run, because the crawl gives up first — and a
+  browser refuses an expired certificate exactly as `fetch` does, so from the
+  crawl's side "nothing answered" and "the certificate lapsed" are the same
+  silence.
+
+  The certificate is now read before bot protection is blamed, over the same
+  non-validating socket the check already used, and the report says
+  *"The TLS certificate expired 4151 day(s) ago … which is why nothing here
+  could be fetched."* Found by asking whether the Raycast extension really gets
+  the certificate checks: it does, and this hole was underneath the question.
+
+  Where the certificate cannot be read at all — the hosted Worker has no socket
+  — the old wording stands unchanged, minus the sentence claiming the
+  certificate is fine. A runtime that cannot run a check says so rather than
+  implying a result.
+
 - **One row named one Open Graph tag and counted three.** A run against a real
   site printed `Missing og:description ×6` over four pages — three of which were
   missing only the description, one missing all three tags — and listed that one

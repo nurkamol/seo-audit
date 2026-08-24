@@ -353,3 +353,45 @@ test('a host that never answers is reported as unreachable, not as missing a sit
   assert.deepEqual(dead.findings.map((f) => f.id), ['unreachable']);
   assert.match(dead.findings[0].detail, /bot-protection|not answering|no response/i);
 });
+
+test('a dead host with an expired certificate is told what is actually wrong', async () => {
+  // A browser refuses an expired certificate and so does `fetch`, so from the
+  // crawl's side "nothing answered" and "the certificate lapsed" are the same
+  // silence — and the site checks that would have named it never run, because
+  // the crawl gives up first. expired.badssl.com used to come back as a guess
+  // about Cloudflare Bot Fight Mode, above a sentence asserting that the TLS
+  // connection had succeeded. Both halves were wrong.
+  const lapsed = await audit('https://127.0.0.1:1/', {
+    concurrency: 1,
+    readCertificateExpiry: async () => Date.parse('2015-04-12T00:00:00Z'),
+    now: Date.parse('2026-08-24T00:00:00Z'),
+  });
+  assert.deepEqual(lapsed.findings.map((f) => f.id), ['tls-expired']);
+  assert.match(lapsed.findings[0].title, /expired 4152 day\(s\) ago/);
+  assert.match(lapsed.findings[0].detail, /2015-04-12/);
+  // It must not also guess at bot protection: one cause, named.
+  assert.doesNotMatch(lapsed.findings[0].detail, /bot-protection|Cloudflare/i);
+
+  // The half that matters: a valid certificate still reports the guess, and no
+  // longer claims to know the TLS connection succeeded when it did not.
+  const healthy = await audit('https://127.0.0.1:1/', {
+    concurrency: 1,
+    readCertificateExpiry: async () => Date.parse('2027-01-01T00:00:00Z'),
+    now: Date.parse('2026-08-24T00:00:00Z'),
+  });
+  assert.deepEqual(healthy.findings.map((f) => f.id), ['unreachable']);
+  assert.match(healthy.findings[0].detail, /bot-protection/);
+
+  // And a certificate that cannot be read at all falls back to the guess
+  // rather than to a finding built on `null`.
+  const unknown = await audit('https://127.0.0.1:1/', {
+    concurrency: 1,
+    readCertificateExpiry: async () => null,
+  });
+  assert.deepEqual(unknown.findings.map((f) => f.id), ['unreachable']);
+  // The hosted Worker has no socket to read a certificate over and lands here.
+  // It must not claim the certificate is fine — a runtime that cannot run a
+  // check says so rather than implying a result.
+  assert.doesNotMatch(unknown.findings[0].detail, /certificate is valid/);
+  assert.match(healthy.findings[0].detail, /certificate is valid/);
+});

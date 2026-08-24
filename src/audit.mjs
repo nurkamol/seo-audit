@@ -4,7 +4,7 @@ import { bodyKind, parseHtml, parseSitemap } from './parse.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
 import { redirectChecks } from './redirects.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
-import { siteChecks } from './site.mjs';
+import { certificateExpiry, siteChecks } from './site.mjs';
 import { linkGraph } from './graph.mjs';
 import { compareAgents } from './compare.mjs';
 import { searchConsole } from './console.mjs';
@@ -223,17 +223,51 @@ export async function audit(target, opts = {}) {
   // A host that never answered is not a sitemap problem, and following links
   // from a page that does not load would find nothing either.
   if (!urls.length && !fetcher.reachable) {
-    findings.push({
-      level: 'error',
-      id: 'unreachable',
-      title: 'The site did not answer a single request',
-      detail:
-        `Tried: ${tried.join(', ')}. The TLS connection succeeds but no response arrives, which ` +
-        'usually means a bot-protection rule is stalling non-browser clients — Cloudflare Bot ' +
-        "Fight Mode does exactly this. If it is your site, allow this crawler's user agent, or " +
-        'pass --user-agent to present a different one.',
-      url: origin,
-    });
+    // Read the certificate before blaming bot protection.
+    //
+    // A browser refuses an expired certificate and so does `fetch`, so "nothing
+    // answered" and "the certificate lapsed years ago" are indistinguishable
+    // from here — except that one of them is knowable, over a socket that does
+    // not validate. This used to assert "the TLS connection succeeds" and point
+    // at Cloudflare Bot Fight Mode, which for expired.badssl.com was wrong
+    // twice over and sends somebody to the wrong dashboard. The site checks
+    // that would have caught it never run, because the crawl gives up first.
+    const expiresAt =
+      url.protocol === 'https:'
+        ? await (opts.readCertificateExpiry ?? certificateExpiry)(url.hostname)
+        : null;
+    const lapsed = expiresAt ? Math.floor(((opts.now ?? Date.now()) - expiresAt) / 86_400_000) : 0;
+
+    findings.push(
+      lapsed > 0
+        ? {
+            level: 'error',
+            id: 'tls-expired',
+            title: `The TLS certificate expired ${lapsed} day(s) ago`,
+            detail:
+              `It ran out on ${new Date(expiresAt).toISOString().slice(0, 10)}, which is why nothing here ` +
+              'could be fetched — browsers refuse the site outright. Renew it; nothing else about this ' +
+              'site can be measured until then.',
+            url: origin,
+          }
+        : {
+            level: 'error',
+            id: 'unreachable',
+            title: 'The site did not answer a single request',
+            detail:
+              `Tried: ${tried.join(', ')}. ` +
+              // Only said where it was actually established. The hosted Worker
+              // has no socket to read a certificate over, so it gets null here
+              // and must not be made to assert that the certificate is fine —
+              // a runtime that cannot run a check says so rather than implying
+              // a result.
+              (expiresAt ? 'The certificate is valid, so this is ' : 'This is ') +
+              'usually a bot-protection rule stalling non-browser clients — Cloudflare Bot Fight Mode ' +
+              "does exactly this. If it is your site, allow this crawler's user agent, or pass " +
+              '--user-agent to present a different one.',
+            url: origin,
+          },
+    );
     return {
       findings,
       meta: {
