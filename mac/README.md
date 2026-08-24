@@ -29,7 +29,7 @@ everything else here refuses.
 
 ```swift
 protocol AuditEngine {
-    func run(site: String, limit: Int) -> AsyncStream<AuditEvent>
+    func run(query: [URLQueryItem]) -> AsyncStream<AuditEvent>
 }
 ```
 
@@ -39,8 +39,8 @@ nothing above the line changes — every view, animation and model stays.
 ## Size
 
 ```
-./mac/build.sh              109 MB   Node inside, runs on a Mac with nothing installed
-./mac/build.sh --no-node    1.7 MB   uses the Node already on the machine
+./mac/build.sh               92 MB   Node inside, runs on a Mac with nothing installed
+./mac/build.sh --no-node    3.1 MB   uses the Node already on the machine
 ```
 
 The difference is one file. Node is 108 MB of that bundle; everything this

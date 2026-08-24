@@ -234,6 +234,27 @@ handed 464 findings about navigation that works.
 
 ## Considered and rejected
 
+- **A pure-Swift engine, so the macOS app carries no Node.** The seam is there —
+  `AuditEngine` is one method, and a Swift engine would be a second conformance
+  with nothing above the line changing. What stops it is not the work, though
+  the work is real: 6,500 lines and 117 places a finding is raised. It is that
+  the result would be **two implementations of ninety-odd checks**, and this
+  project's first rule is that there is one. The Worker exists and is allowed to
+  exist precisely because it re-implements nothing; a Swift engine would make a
+  report from the window able to differ from a report from `seo-audit --json`,
+  and no amount of testing keeps ninety checks identical across two languages
+  written months apart.
+
+  Moving the *command line* to Swift instead would fix that and break something
+  worse: `npx github:nurkamol/seo-audit` is the whole install story, the GitHub
+  Action runs on `ubuntu-latest`, and a Swift CLI means per-platform binaries
+  and no `npx` at all.
+
+  What the 92 MB actually buys is an app that runs on a Mac with nothing
+  installed. `--no-node` is **3.1 MB** today for anyone who has Node, and a cask
+  that declared `depends_on formula: "node"` could ship that instead — the same
+  trade Homebrew makes for most of what it installs.
+
 - **Measuring performance.** PageSpeed Insights and WebPageTest do it properly, with real browsers, from chosen locations. A `fetch` loop cannot see rendering, and a plausible-looking wrong number is worse than no number.
 - **Keyword density and "SEO scores".** Search engines moved past density two decades ago. A score out of 100 invites optimising for the grader rather than the reader — the failure mode these commercial tools encourage.
 - **Bundling a headless browser.** It would enable a handful of checks and cost the thing that makes this usable: `npx`, no install, runs anywhere.
