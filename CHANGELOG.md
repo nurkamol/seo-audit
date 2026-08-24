@@ -5,43 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-- **`tls-not-checked` was in "Other".** It is the note the hosted Worker leaves
-  where the certificate checks would have been, and `tls-expiring` and
-  `tls-expired` are both under **Site & security**. It belongs beside them.
-
-### Changed
-- **The icon is the logo, not a drawing of it.** The one that shipped was
-  redrawn from the reference rather than taken from it — flat instead of glossy,
-  a different arrowhead, no dots on the trend line. Two reasons, and I gave the
-  weaker one more room than it deserved: gloss is a 2010 idiom whose specular
-  highlight is the first thing to go at 16 pixels, which is true and was not the
-  main point. The main point was that the reference is stock art of unknown
-  licence, and this repository is MIT and public. That is the owner's call to
-  make, and it has been made.
-
-  So the original is now the source: masked to the macOS squircle with the same
-  path the app already shipped, so the corners outside it are transparent and
-  nothing draws a white frame around it. It is the icon in the app, on the
-  website, and in the Raycast extension — one logo in three places rather than
-  a drawing in two and a photograph in none.
-
-  **And it is drawn twice, at two sizes.** `.icns` carries different artwork
-  per size and this now uses it: the logo itself at 64 pixels and up, and
-  `docs/icon-small.svg` at 16 and 32 — the same shape and the same orange
-  sampled from the logo, with the gloss removed, the strokes thickened and the
-  trend line reduced from four points and three dots to a rise with an arrow on
-  it. A four-point line inside a ten-pixel lens is a smudge. Apple ships
-  per-size artwork for exactly this reason, and it is not a second mark: it is
-  the same one with the parts that cannot be drawn at that size taken out.
-
-  It costs something, and the number is worth stating: the `.icns` goes from
-  **189 KB to 1.0 MB**, because a glossy gradient does not quantise the way a
-  flat glyph does. In the bundled app that is nothing; in the `--no-node` build
-  it is a third of 3.5 MB. And at 32 pixels the gloss and the thin trend line do
-  soften — visibly, not theoretically.
+## [1.29.0] — 2026-08-24
 
 ### Added
+
 - **The commands on the website have a Copy button.** A command is there to be
   run, which means it is there to be copied, and the brew block is three lines
   nobody should be retyping. `innerText` rather than `textContent`, so those
@@ -102,6 +69,44 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `lib/engine.ts` — one place that says what the engine returns, rather than a
   cast at each call site where four components would each hold their own opinion
   and three would go out of date.
+
+### Changed
+
+- **The icon is the logo, not a drawing of it.** The one that shipped was
+  redrawn from the reference rather than taken from it — flat instead of glossy,
+  a different arrowhead, no dots on the trend line. Two reasons, and I gave the
+  weaker one more room than it deserved: gloss is a 2010 idiom whose specular
+  highlight is the first thing to go at 16 pixels, which is true and was not the
+  main point. The main point was that the reference is stock art of unknown
+  licence, and this repository is MIT and public. That is the owner's call to
+  make, and it has been made.
+
+  So the original is now the source: masked to the macOS squircle with the same
+  path the app already shipped, so the corners outside it are transparent and
+  nothing draws a white frame around it. It is the icon in the app, on the
+  website, and in the Raycast extension — one logo in three places rather than
+  a drawing in two and a photograph in none.
+
+  **And it is drawn twice, at two sizes.** `.icns` carries different artwork
+  per size and this now uses it: the logo itself at 64 pixels and up, and
+  `docs/icon-small.svg` at 16 and 32 — the same shape and the same orange
+  sampled from the logo, with the gloss removed, the strokes thickened and the
+  trend line reduced from four points and three dots to a rise with an arrow on
+  it. A four-point line inside a ten-pixel lens is a smudge. Apple ships
+  per-size artwork for exactly this reason, and it is not a second mark: it is
+  the same one with the parts that cannot be drawn at that size taken out.
+
+  It costs something, and the number is worth stating: the `.icns` goes from
+  **189 KB to 1.0 MB**, because a glossy gradient does not quantise the way a
+  flat glyph does. In the bundled app that is nothing; in the `--no-node` build
+  it is a third of 3.5 MB. And at 32 pixels the gloss and the thin trend line do
+  soften — visibly, not theoretically.
+
+### Fixed
+
+- **`tls-not-checked` was in "Other".** It is the note the hosted Worker leaves
+  where the certificate checks would have been, and `tls-expiring` and
+  `tls-expired` are both under **Site & security**. It belongs beside them.
 
 ## [1.28.0] — 2026-08-24
 
