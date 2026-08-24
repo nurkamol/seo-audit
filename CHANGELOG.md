@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.32.0] — 2026-08-24
 
 ### Added
 - **`twitter-image-broken` — a declared `twitter:image` that does not load.**
@@ -80,14 +80,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the page's own numbers in the title. A test asserting one id, one title would
   have flagged the four right ones and this was the only wrong one.
 
-### Changed
-- **`npx @nurkamol/seo-audit` is the install the site and README lead with.**
-  The repository form still works and is still documented, pinned — but it
-  clones 16 MB of app sources, screenshots and tests to reach a 115 kB crawler,
-  measured rather than guessed. `npm i -g` is written down too, for anyone who
-  would rather type `seo-audit`.
-
-### Fixed
 - **A Raycast preference could do nothing and nobody would know.** The
   extension's hand-written `Preferences` type listed three of the thirteen
   preferences `crawlOptions()` actually reads; the other ten were invisible to
@@ -124,6 +116,13 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was there to be written: `## [1.31.0]` interpolated into a pattern makes
   `[1.31.0]` a character class matching the digits `0`, `1` and `3`. It would
   not have errored. It would have published the wrong section, or none.
+
+### Changed
+- **`npx @nurkamol/seo-audit` is the install the site and README lead with.**
+  The repository form still works and is still documented, pinned — but it
+  clones 16 MB of app sources, screenshots and tests to reach a 115 kB crawler,
+  measured rather than guessed. `npm i -g` is written down too, for anyone who
+  would rather type `seo-audit`.
 
 ## [1.31.0] — 2026-08-24
 
