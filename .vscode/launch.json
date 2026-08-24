@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:seo-audit}",
+            "name": "Debug SeoAudit",
+            "target": "SeoAudit",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug SeoAudit"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:seo-audit}",
+            "name": "Release SeoAudit",
+            "target": "SeoAudit",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release SeoAudit"
+        }
+    ]
+}

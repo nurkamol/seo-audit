@@ -3597,3 +3597,45 @@ test('readSecret reads a dotfile line, and the environment beats it', () => {
   // A name that is a prefix of another must not match it.
   assert.equal(readSecret('PSI_API', {}, dotfile), null);
 });
+
+// Impressions are counted on the pages this crawl reached, not on the property.
+//
+// The first live run against a real property reported "1 of this crawl's
+// findings are on pages Google has shown, 98 times between them" when that
+// page had 13. The other 85 impressions were on pages the crawl never touched.
+// Nothing was false except the sentence joining the numbers, which is the same
+// failure as a group named after one of the three things inside it.
+test('search-console counts impressions on the crawled pages, not the property', async () => {
+  const { searchConsole } = await import('../src/console.mjs');
+  const findings = [
+    { id: 'thin-content', url: 'https://x.test/a/' },
+    { id: 'title-long', url: 'https://x.test/a/' },
+    { id: 'desc-missing', url: 'https://x.test/nowhere/' },
+  ];
+
+  const notes = await searchConsole('https://x.test', findings, {
+    credentials: { clientId: 'c', clientSecret: 's', refreshToken: 'r' },
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      return {
+        ok: true,
+        json: async () => ({
+          rows: [
+            { keys: ['https://x.test/a/'], impressions: 13, clicks: 1 },
+            // A page Google knows and this crawl never saw. Its impressions
+            // belong in the property total and nowhere else.
+            { keys: ['https://x.test/elsewhere/'], impressions: 85, clicks: 4 },
+          ],
+        }),
+      };
+    },
+  });
+
+  const detail = notes[0].detail;
+  // Two findings share one page, so the page is counted once, not twice.
+  assert.match(detail, /2 of this crawl's findings are on 1 page Google has shown, 13 times/);
+  assert.match(detail, /out of 98 across the whole property/);
+
+  // And the traffic is attached to the findings that have it, and only those.
+  assert.deepEqual(findings.map((f) => f.traffic?.impressions ?? null), [13, 13, null]);
+});

@@ -277,7 +277,10 @@ up until an audit reports the property was not found.
 
 Interactive by nature, so it is deliberately **not** a GitHub Action input: a
 flag CI can accept and never satisfy is worse than no flag. In CI, set the
-three variables as secrets. A domain property is named `sc-domain:example.com` rather than by
+three variables as secrets.
+
+The whole setup, the property-naming trap and what each failure note means:
+[docs/search-console.md](docs/search-console.md). A domain property is named `sc-domain:example.com` rather than by
 its URL. Missing credentials, or a property the account cannot read, are a note
 and the rest of the audit is unaffected.
 

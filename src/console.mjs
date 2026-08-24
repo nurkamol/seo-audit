@@ -130,11 +130,26 @@ export async function searchConsole(origin, findings, opts = {}) {
     matched++;
   }
 
-  const shown = [...traffic.values()].reduce((n, t) => n + t.impressions, 0);
+  // Impressions on the pages this crawl actually reached, counted once per
+  // page. The first live run summed every row in the property instead — the
+  // report said one finding had been "shown 98 times between them" when its
+  // page had 13, because the other 85 were on pages the crawl never touched.
+  // Both numbers are worth having; they are two different sentences.
+  const counted = new Set();
+  let shown = 0;
+  for (const finding of findings) {
+    if (!finding.traffic || counted.has(finding.url)) continue;
+    counted.add(finding.url);
+    shown += finding.traffic.impressions;
+  }
+  const everywhere = [...traffic.values()].reduce((n, t) => n + t.impressions, 0);
+
   return [
     f('info', 'search-console', `Search Console has ${traffic.size.toLocaleString()} pages for this site`,
-      `${matched.toLocaleString()} of this crawl's findings are on pages Google has shown, ` +
-        `${shown.toLocaleString()} times between them over 28 days. Findings are ordered by that where it ` +
+      `${matched.toLocaleString()} of this crawl's findings ${matched === 1 ? 'is' : 'are'} on ` +
+        `${counted.size.toLocaleString()} page${counted.size === 1 ? '' : 's'} Google has shown, ` +
+        `${shown.toLocaleString()} time${shown === 1 ? '' : 's'} over 28 days — out of ` +
+        `${everywhere.toLocaleString()} across the whole property. Findings are ordered by that where it ` +
         'is known, and by how much of the site links to a page where it is not.', origin),
   ];
 }

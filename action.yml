@@ -32,6 +32,15 @@ inputs:
       under it, sampled. Set the PSI_API_KEY env var from a secret to lift the
       quota.
     required: false
+  search-console:
+    description: >
+      Order findings by what the pages actually do in Google. The property
+      exactly as Search Console names it — a domain property is
+      "sc-domain:example.com", not a URL. Needs GSC_CLIENT_ID,
+      GSC_CLIENT_SECRET and GSC_REFRESH_TOKEN in the environment, from secrets;
+      get them once with --search-console-login on a machine with a browser.
+      See docs/search-console.md.
+    required: false
   check-external:
     description: >
       Also check links pointing off the site. Off by default because other
@@ -143,6 +152,7 @@ runs:
         [ -n "$INPUT_LIMIT" ]    && args+=(--limit "$INPUT_LIMIT")
         [ -n "$INPUT_PSI" ]      && args+=(--psi "$INPUT_PSI")
         [ -n "$INPUT_PSI_SAMPLE" ] && args+=(--psi-sample "$INPUT_PSI_SAMPLE")
+        [ -n "$INPUT_SEARCH_CONSOLE" ] && args+=(--search-console "$INPUT_SEARCH_CONSOLE")
         [ -n "$INPUT_VERBOSE" ]  && args+=(--verbose)
         [ -n "$INPUT_CHECK_EXTERNAL" ] && args+=(--check-external)
         [ -n "$INPUT_SETTLE" ]   && args+=(--settle "$INPUT_SETTLE")
