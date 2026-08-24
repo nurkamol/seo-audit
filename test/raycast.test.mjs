@@ -7,7 +7,7 @@
 // the tested half.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
@@ -310,4 +310,64 @@ test('a sitemap the engine refused to build carries the refusal, not an empty fi
   });
   assert.match(written.text, /^<\?xml/);
   assert.equal(written.refused, null);
+});
+
+// A Store submission is `extensions/seo-audit/` and nothing above it. Every
+// import that climbs out of the folder builds here, because the repository is
+// around it, and fails there — which is how this shipped broken once. The
+// extension depends on the engine as a package instead, and this is the guard.
+test('the extension imports nothing above its own folder', () => {
+  const root = new URL('../raycast/', import.meta.url);
+  const walk = (dir) =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.name === 'node_modules' || entry.name === 'dist') return [];
+      const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dir);
+      return entry.isDirectory() ? walk(child) : [child];
+    });
+
+  const sources = walk(root).filter((url) => /\.(m?[jt]sx?|d\.mts)$/.test(url.pathname));
+  assert.ok(sources.length > 5, 'found no extension sources to check');
+
+  for (const url of sources) {
+    const source = readFileSync(url, 'utf8');
+    for (const [, specifier] of source.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
+      assert.ok(
+        !specifier.startsWith('../..'),
+        `${url.pathname.split('/raycast/')[1]} imports ${specifier}, which is outside the extension`,
+      );
+    }
+  }
+
+  // And what it imports instead has to be declared, or the Store's install
+  // resolves nothing.
+  const manifest = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
+  assert.ok(manifest.dependencies['seo-audit'], 'the extension must depend on the engine');
+});
+
+// The `exports` map is the contract the extension installs against: a subpath
+// dropped from it is a front end that stops building, and nothing in this
+// repository would notice, because the symlink resolves the same paths.
+test('every engine subpath the extension imports is exported', async () => {
+  const engine = JSON.parse(
+    readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+  );
+  const exported = new Set(
+    Object.keys(engine.exports).map((key) => key.replace(/^\./, 'seo-audit')),
+  );
+
+  const used = new Set();
+  const dir = new URL('../raycast/lib/', import.meta.url);
+  for (const name of readdirSync(dir)) {
+    const source = readFileSync(new URL(name, dir), 'utf8');
+    for (const [, specifier] of source.matchAll(/from\s+['"](seo-audit[^'"]*)['"]/g)) {
+      used.add(specifier);
+    }
+  }
+
+  assert.ok(used.size > 0, 'found no engine imports at all');
+  for (const specifier of used) {
+    assert.ok(exported.has(specifier), `${specifier} is imported but not in "exports"`);
+    // Exported is not the same as resolvable — a path can be listed and gone.
+    await import(specifier);
+  }
 });

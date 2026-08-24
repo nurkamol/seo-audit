@@ -13,7 +13,7 @@ import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { html, markdown, csv } from '../../src/report.mjs';
+import { html, markdown, csv } from 'seo-audit/report';
 
 /** What a report can be written as, in the order somebody wants them. */
 export const FORMATS = [

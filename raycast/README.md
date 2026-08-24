@@ -1,22 +1,30 @@
-# SEO Audit for Raycast
+# SEO Audit
 
-Three commands. The same engine as the command line, the GitHub Action, the
-macOS app and the hosted Worker — imported, not reimplemented.
+Most SEO tools grade one URL. This crawls the whole sitemap and checks every
+page, because the problems that cost you traffic are rarely on the home page.
 
-```
-Preview a Site     how big is this, and is it the right one — ~1s, 3 requests
-Audit a Site       crawl it and list what to change, worst first
-Recent Reports     runs the macOS app has already kept
-```
+It was written after three commercial graders all called a client's site healthy
+while the language switcher on every translated article linked to a 404 — a bug
+none of them could see, because it was only wrong on pages they never opened.
 
-## Why Preview is first
+![Preview a site in about a second](metadata/seo-audit-1.png)
+
+## Three commands
+
+| | |
+|---|---|
+| **Preview Site** | How big is this, and is it the right one — about a second, three requests, no page fetched |
+| **Audit Site** | Crawl it and list what to change, worst first |
+| **Recent Reports** | Every run the macOS app has already finished |
+
+### Preview comes first on purpose
 
 A full crawl takes minutes and a launcher is built for the second you spend in
 it. Running a seven-minute job behind a keystroke is the obvious idea and the
 wrong one — you close the window and it is gone.
 
-`Preview` is the engine's `--dry-run`: it settles the host, reads robots.txt and
-the sitemap, and stops.
+So `Preview` answers the question you actually have *before* spending those
+minutes. It settles the host, reads robots.txt and the sitemap, and stops.
 
 ```
 210 URLs listed     25 would be checked · 185 past the limit of 25
@@ -25,108 +33,118 @@ the sitemap, and stops.
 3 requests, 1.4s    No page was fetched.
 ```
 
-That is the question somebody actually has before spending the minutes, and it
-fits in a launcher exactly.
+You find out you pointed at the wrong host, or that the sitemap is stale, or
+that this is a thousand-page site that belongs in the terminal — in a second,
+not in seven minutes.
 
-`Audit` is capped by preference — 25 pages by default. A thousand-page site
-belongs in the app or the terminal, and the empty state says so rather than
-leaving somebody watching a spinner.
+## What it checks
 
-## It reimplements nothing
+Around ninety checks, grouped into what to change rather than listed as
+individual complaints. One broken template on forty pages is **one** row saying
+forty, not forty rows.
+
+- **Indexability** — `noindex`, robots.txt, canonicals that point somewhere
+  else, pages in the sitemap that the site will not serve
+- **Links** — internal 404s, redirect chains, and outbound links that have
+  died, across every page rather than one
+- **Metadata** — titles and descriptions that are missing, duplicated,
+  truncated, or contradict the page
+- **Structured data** — JSON-LD that parses, validates, and still does nothing
+  because it is not the type Google reads for that page
+- **Social** — Open Graph and Twitter cards, including whether `og:image`
+  actually loads
+- **Site & security** — HTTPS, certificate expiry, redirect behaviour, `www`
+  and non-`www` disagreeing, sitemap and robots.txt sanity
+- **Content** — thin pages, near-duplicate pages found by fingerprint rather
+  than by URL, heading structure, images with no alt text
+- **Performance** — never estimated. `--psi` asks Google for Google's own
+  field measurement, or the number is not shown at all
+
+![What to change, worst first](metadata/seo-audit-2.png)
+
+## Export
+
+`⌘E` on any result writes **HTML**, **Markdown**, **CSV**, **JSON** or a
+**corrected sitemap** to `~/Downloads`.
+
+The corrected sitemap is the one worth knowing about: it lists what the site
+should actually be advertising, with the dead and redirected and non-indexable
+URLs taken out. When the crawl did not see the whole site, it refuses and says
+why — a sitemap built from a partial crawl would quietly delete real pages from
+somebody's index.
+
+## Settings
+
+`⌘,` reaches every flag that shapes a run:
+
+| | |
+|---|---|
+| Pages per run | How far to crawl, capped — a launcher is a poor place to wait out a thousand pages |
+| Speed | Gentle, Normal or Fast |
+| Outbound links | Check that external links still resolve |
+| Sitemap | Point at one directly when discovery finds the wrong one |
+| Exclude | Skip paths by glob, one per line or comma separated |
+| Only what changed | Crawl only pages whose `lastmod` is newer than a date |
+| Identify as | Which browser and system to send, or your own user agent |
+| Performance | Which pages to measure, how many, mobile or desktop |
+| Silenced checks | Ids to ignore — copy one off any finding with `⌘.` |
+
+Anything left at its default is not sent, so the defaults stay written down in
+one place: the engine.
+
+![Every flag that shapes a run](metadata/seo-audit-3.png)
+
+## It shares a library with the macOS app
+
+Both read `~/Library/Application Support/seo-audit`, so a crawl you ran in the
+app window is in **Recent Reports** a second later, with nothing synchronised or
+copied. A seven-minute crawl should only ever happen once.
+
+Reading only, deliberately: deleting somebody's seven minutes behind a single
+Return is not a trade worth offering. That stays in the app, where the
+confirmation and the undo live.
+
+![Runs the app already finished](metadata/seo-audit-4.png)
+
+## Nothing leaves your machine
+
+The crawl runs locally and talks to the site you named and nothing else. There
+is no account, no telemetry, no server in the middle. The one exception is
+opt-in and named: turning on the performance setting asks Google's PageSpeed
+Insights about the URLs you chose, because a `fetch` loop cannot see rendering
+and a plausible wrong number is worse than no number.
+
+## The same engine as everything else
 
 ```ts
-import { preview } from "../../src/audit.mjs";
+import { preview } from "seo-audit";
 ```
 
-The same line `worker/index.mjs` uses. Levels, thresholds, grouping, ordering
-and the scope sentences all arrive from the engine; this arranges them into
-rows. A report from Raycast and one from `seo-audit --json` are the same report,
-which is the rule that lets this project have five front ends at all.
+That one line is the whole architecture. The command line, the GitHub Action,
+the hosted Worker, the macOS app and this extension all import the same
+`seo-audit` package — none of them reimplements a check. A report from Raycast
+and one from `seo-audit --json` are the same report, which is the rule that lets
+this project have five front ends without them drifting apart.
 
 Raycast runs Node, so unlike the hosted Worker this gets `node:tls` and the
 certificate checks work here.
 
-**Two things are duplicated**, and both have tests. The three named speeds:
-Swift's `CrawlSettings.Speed` and `SPEEDS` in `lib/present.mjs` are the same
-numbers in two languages, and two people reading "Gentle" in two windows should
-get the same crawl. And the browser and system menus, because a dropdown in a
-static manifest cannot read `src/agents.mjs` at runtime — `npm test` fails if
-either drifts.
+**Two things are duplicated**, and both have tests that fail if either drifts:
+the three named speeds, which exist in Swift and JavaScript and must mean the
+same crawl in both windows; and the browser and system menus, because a dropdown
+in a static manifest cannot read the engine's list at runtime.
 
-## What it reaches
+![The whole report, exported](metadata/seo-audit-5.png)
 
-Every flag that shapes a run, through `⌘,` preferences:
+## Not here, and why
 
-| | |
-|---|---|
-| Pages per run | `--limit`, capped — a launcher is a poor place to wait out a thousand pages |
-| Speed | `--concurrency` as Gentle / Normal / Fast |
-| Outbound links | `--check-external` |
-| Sitemap | `--sitemap` |
-| Exclude | `--exclude`, one pattern per line or comma separated |
-| Only what changed since | `--since` |
-| Identify as / On / Or your own | `--browser`, `--os`, `--user-agent` |
-| Performance | `--psi`, `--psi-sample`, `--psi-strategy` |
-| Silenced checks | `--ignore` — copy an id off any finding with `⌘.` |
+`--baseline` and `--against` want two runs picked and compared, which is a
+screen rather than a preference. `--compare-as` fetches a sample twice.
+`--settle` waits out a deploy. `--redirects` and `--config` are files a
+repository commits. `--fail-on` needs an exit code a launcher does not have.
+`--search-console` needs an OAuth client and has never run against the live API.
 
-**Export** (`⌘E`) writes HTML, Markdown, CSV, JSON or the corrected sitemap to
-`~/Downloads`, using the engine's own writers — the same `html()`, `markdown()`
-and `csv()` the command line calls. When the engine refuses to build a sitemap,
-because the crawl did not see the whole site, the refusal is shown rather than a
-file that would delete pages from somebody's site.
-
-Anything left at its default is **not sent**, so the engine's defaults stay
-written down in the engine.
-
-Not reachable, and each for a reason: `--baseline` and `--against` want two runs
-picked and compared, which is a screen rather than a preference; `--compare-as`
-fetches a sample twice; `--settle` waits out a deploy; `--redirects` and
-`--config` are files a repository commits; `--fail-on` needs an exit code a
-launcher does not have; `--search-console` needs an OAuth client and has never
-run against the live API.
-
-## Before this can go to the Store
-
-Checked against
-[Prepare an Extension for Store](https://developers.raycast.com/basics/prepare-an-extension-for-store).
-Three things are outstanding and one of them is a blocker.
-
-**Blocker — the engine is outside the extension folder.** `lib/engine.ts`
-imports `../../src/audit.mjs`, and a Store submission is a pull request
-containing `extensions/seo-audit/` and nothing else, so that path will not exist
-there. It builds here because the repository is around it. The fix is for the
-engine to be a published npm package the extension depends on, which is the
-`Publish to public npm` item on the roadmap — the two questions turn out to be
-one. Vendoring a copy of `src/` into this folder would also build, and would put
-a second copy of ninety checks in the repository, which is the thing this
-project refuses everywhere else.
-
-**`author` must be a Raycast account username.** It currently says `nurkamol`,
-which is the GitHub one. If they differ, this is what gets the submission
-returned.
-
-**Screenshots.** `metadata/` is empty. The Store wants at least three, 2000×1250,
-captured with Raycast's own Window Capture and its *Save to Metadata* option.
-
-Everything else conforms: MIT, one-sentence description, 512×512 icon,
-`Developer Tools` and `Web` categories, `platforms: ["macOS"]`, commands named
-`<verb> <noun>` with no articles, no duplicated subtitles, Title Case action
-titles, an ellipsis on the Export submenu, a `CHANGELOG.md` in the Store's
-format, placeholders on every search bar, a custom `EmptyView` on every command,
-no analytics, no keychain, no bundled binaries, and `package-lock.json`
-committed.
-
-`ray lint` passes with one warning: it wants the title Title Cased as
-"Seo Audit". It is an acronym, the Apple Style Guide the same page cites keeps
-acronyms capitalised, and it stays.
-
-## `@raycast/api` is a dependency, and only here
-
-The command line has none and never will: `npx github:nurkamol/seo-audit` is the
-whole install story. This folder is the same arrangement `worker/` has with
-Wrangler — the dependency belongs to the front end, is installed only by
-somebody developing *this*, and never reaches the npx payload. `raycast/` is
-absent from `files` in the root `package.json` for the same reason `worker/` is.
+All of them are in the command line: `npx seo-audit example.com`.
 
 ## Working on it
 
@@ -137,29 +155,24 @@ npm run dev      # ray develop — opens Raycast against this folder
 npm run lint
 ```
 
-The half that is not React lives in `lib/present.mjs` and is plain ESM with no
-`@raycast/api` import anywhere in it, so `node --test` can run it —
-`test/raycast.test.mjs`, from the repository root, along with everything else.
-The components are thin over it on purpose: what can be wrong quietly is a
-preference that parses to `NaN` pages, a library row pointing at a file that is
-gone, or a refusal drawn as a result, and all three are in the tested half.
+The extension depends on `seo-audit` as a published package, because a Store
+submission is this folder and nothing above it. Inside this repository the
+package is not installed, so `npm test` at the repository root runs
+`scripts/link-engine.mjs` first, which symlinks `raycast/node_modules/seo-audit`
+at the repository. That way a checkout builds and tests without a publish step,
+and `package.json` still says the version the Store needs to see.
 
-## Types
+The half that is not React lives in `lib/present.mjs` — plain ESM with no
+`@raycast/api` import anywhere in it, so `node --test` can run it from the
+repository root along with everything else. The components are thin over it on
+purpose: what goes wrong quietly is a preference that parses to `NaN` pages, a
+library row pointing at a file that is gone, or a refusal drawn as a result, and
+all three are in the tested half.
 
-`lib/engine.ts` is the only place that says what the engine returns. The engine
-is plain ESM with no declarations and stays that way — the command line's whole
-premise is that it runs under `npx` with nothing installed, and emitting types
-would mean a build step. TypeScript infers something from the JavaScript and
-what it infers is narrower than the truth, so that file widens it, once.
+`lib/engine.ts` is the one place that says what the engine returns, and
+`lib/seo-audit.d.ts` is why it has to: the engine ships plain ESM with no
+declarations and stays that way, because the command line's premise is that it
+runs under `npx` with nothing installed.
 
-It ends in three assertions rather than annotations, and the reason is written
-there: `level` is one of exactly three strings — every `f('warn', …)` in
-`src/checks.mjs` passes a literal — but TypeScript reading plain JavaScript can
-only see `string`. The narrow type is true and unprovable from here. The
-alternative is `string` everywhere, re-narrowed at every icon lookup in every
-component: one honest assertion traded for several dishonest ones. What keeps it
-from rotting is `test/raycast.test.mjs`, which runs against the real engine
-rather than against the types.
-
-`lib/present.d.mts` does the same for `present.mjs`, which stays `.mjs` so
-`node --test` can run it.
+MIT. Source and the other four front ends:
+[github.com/nurkamol/seo-audit](https://github.com/nurkamol/seo-audit).

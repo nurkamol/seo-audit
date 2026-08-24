@@ -1,0 +1,60 @@
+# Publish the command line to npm when a version tag is pushed.
+#
+# No token. npm trusted publishing exchanges GitHub's OIDC identity for
+# permission to publish, so there is no long-lived secret in this repository to
+# leak, rotate or forget — the trust is configured once on npmjs.com against
+# this repository and this workflow filename.
+#
+# What reaches npm is `files` in package.json: bin, src, action.yml, README and
+# LICENSE. 115 KB and 27 files, rather than the git clone `npx github:…`
+# performs, which carries a Swift app, a website, a Raycast extension and 341
+# tests to run a crawler.
+name: npm
+
+on:
+  push:
+    # The same shape mac-release.yml uses, so the floating v1 tag never
+    # triggers a publish.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # What replaces the token. Without it npm cannot verify who is asking.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Trusted publishing needs Node 22.14+ and npm 11.5.1+.
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Use an npm new enough to publish this way
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: The tag and the version have to agree
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag $GITHUB_REF_NAME says $tag, package.json says $pkg"
+            exit 1
+          fi
+          echo "publishing $pkg"
+
+      # The suite runs here too. A release that fails its own tests is not one
+      # anybody should be able to install with a single command.
+      - name: Test
+        run: npm test
+
+      - name: What is about to be published
+        run: npm pack --dry-run
+
+      - name: Publish
+        run: npm publish --provenance --access public

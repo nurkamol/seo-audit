@@ -7,7 +7,13 @@
     "seo-audit": "bin/seo-audit.mjs"
   },
   "exports": {
-    ".": "./src/audit.mjs"
+    ".": "./src/audit.mjs",
+    "./causes": "./src/causes.mjs",
+    "./report": "./src/report.mjs",
+    "./sitemap": "./src/sitemap.mjs",
+    "./areas": "./src/areas.mjs",
+    "./agents": "./src/agents.mjs",
+    "./package.json": "./package.json"
   },
   "files": [
     "bin",
@@ -20,6 +26,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "pretest": "node scripts/link-engine.mjs",
     "test": "node --test test/*.test.mjs",
     "audit": "node bin/seo-audit.mjs"
   },
@@ -36,6 +43,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nurkamol/seo-audit.git"
+    "url": "git+https://github.com/nurkamol/seo-audit.git"
+  },
+  "homepage": "https://nurkamol.github.io/seo-audit/",
+  "bugs": {
+    "url": "https://github.com/nurkamol/seo-audit/issues"
   }
 }

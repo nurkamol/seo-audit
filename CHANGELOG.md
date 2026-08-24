@@ -5,7 +5,39 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The engine is published to npm as `seo-audit`.** Not for its own sake: a
+  Raycast Store submission is the extension folder and nothing above it, so
+  `lib/engine.ts` importing `../../src/audit.mjs` was a blocker — it built here
+  only because the repository happened to be around it. Copying `src/` into the
+  extension would also have built, and would have put a second copy of ninety
+  checks in this repository, which is the thing every front end here refuses.
+  So the five modules the front ends actually use get named `exports`, and the
+  extension depends on the package like anybody else would.
+
+  `npx github:nurkamol/seo-audit` keeps working exactly as before, and there is
+  still nothing to install and no build step. Releases publish from a tag with
+  npm's trusted publishing, so no token is stored anywhere — the workflow proves
+  its own identity to npm and the package carries a provenance attestation
+  pointing back at the commit it was built from.
+
+- **`scripts/link-engine.mjs`, run by `pretest`.** Inside this repository the
+  package is not installed, so the extension's own imports had nothing to
+  resolve to and both `ray build` and `node --test` failed on a fresh checkout.
+  A symlink at `raycast/node_modules/seo-audit` pointing back at the repository
+  fixes it with no network and no publish step, and `raycast/package.json` still
+  says the version the Store needs to see. Wired to `pretest` rather than
+  documented, because a setup step somebody can forget is a test suite that
+  quietly stops covering a front end.
+
 ### Changed
+- **The Raycast extension is ready to submit.** Five 2000×1250 screenshots
+  captured from the running extension rather than mocked up, a README written
+  as the Store page it becomes, and `publish` and `pull-contributions` in the
+  documented `npx @raycast/api@latest` form rather than whichever `ray` version
+  is installed locally. Proved rather than assumed: a copy of `raycast/` alone,
+  with only its declared dependencies, builds.
+
 - **The Raycast extension is checked against the Store guidelines.** Six things
   had to change. Commands may not contain articles, so *Preview a Site* and
   *Audit a Site* are **Preview Site** and **Audit Site**. Subtitles may not

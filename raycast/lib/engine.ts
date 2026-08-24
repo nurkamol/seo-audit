@@ -16,8 +16,8 @@
 // destructure and none of the ones it reads off `opts` later. The annotations
 // below widen it deliberately.
 
-import { audit as rawAudit, preview as rawPreview } from "../../src/audit.mjs";
-import { causePayload as rawCausePayload } from "../../src/causes.mjs";
+import { audit as rawAudit, preview as rawPreview } from "seo-audit";
+import { causePayload as rawCausePayload } from "seo-audit/causes";
 
 export type Level = "error" | "warn" | "info";
 

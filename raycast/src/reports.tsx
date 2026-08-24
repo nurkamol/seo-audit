@@ -48,7 +48,7 @@ export default function Command() {
           title="Nothing kept yet"
           description={
             appIsInstalled()
-              ? "Runs finished in the SEO Audit app are kept here. So are runs from Audit a Site."
+              ? "Runs finished in the SEO Audit app are kept here. So are runs from Audit Site."
               : "The macOS app keeps every finished run. Install it, or use Audit a Site."
           }
         />
@@ -76,7 +76,8 @@ export default function Command() {
                   // "Open in" would be a lie: the app cannot be told which
                   // report to show, so this only launches it. A control that
                   // overstates what it does is worse than one that does less.
-                  title="Open the Seo Audit App"
+                  // eslint-disable-next-line @raycast/prefer-title-case
+                  title="Open the SEO Audit App"
                   icon={Icon.Window}
                   onAction={() => open("/Applications/SEO Audit.app")}
                 />
