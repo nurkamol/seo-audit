@@ -30,6 +30,17 @@ struct Release: Decodable, Identifiable, Hashable {
     var version: Version { Version(tagName) }
     var title: String { name ?? tagName }
 
+    /// The zip the release workflow attaches. Derived rather than read from the
+    /// API's asset list, because the feed has no assets at all and a list that
+    /// works for half the releases is worse than one rule that holds for every
+    /// tag: `mac-release.yml` names it `seo-audit-<version>-macos.zip`, and the
+    /// name is asserted in the workflow rather than chosen per release.
+    var downloadUrl: URL? {
+        let version = version.description
+        return URL(string: "https://github.com/nurkamol/seo-audit/releases/download/"
+                   + "\(tagName)/seo-audit-\(version)-macos.zip")
+    }
+
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case name, body, prerelease, fromFeed
@@ -83,6 +94,7 @@ final class Updates: ObservableObject {
     @Published private(set) var checking = false
     @Published private(set) var problem: String?
     @Published var lastChecked: Date?
+    @Published var downloadState: DownloadState = .idle
 
     private let endpoint = URL(string: "https://api.github.com/repos/nurkamol/seo-audit/releases?per_page=30")!
     /// The same releases as an Atom feed, served by github.com rather than
@@ -93,6 +105,8 @@ final class Updates: ObservableObject {
     private let checkedKey = "seo-audit.updates.lastChecked"
     private let automaticKey = "seo-audit.updates.automatic"
     private let cache: URL
+    private var ticker: Timer?
+    private var woke: NSObjectProtocol?
 
     var current: Version {
         Version(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0")
@@ -148,6 +162,34 @@ final class Updates: ObservableObject {
         guard automatic else { return }
         if let lastChecked, Date().timeIntervalSince(lastChecked) < 86_400 { return }
         await check()
+    }
+
+    /// Keep it once a day for an app that is *left open*.
+    ///
+    /// `checkIfDue()` used to be called only from the main view's `.task`,
+    /// which runs once when the window appears. An app open for a week
+    /// therefore checked once, in the week's first minute, and a release cut
+    /// the next morning went unmentioned until somebody quit and came back.
+    ///
+    /// Two triggers, because one is not enough. The timer covers an app left
+    /// running; it does not fire while the machine is asleep and it coalesces,
+    /// which is why becoming active covers the laptop that was shut overnight.
+    /// Both funnel through `checkIfDue()`, so the day-old guard still decides
+    /// and extra triggers cost nothing.
+    func beginPeriodicChecks() {
+        guard ticker == nil else { return }
+        ticker = Timer.scheduledTimer(withTimeInterval: 3_600, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.checkIfDue() }
+        }
+        // Cheap enough to be generous with: waking, or coming back to the app
+        // after a while, is exactly when a day is most likely to have passed.
+        woke = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main,
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.checkIfDue() }
+        }
     }
 
     func check() async {
@@ -265,5 +307,105 @@ final class Updates: ObservableObject {
 
     func open(_ release: Release) {
         if let url = URL(string: release.htmlUrl) { NSWorkspace.shared.open(url) }
+    }
+}
+
+// MARK: - Downloading a release
+
+/// Where a download has got to, for a progress bar that means something.
+///
+/// `.downloading` carries a fraction only when the server said how big the file
+/// is. GitHub does, but a proxy in the way may not, and a bar that sits at zero
+/// and then jumps to done is worse than a spinner that admits it cannot say.
+enum DownloadState: Equatable {
+    case idle
+    case downloading(fraction: Double?, received: Int64, total: Int64?)
+    case unpacking
+    case ready(URL)
+    case failed(String)
+}
+
+extension Updates {
+    /// Fetch a release's zip, unpack it, and reveal it.
+    ///
+    /// Deliberately not a self-replacing updater. Replacing a *running* bundle
+    /// safely needs a helper process outliving the app it is overwriting, which
+    /// is Sparkle's entire job — and if Homebrew installed this, overwriting the
+    /// bundle behind its back leaves its records describing a version that is no
+    /// longer there. So this does the slow part, and hands over.
+    func download(_ release: Release) async {
+        guard case .elsewhere = install else {
+            // A cask install has one correct answer and it is not this.
+            runInTerminal(command(for: release))
+            return
+        }
+        guard let url = release.downloadUrl else {
+            downloadState = .failed("That release has no macOS build attached.")
+            return
+        }
+
+        downloadState = .downloading(fraction: nil, received: 0, total: nil)
+        do {
+            let (bytes, response) = try await URLSession.shared.bytes(from: url)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                downloadState = .failed("GitHub answered \((response as? HTTPURLResponse)?.statusCode ?? 0).")
+                return
+            }
+            let total = response.expectedContentLength > 0 ? response.expectedContentLength : nil
+
+            var data = Data()
+            if let total { data.reserveCapacity(Int(total)) }
+            var lastShown = Date.distantPast
+            for try await byte in bytes {
+                data.append(byte)
+                // Publishing every byte would spend the download redrawing a
+                // bar. Ten times a second is smooth and costs nothing.
+                if Date().timeIntervalSince(lastShown) > 0.1 {
+                    lastShown = Date()
+                    downloadState = .downloading(
+                        fraction: total.map { Double(data.count) / Double($0) },
+                        received: Int64(data.count),
+                        total: total,
+                    )
+                }
+            }
+
+            downloadState = .unpacking
+            let staging = FileManager.default.temporaryDirectory
+                .appendingPathComponent("seo-audit-update-\(release.version.description)")
+            try? FileManager.default.removeItem(at: staging)
+            try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+            let zip = staging.appendingPathComponent("app.zip")
+            try data.write(to: zip)
+
+            // ditto, because ditto is what wrote it: it keeps the bundle's
+            // symlinks and its signature, and plain unzip does not.
+            let unzip = Process()
+            unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            unzip.arguments = ["-x", "-k", zip.path, staging.path]
+            try unzip.run()
+            unzip.waitUntilExit()
+            guard unzip.terminationStatus == 0 else {
+                downloadState = .failed("The download did not unpack. It may have been truncated.")
+                return
+            }
+
+            let unpacked = (try? FileManager.default.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil))?
+                .first { $0.pathExtension == "app" }
+            guard let unpacked else {
+                downloadState = .failed("No application inside the download.")
+                return
+            }
+            downloadState = .ready(unpacked)
+        } catch {
+            downloadState = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Show it, rather than install it. The last step is a drag somebody makes
+    /// deliberately, which is also the step where macOS asks whether they meant
+    /// to replace a running application.
+    func reveal(_ app: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([app])
     }
 }

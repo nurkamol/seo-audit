@@ -89,6 +89,7 @@ struct ContentView: View {
 
     @State private var site = ""
     @State private var showingVersions = false
+    @AppStorage("seo-audit.updates.dismissed") private var dismissedUpdate = ""
     @State private var comparing: Pair?
     @State private var plan: Preview?
     @State private var previewing = false
@@ -134,13 +135,36 @@ struct ContentView: View {
             ZStack {
                 Backdrop()
                 content
+                // An update nobody is told about is an update nobody installs.
+                // Until now this only showed in Settings, which somebody has to
+                // think to open — so the app knew for a week and said nothing.
+                // Dismissible, and it stays dismissed for that version: a bar
+                // that comes back every launch is a bar people learn to ignore.
+                if let newer = updates.available, dismissedUpdate != newer.tagName {
+                    VStack {
+                        UpdateBanner(
+                            updates: updates,
+                            release: newer,
+                            onDismiss: { withAnimation(.snappy) { dismissedUpdate = newer.tagName } },
+                            onDetails: { showingVersions = true },
+                        )
+                        .padding(.horizontal, 18)
+                        .padding(.top, 12)
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: updates.available)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: engine.state)
         }
         .navigationTitle("")
         .sheet(isPresented: $showingVersions) { VersionsSheet(updates: updates) }
         .task { await engine.start() }
-        .task { await updates.checkIfDue() }
+        .task {
+            await updates.checkIfDue()
+            updates.beginPeriodicChecks()
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -247,5 +271,93 @@ struct Card<Content: View>: View {
         VStack(alignment: alignment, spacing: 12) { content }
             .padding(28)
             .glassEffect(.regular, in: .rect(cornerRadius: Radius.surface))
+    }
+}
+
+/// A quiet line across the top of the report, not a modal.
+///
+/// A new version is worth mentioning and never worth interrupting somebody
+/// mid-crawl for — so it sits above the work rather than in front of it, and it
+/// can be dismissed for good. It carries the download itself, because "there is
+/// an update" and "here is how to get it" being in two different windows is how
+/// the old arrangement managed to say nothing useful for a week.
+struct UpdateBanner: View {
+    @ObservedObject var updates: Updates
+    let release: Release
+    let onDismiss: () -> Void
+    let onDetails: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(.tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Version \(release.version.description) is available")
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                Text(subtitle)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 12)
+
+            if case .downloading(let fraction, _, _) = updates.downloadState {
+                // Narrow on purpose: the banner is a line, and a full-width bar
+                // here would read as the crawl's progress rather than a
+                // download's.
+                Group {
+                    if let fraction { ProgressView(value: min(max(fraction, 0), 1)) }
+                    else { ProgressView() }
+                }
+                .frame(width: 120)
+            } else if case .ready(let app) = updates.downloadState {
+                Button("Show in Finder") { updates.reveal(app) }
+                    .buttonStyle(.borderedProminent)
+            } else if case .unpacking = updates.downloadState {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("What's new") { onDetails() }
+                Button(isHomebrew ? "Upgrade…" : "Download") {
+                    Task { await updates.download(release) }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Not now")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 1),
+        )
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+    }
+
+    private var subtitle: String {
+        switch updates.downloadState {
+        case .failed(let why): why
+        case .unpacking: "Unpacking…"
+        case .ready: "Drag it into Applications, replacing this one."
+        case .downloading: "Downloading…"
+        case .idle: isHomebrew ? "Homebrew installed this one." : "You are on \(updates.current.description)."
+        }
+    }
+
+    private var isHomebrew: Bool {
+        if case .homebrew = updates.install { return true }
+        return false
     }
 }

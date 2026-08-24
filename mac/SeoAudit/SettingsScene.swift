@@ -415,8 +415,15 @@ private struct UpdatesPane: View {
             } footer: {
                 Text(updates.available == nil
                      ? "This is the newest release this app knows about."
-                     : "A newer release is out. Open Versions from the sidebar to read what changed "
-                       + "and move to it.").footnote()
+                     : "A newer release is out.").footnote()
+            }
+
+            if let newer = updates.available {
+                Section {
+                    UpdateAction(updates: updates, release: newer)
+                } header: {
+                    Text("Version \(newer.version.description) is available")
+                }
             }
 
             Section {
@@ -711,5 +718,80 @@ private struct SearchConsolePane: View {
         } catch {
             problem = error.localizedDescription
         }
+    }
+}
+
+/// The one control that moves somebody to a new version, wherever it is shown.
+///
+/// It does the slow part with a bar that means something and stops at the drag,
+/// which is the step where macOS asks whether somebody really meant to replace
+/// a running application. A Homebrew install skips all of it: `brew` verifies
+/// what it downloads and keeps records this app has no business editing.
+private struct UpdateAction: View {
+    @ObservedObject var updates: Updates
+    let release: Release
+
+    var body: some View {
+        switch updates.downloadState {
+        case .idle, .failed:
+            VStack(alignment: .leading, spacing: 8) {
+                if case .failed(let why) = updates.downloadState {
+                    Text(why).font(.callout).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 10) {
+                    Button(isHomebrew ? "Upgrade with Homebrew…" : "Download \(release.version.description)") {
+                        Task { await updates.download(release) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("What changed") { updates.open(release) }
+                }
+                Text(isHomebrew
+                     ? "Runs `\(updates.command(for: release))` in Terminal, where you can watch it "
+                       + "happen. Homebrew asks questions this app should not answer for you."
+                     : "Downloads the build attached to that release, unpacks it, and shows it to "
+                       + "you in Finder. The last step is a drag you make on purpose.")
+                    .footnote()
+            }
+
+        case .downloading(let fraction, let received, let total):
+            VStack(alignment: .leading, spacing: 6) {
+                if let fraction {
+                    ProgressView(value: min(max(fraction, 0), 1))
+                } else {
+                    // No Content-Length, so no honest fraction. A bar that sits
+                    // at zero and jumps to full is worse than admitting it.
+                    ProgressView()
+                }
+                Text(total.map { "\(bytes(received)) of \(bytes($0))" } ?? bytes(received))
+                    .font(.callout).foregroundStyle(.secondary).monospacedDigit()
+            }
+
+        case .unpacking:
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Unpacking…").font(.callout).foregroundStyle(.secondary)
+            }
+
+        case .ready(let app):
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Downloaded", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Button("Show in Finder") { updates.reveal(app) }
+                    .buttonStyle(.borderedProminent)
+                Text("Drag it into Applications, replacing this one, then reopen. Replacing an app "
+                     + "while it runs is something to do deliberately rather than have done to you.")
+                    .footnote()
+            }
+        }
+    }
+
+    private var isHomebrew: Bool {
+        if case .homebrew = updates.install { return true }
+        return false
+    }
+
+    private func bytes(_ n: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: n, countStyle: .file)
     }
 }

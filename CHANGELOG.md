@@ -6,6 +6,37 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The app tells you an update exists, and offers to fetch it.** It knew
+  before — `checkIfDue()` has had a one-a-day guard for versions — but it was
+  only called from the main view's `.task`, which runs once when the window
+  appears. An app left open for a week checked once, in that week's first
+  minute, and a release cut the next morning went unmentioned until somebody
+  quit and came back. And when it did know, the only place that said so was a
+  Settings pane somebody had to think to open.
+
+  Now an hourly timer and `didBecomeActive` both funnel through the same
+  day-old guard — the timer for an app left running, becoming active for the
+  laptop that was shut overnight, since a timer neither fires while asleep nor
+  keeps its schedule afterwards.
+
+  A banner sits above the report rather than in front of it: a new version is
+  worth mentioning and never worth interrupting a crawl for. Dismissing it
+  dismisses that version for good, because a bar that returns every launch is a
+  bar people learn to ignore.
+
+  Downloading shows a real fraction where GitHub sent a length and an
+  indeterminate spinner where it did not — a bar that sits at zero and jumps to
+  full is worse than one that admits it cannot say. It unpacks with `ditto`,
+  which is what wrote the archive and what keeps the bundle's signature intact.
+
+  **It stops at the drag, deliberately.** Replacing a running bundle safely
+  needs a helper process that outlives the app it is overwriting, which is
+  Sparkle's whole job; and a Homebrew install has one correct answer that is not
+  this one, since overwriting the bundle behind `brew`'s back leaves its records
+  describing a version that is no longer there. So a cask install gets the
+  `brew` command run in Terminal where it can be watched, and everything else
+  gets the file revealed in Finder.
+
 - **A Search Console pane in the macOS app**, and the whole Help row is now the
   click target rather than its chevron. `DisclosureGroup` only hit-tests its own
   triangle, which left a full-width row that looked clickable everywhere and
