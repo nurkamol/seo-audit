@@ -154,6 +154,21 @@ verifies a checksum before it replaces anything, and the browser leaves
 Gatekeeper a say. Either is better than an unsigned application rewriting its
 own bundle.
 
+## The icon, at two sizes
+
+`.icns` carries different artwork per size, and this uses it. The logo is a
+glossy render — a specular sweep, a soft rim, a hairline trend line with dots on
+it — and at 32 pixels the sweep is a grey smear and the dots are a pixel each.
+The detail that makes it good at 512 is the detail that muddies it at 32.
+
+| Rendered at | From |
+|---|---|
+| 16, 32 | `docs/icon-small.svg` — same shape, same orange sampled from the logo, gloss gone, strokes thickened |
+| 64 and up | `docs/icon@1024.png` — the logo itself |
+
+Apple ships per-size artwork for the same reason. It is not a second mark: it is
+the same one with the parts that cannot be drawn at that size taken out.
+
 ## Signing
 
 The build is **ad-hoc signed**: it runs on the machine that built it, which is

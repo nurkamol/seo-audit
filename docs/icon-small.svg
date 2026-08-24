@@ -1,0 +1,42 @@
+<!-- The same mark, drawn for 16 and 32 pixels.
+
+     `.icns` carries different artwork per size and this is what that is for.
+     The logo is a glossy render: a specular sweep, a soft rim, a hairline trend
+     line with dots on it. At 32 pixels the sweep is a grey smear and the dots
+     are one pixel each — the detail that makes it look good at 512 is the
+     detail that muddies it at 32.
+
+     So: the same shape and the same orange, sampled from the logo itself, with
+     the gloss removed and every stroke thickened until it survives. Nothing
+     here is a different mark; it is the same one with the parts that cannot be
+     drawn at this size taken out. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"
+     role="img" aria-label="SEO Audit">
+  <defs>
+    <!-- Top and bottom sampled from docs/icon@1024.png, so the two masters are
+         the same colour and a Dock full of sizes does not shift hue. -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0%" stop-color="#fec193"/>
+      <stop offset="45%" stop-color="#fd8c3a"/>
+      <stop offset="100%" stop-color="#fd640b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The squircle macOS actually uses, and the same path the .icns mask is
+       built from, so the two masters have identical edges. -->
+  <path fill="url(#bg)"
+        d="M512 32c204 0 306 0 383 77s77 179 77 403-0 306-77 383-179 77-383 77-306 0-383-77-77-179-77-383 0-326 77-403S308 32 512 32z"/>
+
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Thicker than the logo's ring: at 16 pixels a 56-unit stroke is under
+         one pixel and the circle greys out. -->
+    <circle cx="437" cy="430" r="205" stroke-width="74"/>
+    <path d="M842 835 L596 589" stroke-width="104"/>
+
+    <!-- Two segments rather than three, and no dots. A four-point line inside a
+         ten-pixel lens is a smudge; a rise with an arrow on it still reads as
+         a rise. -->
+    <path d="M352 505 L436 421 L560 337" stroke-width="60"/>
+    <path d="M486 331 L566 331 L566 411" stroke-width="60"/>
+  </g>
+</svg>

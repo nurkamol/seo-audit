@@ -73,14 +73,34 @@ cp -R "$here/bin" "$here/src" "$here/worker" "$here/package.json" "$app/Contents
 # was checked in and macOS drew a white frame around the icon.
 iconset="$out/icon.iconset"
 rm -rf "$iconset"; mkdir -p "$iconset"
+# Two masters, which is what .icns is for. The logo is a glossy render: a
+# specular sweep, a soft rim, a hairline trend line with dots on it. At 32
+# pixels the sweep is a grey smear and the dots are a pixel each — the detail
+# that makes it good at 512 is the detail that muddies it at 32. So anything
+# drawn at 32 pixels or under comes from docs/icon-small.svg, the same shape and
+# the same orange with the gloss gone and the strokes thickened. Apple ships
+# per-size artwork for exactly this reason.
 master="$out/icon-master.png"
+small="$out/icon-small.png"
 cp "$here/docs/icon@1024.png" "$master"
-cp "$master" "$iconset/icon_512x512@2x.png"
-for size in 16 32 128 256 512; do
-  sips -s format png -z $size $size "$master" --out "$iconset/icon_${size}x${size}.png" >/dev/null
-  sips -s format png -z $((size*2)) $((size*2)) "$master" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
-done
-rm -f "$master"
+sips -s format png -Z 1024 "$here/docs/icon-small.svg" --out "$small" >/dev/null
+
+render() {  # render <name> <pixels> — under 33 pixels takes the small master
+  local from="$master"
+  [ "$2" -le 32 ] && from="$small"
+  sips -s format png -z "$2" "$2" "$from" --out "$iconset/$1" >/dev/null
+}
+render icon_16x16.png        16
+render icon_16x16@2x.png     32
+render icon_32x32.png        32
+render icon_32x32@2x.png     64
+render icon_128x128.png     128
+render icon_128x128@2x.png  256
+render icon_256x256.png     256
+render icon_256x256@2x.png  512
+render icon_512x512.png     512
+render icon_512x512@2x.png 1024
+rm -f "$master" "$small"
 # sips writes honest but heavy PNGs — a flat glyph came out at 700 KB. pngquant
 # takes the same image to a tenth of that with no visible difference, and is
 # skipped rather than required, because a build that needs a package manager to

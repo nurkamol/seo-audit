@@ -21,6 +21,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   website, and in the Raycast extension — one logo in three places rather than
   a drawing in two and a photograph in none.
 
+  **And it is drawn twice, at two sizes.** `.icns` carries different artwork
+  per size and this now uses it: the logo itself at 64 pixels and up, and
+  `docs/icon-small.svg` at 16 and 32 — the same shape and the same orange
+  sampled from the logo, with the gloss removed, the strokes thickened and the
+  trend line reduced from four points and three dots to a rise with an arrow on
+  it. A four-point line inside a ten-pixel lens is a smudge. Apple ships
+  per-size artwork for exactly this reason, and it is not a second mark: it is
+  the same one with the parts that cannot be drawn at that size taken out.
+
   It costs something, and the number is worth stating: the `.icns` goes from
   **189 KB to 1.0 MB**, because a glossy gradient does not quantise the way a
   flat glyph does. In the bundled app that is nothing; in the `--no-node` build
