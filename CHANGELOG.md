@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.33.1] — 2026-08-24
 
 ### Fixed
 - **The macOS app skipped the certificate checks and blamed the hosted
