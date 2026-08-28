@@ -369,10 +369,14 @@ struct CrawlSettingsTests {
         let names = Set(items.map(\.name))
         // Sending concurrency=6 explicitly would move the default out of the
         // engine and into this app, where changing it later would not take.
-        // `sitemap-out` is not a setting: rebuilding the sitemap needs per-page
-        // data that is gone by the time the report arrives, so it is always
-        // asked for and costs one already-cached request.
-        #expect(names == ["url", "limit", "format", "sitemap-out"])
+        //
+        // The three `-out` parameters are not settings. Each is built from
+        // per-page data that is gone by the time the report arrives — the
+        // sitemap from every page's status and canonical, `llms.txt` and the
+        // structured data from their titles and descriptions — so all three
+        // are always asked for. The sitemap costs one already-cached request
+        // and the other two cost none at all.
+        #expect(names == ["url", "limit", "format", "sitemap-out", "llms-out", "schema-out"])
         #expect(items.first { $0.name == "format" }?.value == "json")
     }
 
@@ -485,15 +489,27 @@ struct ComparisonTests {
                                  at: Date(timeIntervalSince1970: 1_000))
         let second = library.keep(report, site: "https://a.test", raw: raw,
                                   at: Date(timeIntervalSince1970: 2_000))
-        _ = library.keep(report, site: "https://b.test", raw: raw,
-                         at: Date(timeIntervalSince1970: 3_000))
+        let other = library.keep(report, site: "https://b.test", raw: raw,
+                                 at: Date(timeIntervalSince1970: 3_000))
 
+        // The one thing that must never be offered is the run on screen.
         let offered = library.otherRuns(of: "a.test", besides: second)
-        #expect(offered.map(\.id) == [first.id], "only the other run of the same site")
-        #expect(library.otherRuns(of: "b.test", besides: nil).count == 1)
-        // The first audit of a site has nothing to compare against, and the
-        // menu says so rather than being absent.
-        #expect(library.otherRuns(of: "a.test", besides: first).map(\.id) == [second.id])
+        #expect(!offered.contains { $0.id == second.id }, "never itself")
+
+        // Runs of this same site come first, then everything else — the
+        // question people arrive with is usually "is the rebuild better than
+        // the site it replaces", and the rebuild lives on a different host.
+        // The engine compares those two by path rather than by URL.
+        #expect(offered.map(\.id) == [first.id, other.id])
+
+        // A host with one run of its own still has the rest of the library to
+        // compare against, so the menu is never empty when it need not be.
+        #expect(library.otherRuns(of: "b.test", besides: nil).map(\.id).first == other.id)
+        #expect(library.otherRuns(of: "b.test", besides: other).count == 2)
+
+        // The first audit of a site has no earlier run of its own, and the
+        // menu says which rows are the other sites rather than mixing them in.
+        #expect(library.otherRuns(of: "a.test", besides: first).map(\.id) == [second.id, other.id])
     }
 
     @MainActor

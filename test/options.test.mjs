@@ -68,6 +68,37 @@ test('a parameter the window sends is one the table knows about', () => {
     `the window sends ${orphans.join(', ')}, which no flag in src/options.mjs corresponds to`);
 });
 
+// The macOS app has a Swift test suite of its own, and `npm test` cannot run
+// it: `swift test` needs a toolchain that most machines touching this repo do
+// not have, which is the same reason the checks above read Swift source rather
+// than running it. That suite pins the parameters a default run sends, in a
+// list of its own — and adding `llms-out` and `schema-out` left it stale, so a
+// release job failed on it minutes after everything here was green.
+//
+// So the two lists are compared here instead, on whatever machine changed one.
+test('the app\'s own test knows which parameters every run sends', () => {
+  // The literals inside `var items = [...]` in queryItems() — the ones sent
+  // unconditionally, rather than the ones a setting adds.
+  const swift = read('mac/SeoAudit/CrawlSettings.swift');
+  const block = swift.slice(swift.indexOf('var items = ['), swift.indexOf(']', swift.indexOf('var items = [')));
+  const always = new Set([...block.matchAll(/name: "([a-zA-Z-]+)"/g)].map((m) => m[1]));
+  assert.ok(always.size >= 3, 'expected to find the unconditional parameters');
+
+  // What ModelTests.swift asserts a default run sends.
+  const tests = read('mac/Tests/SeoAuditTests/ModelTests.swift');
+  const expectation = tests.match(/#expect\(names == \[([^\]]+)\]\)/);
+  assert.ok(expectation, 'ModelTests.swift no longer pins the default parameters');
+  const pinned = new Set([...expectation[1].matchAll(/"([a-zA-Z-]+)"/g)].map((m) => m[1]));
+
+  const missing = [...always].filter((name) => !pinned.has(name));
+  const stale = [...pinned].filter((name) => !always.has(name));
+  assert.deepEqual(missing, [],
+    `CrawlSettings.swift always sends ${missing.join(', ')} and ModelTests.swift does not expect it. ` +
+    'Add it there, or `swift test` fails in CI long after this passed.');
+  assert.deepEqual(stale, [],
+    `ModelTests.swift expects ${stale.join(', ')} and CrawlSettings.swift no longer sends it`);
+});
+
 test('every reason is a sentence somebody can act on', () => {
   for (const { flag, reason } of notInApp()) {
     assert.equal(typeof reason, 'string', `${flag} needs a reason, not ${reason}`);

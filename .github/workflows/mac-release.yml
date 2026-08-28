@@ -44,6 +44,14 @@ jobs:
             *) echo "::error::Liquid Glass needs the macOS 26 SDK; this runner has $sdk"; exit 1 ;;
           esac
 
+      # The sibling workflow says a break landing on main and waiting until
+      # release day is the worst possible time to find it — and then this job,
+      # the one that actually ships, did not run the suite. 1.34.0 built and
+      # published while `swift test` was failing on main. The tests are half a
+      # second; a bad build is a Homebrew cask pointing at it.
+      - name: Test the app
+        run: swift test
+
       - name: Build the app with Node inside it
         run: |
           # The runner's own Node is what gets bundled, so the app works on a
