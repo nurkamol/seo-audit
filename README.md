@@ -279,6 +279,23 @@ Interactive by nature, so it is deliberately **not** a GitHub Action input: a
 flag CI can accept and never satisfy is worse than no flag. In CI, set the
 three variables as secrets.
 
+It also brings back **where Google puts each page**, and what it is found for:
+
+- Every finding on a page Google ranks carries that page's average position, so
+  the report can put a template on page two ahead of one nobody has been shown.
+  Positions were in every response Google has ever sent and were being discarded.
+- **`search-console-striking`** names the crawled pages sitting at positions 11
+  to 20 — page two, where the click-through rate is roughly nothing and the
+  ranking is already earned — with the query each one is closest on. It is the
+  only list in this tool that is an opportunity rather than a fault, and every
+  number in it was measured by Google. Moving one of those up two places is
+  usually less work than a new page.
+
+Neither needs a second account, a scrape, or a keyword provider: it is the same
+connection, asked one more question. Google withholds any search too rare to be
+anonymous, so a low-traffic property gets positions and no queries — and the
+report says so rather than leaving silence to read as "found for nothing".
+
 The whole setup, the property-naming trap and what each failure note means:
 [docs/search-console.md](docs/search-console.md). A domain property is named `sc-domain:example.com` rather than by
 its URL. Missing credentials, or a property the account cannot read, are a note
@@ -463,8 +480,10 @@ reason.
 | `--exclude <glob>` | — | Leave URLs out of the crawl. Repeatable; `*` stops at a slash, `**` does not |
 | `--dry-run` | — | Say what would be crawled and stop. A handful of requests instead of hundreds |
 | `--write-sitemap <file>` | — | Write the sitemap this site should have had. Refuses on a crawl that did not see the whole site |
+| `--write-llms <file>` | — | Write the `llms.txt` this site should have had, in the [llmstxt.org](https://llmstxt.org) format, from the site's own titles and descriptions. Nothing is generated or rewritten. Refuses on a partial crawl, for the same reason |
+| `--write-schema <file>` | — | Write the JSON-LD this site could add — `WebSite`, `Organization`, `BreadcrumbList` — built **only** from strings the crawl read off the site. A step it cannot name from the site's own words is skipped, never invented from a slug |
 | `--json <file>` | — | Write a JSON report — findings, the grouped `causes` with their scope lines, and `meta`. Also usable as a baseline, which carries the findings only |
-| `--csv <file>` | — | Write the findings as a spreadsheet, one row each |
+| `--csv <file>` | — | Write the checklist as a spreadsheet: one row per finding with a `points` column for what fixing it is worth, then the checks that passed (`pass`) and the ones that did not apply (`not-checked`) |
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
 | `--update-baseline` | — | Rewrite the baseline after comparing |
 | `--limit <n>` | 200 | Maximum pages to check |
@@ -480,7 +499,7 @@ reason.
 | `--psi <urls>` | — | Measure these pages with PageSpeed Insights. A path glob names a section (see below) |
 | `--psi-sample <n>` | 3 | Pages measured per section glob |
 | `--psi-strategy` | `mobile` | `mobile` or `desktop` |
-| `--against <url>` | — | Compare against another deployment now — preview vs production |
+| `--against <url>` | — | Compare against another deployment now — a rebuild against the site it replaces. Findings are matched by path, so the two hosts need not be the same |
 | `--settle <s>` | — | Wait until the site serves consistent HTML before crawling |
 | `--fail-on <level>` | `error` | Exit 1 at `error`, `warn`, `new`, or `never` |
 | `--version` | — | Print the version |
@@ -741,6 +760,8 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | No `lastmod` is in the future | warning |
 | A favicon Google can use — the home page declares one that loads, or `/favicon.ico` is there | warning / note |
 | `llms.txt` exists | note |
+| **Which AI crawlers robots.txt lets in** — GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot and eight more, asked of the same parser Google's rules go through. Split by what blocking costs: an *answering* crawler fetches because somebody asked a question just now, a *training* one does not, and blocking the second changes nothing about being cited today. Always a **note**: refusing an AI crawler is a decision a publisher is entitled to make. It also says whether anybody made it — a block that arrives through `User-agent: *` is usually a CDN or plugin default | note |
+| `llms.txt` and `robots.txt` do not contradict each other — a site that serves a file whose only purpose is to tell an assistant what to read, while disallowing the agent that would read it, has one of the two files wrong | warning |
 | Everything once-per-domain is read on the host that answers — audit `example.com` when the site lives at `www.` and the audit moves there, saying so, rather than reading robots.txt off a 301 | note |
 | `http://`, `www.` and `https://www.` each reach the canonical host in one hop — a variant that answers 429 is reported as **not checked**, never as dead | warning / note |
 | The TLS certificate is not expired, and not expiring within 14 days | error / warning |
@@ -760,11 +781,97 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 
 ---
 
+## What it can write for you
+
+Three of the outputs are not reports. They are the fix, built from what the crawl already read:
+
+| | |
+|---|---|
+| `--write-sitemap` | Every page that answered 200, is HTML, is indexable and is its own canonical |
+| `--write-llms` | The [llms.txt](https://llmstxt.org) — the site's own titles and descriptions, grouped by section |
+| `--write-schema` | `WebSite`, `Organization` and `BreadcrumbList` as JSON-LD |
+
+All three follow one rule and it is absolute: **every value is a string this crawl read off this site.** Nothing is generated, rewritten, summarised or inferred. A page with no description gets a line without one rather than a sentence somebody made up about it; an organisation is named only when the site names itself in `og:site_name`, because a wrong company name is the worst thing in that file to get wrong.
+
+Breadcrumbs make the rule concrete. A `<title>` is not a breadcrumb name — the first live run of this produced `Assets | Jekyll • Simple, blog-aware, static sites` as a step. So a step is named by the page's `<h1>` when it has exactly one, or by the words the site's own navigation uses to link to it, and by nothing else:
+
+```
+  wrote schema.json — 61 block(s) for 61 page(s)
+    60   BreadcrumbList          Jekyll › Docs › Assets
+    1    Organization
+    skipped 142 (a step could not be named from the site's own words)
+    skipped 8   (is at the top of the site, so there is no trail to describe)
+    skipped 1   (already declares a WebSite)
+```
+
+Structured data that describes a site inaccurately is worse than none: it is a machine-readable claim the page does not support, which is a manual-action category at Google. So 142 pages were skipped rather than given a name invented from a URL.
+
+And all three refuse outright on a crawl that did not see the whole site, because a file built from a third of a site is worse than no file — it looks complete. The refusal names the run that would work.
+
+---
+
+## The score
+
+Every report opens with a number out of 100, a grade and a ring:
+
+```
+  https://example.com
+  31 pages · 71 requests · 12.9s
+
+  74/100   C   ████████████████████░░░░░░░░
+  26.1 points across 9 checks · 61 passed · 22 did not apply
+  Clear the errors alone and it is 88.
+```
+
+It is a checklist that has been counted, and the arithmetic is small enough to print:
+
+| | |
+|---|---|
+| **A run starts at 100** and pays for what is wrong with it | Nothing is added for passing; a clean site is at 100 because nothing took points off |
+| **An error-level check costs 12 points, a warning 4** | Not a new judgement — every check already carries a level, argued over check by check when it was written. `scripts/check-levels.mjs` reads those levels back out of the source and a test asserts the table still matches, so a check promoted from warning to error cannot keep its old weight |
+| **A check on some pages costs its share** | A missing `<h1>` on 3 of 40 pages costs a tenth of a warning; the same fault on all 40 costs the whole of one |
+| **Notes cost nothing** | A note is "worth knowing, may be deliberate". An `llms.txt` nobody wanted is not a fault |
+| **A check that could not run is skipped, not passed** | A site with no images has not passed the alt-text check, and a run without `--psi` has not passed the performance ones. Both would be free points for doing less |
+
+So the score is an amount of known, named, locatable work subtracted from a clean sheet — never a prediction of a ranking, an estimate of traffic, or a grade against anybody else's site. What a check costs is what fixing it is worth, and every piece of work under **Start here** carries the points it returns:
+
+```
+    +4.0  ✗ No <h1>                    17 pages under /classes/, 62% of the crawl
+    +2.7  ! og:image is WebP           17 pages under /classes/
+    +1.3  ! Meta description will be cut off   4 pages under /journal/
+```
+
+Two runs of the same site are directly comparable. A run of one site against another is comparable to the degree that the same checks applied to both, which the report says out loud.
+
+### What passed, and what was never checked
+
+A missing finding reads exactly like a passing one, so both are named. **Passing** lists every check the site cleared, in its own words:
+
+```
+  ✓ Every page has a title
+  ✓ Every image has an alt attribute
+  ✓ No og:image is WebP
+```
+
+**Not checked** says why the rest did not apply, grouped by reason:
+
+```
+  · No page declares hreflang. (hreflang-invalid, hreflang-one-way, hreflang-dead, …)
+  · PageSpeed was not asked — run with --psi. (psi-score, psi-lcp, psi-cls, …)
+```
+
+The full checklist — every scored check with its weight, its area and its pass line — is served at `/checks` when the [hosted front end](#hosting-it-for-people-who-will-not-open-a-terminal) is running, so "what does this thing actually check" is a question with a fetchable answer.
+
+---
+
 ## Reading the output
 
 ```
   https://example.com
   31 pages · 71 requests · 12.9s
+
+  74/100   C   ████████████████████░░░░░░░░
+  26.1 points across 9 checks · 61 passed · 22 did not apply
 
   ✗ No <h1> ×17
     The page has no headline.
@@ -784,7 +891,9 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
   20 error  91 warning  12 note
 ```
 
-Findings are grouped by check, not by page, because the fix is usually one change applied everywhere.
+Findings are grouped by check, not by page, because the fix is usually one change applied everywhere. Errors and warnings come first; notes follow under **Worth knowing**, which says out loud that none of them cost the score anything.
+
+Then **Passing**, then **Not checked**.
 
 Some warnings are meant to be lived with. A contact page is *supposed* to be short; a privacy policy has no business carrying editorial links. The tool reports what is true and leaves the judgement to you — it has no way to know which pages are meant to rank.
 

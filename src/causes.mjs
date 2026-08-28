@@ -93,10 +93,12 @@ export function byCause(findings) {
       // asked, this is what these pages actually do in Google.
       const shown = new Set();
       let impressions = 0;
+      const positions = [];
       for (const finding of cause.findings) {
         if (!finding.traffic || shown.has(finding.url)) continue;
         shown.add(finding.url);
         impressions += finding.traffic.impressions;
+        if (typeof finding.traffic.position === 'number') positions.push(finding.traffic.position);
       }
       return {
         ...cause,
@@ -105,6 +107,11 @@ export function byCause(findings) {
         inlinks: measured.length ? inlinks : null,
         depth: depths.length ? Math.min(...depths) : null,
         impressions: shown.size ? impressions : null,
+        // Where Google puts these pages on average. Measured, never estimated —
+        // the only reason a ranking is allowed in this file at all. Best of the
+        // set rather than the mean: a cause spanning a page at 3 and a page at
+        // 60 is worth looking at because of the page at 3.
+        position: positions.length ? Math.min(...positions) : null,
       };
     })
     .sort(
@@ -132,7 +139,8 @@ export function causeScope(cause, totalPages) {
   const share =
     totalPages && pages / totalPages >= 0.5 ? `, ${Math.round((pages / totalPages) * 100)}% of the crawl` : '';
   const seen = cause.impressions
-    ? `, ${cause.impressions.toLocaleString()} impressions in 28 days`
+    ? `, ${cause.impressions.toLocaleString()} impressions in 28 days` +
+      (cause.position ? `, best at position ${cause.position}` : '')
     : '';
   const reach = seen || (cause.inlinks ? `, ${cause.inlinks.toLocaleString()} links in` : '');
   const near =
@@ -159,6 +167,10 @@ export function causePayload(findings, totalPages) {
     count: cause.count,
     pages: cause.pages,
     scope: causeScope(cause, totalPages),
+    // Where Google puts the best of these pages, when Search Console was
+    // asked. Travels with the cause so a native client can sort by it rather
+    // than parsing it back out of the scope sentence.
+    ...(cause.position ? { position: cause.position } : {}),
     // Which part of the site fixes this. The HTML report groups by it, so a
     // client drawing its own report groups by the same thing rather than
     // carrying a second copy of that table in another language.

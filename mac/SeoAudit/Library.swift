@@ -19,6 +19,11 @@ struct StoredReport: Identifiable, Hashable, Codable {
     let causes: Int
     let errors: Int
     let warnings: Int
+    /// How much of the checklist that run passed. Optional so an index written
+    /// before scoring existed still decodes — and so the Raycast extension,
+    /// which reads this same file, can show the number without opening the
+    /// report.
+    let score: Int?
 
     var filename: String { "\(id.uuidString).json" }
 
@@ -76,7 +81,8 @@ final class Library: ObservableObject {
             findings: report.findings.count,
             causes: report.causes.count,
             errors: counts.error,
-            warnings: counts.warn
+            warnings: counts.warn,
+            score: report.score?.score
         )
         try? raw.write(to: folder.appendingPathComponent(stored.filename))
         reports.insert(stored, at: 0)
@@ -115,13 +121,23 @@ final class Library: ObservableObject {
         save()
     }
 
-    /// Every other run of this host, newest first — what a comparison can be
-    /// against. `besides` is the one on screen, which is never worth offering
-    /// as something to compare itself with.
+    /// Every other kept run a comparison can be against, newest first, with the
+    /// runs of this same host ahead of the rest. `besides` is the one on
+    /// screen, which is never worth offering as something to compare itself
+    /// with.
+    ///
+    /// Other hosts are offered because the question people actually arrive
+    /// with is "is the rebuild better than the site it replaces", and
+    /// new.example.com and example.com are two hosts. The engine compares
+    /// those two by path rather than by URL — see `diff()` in
+    /// `src/baseline.mjs` — so the answer is about the pages, not the domain.
     func otherRuns(of host: String, besides current: StoredReport?) -> [StoredReport] {
         reports
-            .filter { $0.host == host && $0.id != current?.id }
-            .sorted { $0.finishedAt > $1.finishedAt }
+            .filter { $0.id != current?.id }
+            .sorted {
+                if ($0.host == host) != ($1.host == host) { return $0.host == host }
+                return $0.finishedAt > $1.finishedAt
+            }
     }
 
     /// The newest kept run of a host, for when a comparison needs the other

@@ -22,6 +22,7 @@ export const CATEGORIES = [
   'Structured data',
   'Multilingual',
   'Sitemap & robots',
+  'AI & answer engines',
   'Site & security',
   'Performance',
 ];
@@ -64,6 +65,7 @@ const CATEGORY_OF = {
   'serves-differently': 'Indexability', 'compare-sampled': 'Indexability',
   'search-console': 'Site & security', 'search-console-unconfigured': 'Site & security',
   'search-console-failed': 'Site & security',
+  'search-console-striking': 'Site & security',
   'trailing-slash': 'Redirects', 'meta-refresh': 'Redirects',
   'redirect-dead': 'Redirects', 'redirect-broken': 'Redirects',
   'redirect-not-applied': 'Redirects', 'redirect-hops': 'Redirects',
@@ -105,10 +107,19 @@ const CATEGORY_OF = {
   'robots-missing': 'Sitemap & robots', 'robots-blocks-all': 'Sitemap & robots',
   'robots-no-sitemap': 'Sitemap & robots', 'robots-blocks-sitemap-url': 'Sitemap & robots',
   'sitemap-lastmod-missing': 'Sitemap & robots', 'sitemap-lastmod-identical': 'Sitemap & robots',
-  'sitemap-lastmod-future': 'Sitemap & robots', 'llms-missing': 'Sitemap & robots',
+  'sitemap-lastmod-future': 'Sitemap & robots',
   'sitemap-duplicate-url': 'Sitemap & robots',
   'sitemap-not-indexable': 'Sitemap & robots', 'sitemap-too-many-urls': 'Sitemap & robots',
   'sitemap-too-large': 'Sitemap & robots',
+
+  // AI & answer engines
+  // What the answer engines are allowed to read, which is a question robots.txt
+  // already answers and nothing here estimates. llms.txt moved out of
+  // "Sitemap & robots" when this area arrived: it is addressed to assistants,
+  // not to crawlers, and it belongs beside the agents that read it.
+  'llms-missing': 'AI & answer engines',
+  'ai-crawler-blocked': 'AI & answer engines',
+  'ai-crawler-conflict': 'AI & answer engines',
 
   // Site & security
   'favicon-broken': 'Site & security', 'favicon-missing': 'Site & security',

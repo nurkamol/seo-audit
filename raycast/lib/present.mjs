@@ -194,6 +194,73 @@ export function summaryLine(report) {
   return parts.join(' · ');
 }
 
+// --- the score --------------------------------------------------------------
+// Every number here is the engine's. `scoreRun()` in src/score.mjs decides what
+// a check costs and what applied; this arranges the answer into rows.
+
+/** The score as one accessory-sized string, or `null` when there is none — a
+ *  report kept before scoring existed, or a site that never answered. */
+export function scoreTag(score) {
+  if (!score || typeof score.score !== 'number') return null;
+  return `${score.score}/100${score.grade ? ` ${score.grade}` : ''}`;
+}
+
+/** The line under a score: what it cost, and what it would be with the errors
+ *  cleared. Deliberately says how many checks did not apply — a check nobody
+ *  could run must not read as one that passed. */
+export function scoreLine(score) {
+  if (!score) return '';
+  if (typeof score.score !== 'number') return score.why ?? '';
+  const parts = [`${score.lost ?? 0} points across ${score.checks?.failed ?? 0} checks`];
+  if (score.checks) parts.push(`${score.checks.passed} passed`, `${score.checks.skipped} did not apply`);
+  if (typeof score.ifErrorsFixed === 'number' && score.ifErrorsFixed > score.score) {
+    parts.push(`errors cleared → ${score.ifErrorsFixed}`);
+  }
+  return parts.join(' · ');
+}
+
+/** What the score gains when one piece of work is done.
+ *
+ *  A check can be a cause under two sections, and giving each the whole
+ *  check's cost would say the site can gain the same points twice. Split by
+ *  pages — the same split `causeCost()` makes in src/report.mjs, and the reason
+ *  it is written here too is that this file is the only one Raycast can run. */
+export function gainFor(cause, score) {
+  const check = (score?.failed ?? []).find((row) => row.id === (cause?.checkId ?? cause?.id));
+  if (!check) return null;
+  const pages = cause?.pages?.length ?? 0;
+  const share = check.pages > 0 && pages > 0 ? Math.min(1, pages / check.pages) : 1;
+  const points = check.cost * share;
+  return points < 0.05 ? null : Math.round(points * 10) / 10;
+}
+
+/** Checks that passed, as rows.
+ *  @returns {Row[]} */
+export function passedRows(score) {
+  return (score?.passed ?? []).map((check) => ({
+    id: `pass:${check.id}`,
+    title: check.pass,
+    subtitle: check.area,
+    tone: 'ok',
+  }));
+}
+
+/** Checks that never came up, one row per reason rather than one per check —
+ *  "no page declares hreflang" said once over five checks, not five times.
+ *  @returns {Row[]} */
+export function skippedRows(score) {
+  const byReason = new Map();
+  for (const check of score?.skipped ?? []) {
+    byReason.set(check.why, [...(byReason.get(check.why) ?? []), check.id]);
+  }
+  return [...byReason].map(([why, ids]) => ({
+    id: `skip:${ids[0]}`,
+    title: why,
+    subtitle: ids.join(', '),
+    tone: 'plain',
+  }));
+}
+
 // --- what the macOS app has already kept -----------------------------------
 
 /** The folder both front-ends use. Named for the bundle id rather than the

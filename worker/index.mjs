@@ -13,6 +13,7 @@
 import { audit, preview } from '../src/audit.mjs';
 import { html as htmlReport, markdown as markdownReport, csv as csvReport } from '../src/report.mjs';
 import { causePayload } from '../src/causes.mjs';
+import { scoreRun, checklist, WEIGHT } from '../src/score.mjs';
 import { diff } from '../src/baseline.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 import { runParameters, notInApp } from '../src/options.mjs';
@@ -410,7 +411,15 @@ export async function handle(request, env, ctx, deps = {}) {
       });
     }
 
-    const { added, fixed, unchanged, previousDate } = diff(payload.previous, payload.current.findings);
+    // `currentMeta` so `diff` can see that the two runs are of different
+    // origins and compare by path — staging against production is the same
+    // question as yesterday against today, and until it was passed, every
+    // finding read as both fixed and added.
+    const { added, fixed, unchanged, previousDate, crossSite } = diff(
+      payload.previous,
+      payload.current.findings,
+      { currentMeta: payload.current.meta },
+    );
     // Grouped by the same causePayload() everything else uses, so a regression
     // reads as one thing to fix rather than as forty rows.
     const pages = payload.current.meta?.pages ?? 0;
@@ -418,11 +427,23 @@ export async function handle(request, env, ctx, deps = {}) {
       JSON.stringify({
         previousDate,
         unchanged,
+        crossSite,
         added: { findings: added, causes: causePayload(added, pages) },
         fixed: { findings: fixed, causes: causePayload(fixed, payload.previous.meta?.pages ?? 0) },
       }),
       { headers: { 'content-type': 'application/json' } },
     );
+  }
+
+  // Every check the score counts, with what it costs and what it says when it
+  // passes. Served for the same reason as /options: "what does this thing
+  // actually check" should be a question with a fetchable answer rather than
+  // one that needs a source file read, and a client drawing its own checklist
+  // asks rather than carrying a second copy of the table in another language.
+  if (url.pathname === '/checks') {
+    return new Response(JSON.stringify({ weights: WEIGHT, checks: checklist() }), {
+      headers: { 'content-type': 'application/json' },
+    });
   }
 
   // What a run can be told to do, and what the window does not reach yet, with
@@ -468,7 +489,9 @@ export async function handle(request, env, ctx, deps = {}) {
     if (!Array.isArray(payload?.findings) || !payload?.meta) {
       return new Response('Expected { meta, findings }.', { status: 400 });
     }
-    return new Response(writer.render(payload.findings, payload.meta), {
+    // The score travels with the payload rather than being recomputed here:
+    // this route never crawls, so it has no way to know what applied.
+    return new Response(writer.render(payload.findings, payload.meta, { score: payload.score }), {
       headers: { 'content-type': writer.type },
     });
   }
@@ -488,7 +511,7 @@ export async function handle(request, env, ctx, deps = {}) {
     const origin = new URL(target.url).origin;
     const work = (async () => {
       try {
-        const { findings, meta, sitemap } = await run(target.url, {
+        const { findings, meta, sitemap, llms, schema, score } = await run(target.url, {
           limit: pageLimit(url.searchParams.get('limit'), env),
           concurrency: crawlConcurrency(url.searchParams.get('concurrency'), env),
           checkExternal: url.searchParams.get('external') === '1',
@@ -496,6 +519,10 @@ export async function handle(request, env, ctx, deps = {}) {
           // it needs per-page data a client is never sent. Costs one cached
           // request; everything else it reads is already in memory.
           writeSitemap: url.searchParams.get('sitemap-out') === '1',
+          // Same arrangement: built during the run because it needs each page's
+          // title, description and canonical, none of which survives the crawl.
+          writeLlms: url.searchParams.get('llms-out') === '1',
+          writeSchema: url.searchParams.get('schema-out') === '1',
           // Checks the run was told to silence. Only ever removes findings, so
           // it needs no gate — and meta.ignored still reports how many, because
           // a silenced check that says nothing is indistinguishable from one
@@ -519,6 +546,15 @@ export async function handle(request, env, ctx, deps = {}) {
           ? findings
           : [...findings, { ...NO_CERTIFICATE_CHECK, url: meta.origin }];
 
+        // The note is appended after the audit returned, so the score that came
+        // with it still counts the two certificate checks as applicable. Scored
+        // again here, with the same function, rather than left describing a
+        // checklist this runtime did not run — a hosted report and a CLI report
+        // must be the same document or neither is trustworthy.
+        const scored = canReadCertificates(env)
+          ? score
+          : scoreRun(all, { pages: meta.pages, applicable: { ...meta.applicable, tls: false } });
+
         // A native client wants the findings, not a page. The grouping travels
         // with them, from the same causePayload() the CLI's --json calls, so
         // that a report from here and a report from the command line are the
@@ -528,14 +564,17 @@ export async function handle(request, env, ctx, deps = {}) {
             meta,
             findings: all,
             causes: causePayload(all, meta.pages),
+            score: scored,
             ...(sitemap ? { sitemap } : {}),
+            ...(llms ? { llms } : {}),
+            ...(schema ? { schema } : {}),
           });
         } else {
           // The report replaces this page entirely, so it has to carry its own
           // way back to the form — otherwise the only route is the browser's
           // back button, onto a page that has finished streaming and shows a
           // stale log.
-          await send('done', render(all, meta, { backHref: '/', backLabel: 'Audit another site' }));
+          await send('done', render(all, meta, { backHref: '/', backLabel: 'Audit another site', score: scored }));
         }
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);

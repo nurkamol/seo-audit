@@ -1,6 +1,6 @@
 {
   "name": "@nurkamol/seo-audit",
-  "version": "1.33.1",
+  "version": "1.34.0",
   "description": "Crawl a site's sitemap and check every page for SEO, metadata and structured-data problems that single-page graders miss. Zero dependencies.",
   "type": "module",
   "bin": {
@@ -10,6 +10,7 @@
     ".": "./src/audit.mjs",
     "./causes": "./src/causes.mjs",
     "./report": "./src/report.mjs",
+    "./score": "./src/score.mjs",
     "./sitemap": "./src/sitemap.mjs",
     "./areas": "./src/areas.mjs",
     "./agents": "./src/agents.mjs",

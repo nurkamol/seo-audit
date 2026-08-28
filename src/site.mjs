@@ -3,6 +3,7 @@
 import { connect } from 'node:tls';
 import { mapLimit } from './http.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
+import { aiAccess, describeAccess } from './agents-ai.mjs';
 import { parseHtml } from './parse.mjs';
 import { schemaNodes, seriesOf, paginatedCanonical } from './checks.mjs';
 
@@ -77,12 +78,17 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   // --- robots.txt ---------------------------------------------------------
   const robots = await fetcher.get(new URL('/robots.txt', base).toString());
   let blocksAll = false;
+  // Kept for the AI-crawler section below, which asks the same parsed file a
+  // different question rather than fetching and parsing it a second time.
+  let aiGroups = null;
+  const robotsUrl = robots.url;
   if (!robots.ok && absent(robots)) {
     out.push(f('warn', 'robots-missing', 'No robots.txt',
       `HTTP ${robots.status || robots.error}. Not fatal, but it is where the sitemap is advertised.`,
       robots.url));
   } else if (robots.ok) {
     const groups = parseRobots(robots.body);
+    aiGroups = groups;
 
     // Asked of the parser rather than by pattern-matching the file. The old
     // test was "some line says Disallow: / and some line says User-agent: *",
@@ -127,9 +133,38 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
 
   // --- llms.txt -----------------------------------------------------------
   const llms = await fetcher.get(new URL('/llms.txt', base).toString());
-  if (absent(llms)) {
+  const hasLlms = !absent(llms);
+  if (!hasLlms) {
     out.push(f('info', 'llms-missing', 'No llms.txt',
       'The emerging convention for telling AI assistants what a site is and which pages matter.', llms.url));
+  }
+
+  // --- Who the answer engines are allowed to be ---------------------------
+  // Asked of robots.txt, which the site already serves, rather than estimated:
+  // the AI crawlers obey it like anything else, so the site's position is
+  // already written down. Blocking them is a legitimate decision and the
+  // finding says so — what this is for is the block nobody chose.
+  if (aiGroups) {
+    const access = aiAccess(aiGroups, robotsVerdict);
+    const shut = describeAccess(access);
+    if (shut) {
+      out.push(f('info', 'ai-crawler-blocked',
+        `${shut.blocked.length} AI crawler(s) are disallowed by robots.txt`,
+        shut.detail, robotsUrl));
+
+      // The site contradicting itself. llms.txt exists to tell an AI assistant
+      // what a site is and which pages matter; a Disallow tells the same
+      // assistant not to come. One of the two files is wrong, and unlike the
+      // block itself this is never something anybody chose.
+      if (hasLlms && shut.answering.length) {
+        out.push(f('warn', 'ai-crawler-conflict',
+          'llms.txt invites AI assistants that robots.txt turns away',
+          `This site serves llms.txt — a file whose only purpose is to tell an AI assistant what to read ` +
+            `— and robots.txt disallows ${shut.answering.map((row) => row.agent.name).join(', ')}, which ` +
+            'is how those assistants fetch a page when somebody asks a question. The invitation never ' +
+            'gets read. Either drop the Disallow or drop llms.txt.', llms.url));
+      }
+    }
   }
 
   // --- Soft 404s ----------------------------------------------------------

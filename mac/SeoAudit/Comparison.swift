@@ -59,7 +59,6 @@ struct Comparison: Decodable {
 // MARK: - The sheet
 
 struct ComparisonSheet: View {
-    let host: String
     let earlier: StoredReport
     let later: StoredReport
     @ObservedObject var library: Library
@@ -102,13 +101,24 @@ struct ComparisonSheet: View {
         .task { await compare() }
     }
 
+    /// Two hosts when they differ, one when they do not. A sheet titled with
+    /// only the current host would not say which site the other column is.
+    private var title: String {
+        earlier.host == later.host ? later.host : "\(later.host)  ←→  \(earlier.host)"
+    }
+
+    private func when(_ run: StoredReport) -> String {
+        run.finishedAt.formatted(date: .abbreviated, time: .shortened)
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(host).font(.system(.title3, design: .rounded).weight(.semibold))
-                Text("\(later.finishedAt.formatted(date: .abbreviated, time: .shortened))"
-                     + "  ·  compared with  ·  "
-                     + "\(earlier.finishedAt.formatted(date: .abbreviated, time: .shortened))")
+                Text(title).font(.system(.title3, design: .rounded).weight(.semibold))
+                Text("\(when(later))  ·  compared with  ·  \(when(earlier))"
+                     + (earlier.host == later.host
+                        ? ""
+                        : "  ·  matched by path, since the hosts differ"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

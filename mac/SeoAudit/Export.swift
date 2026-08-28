@@ -15,7 +15,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 enum ExportFormat: String, CaseIterable, Identifiable {
-    case pdf, html, markdown, csv, json, sitemap
+    case pdf, html, markdown, csv, json, sitemap, llms, schema
 
     var id: String { rawValue }
 
@@ -27,6 +27,8 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .csv: "Spreadsheet (CSV)"
         case .json: "JSON"
         case .sitemap: "Sitemap (XML)"
+        case .llms: "llms.txt"
+        case .schema: "Structured data (JSON-LD)"
         }
     }
 
@@ -38,6 +40,8 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .csv: "One row per finding. For sorting and filtering."
         case .json: "Everything, exactly as the engine produced it."
         case .sitemap: "The sitemap this site should have had."
+        case .llms: "The llms.txt this site should have had, from its own words."
+        case .schema: "The JSON-LD this site could add, from what it already says."
         }
     }
 
@@ -49,6 +53,8 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .csv: "tablecells"
         case .json: "curlybraces"
         case .sitemap: "list.bullet.rectangle"
+        case .llms: "sparkles"
+        case .schema: "chevron.left.forwardslash.chevron.right"
         }
     }
 
@@ -60,6 +66,8 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .csv: .commaSeparatedText
         case .json: .json
         case .sitemap: UTType(filenameExtension: "xml") ?? .xml
+        case .llms: .plainText
+        case .schema: .json
         }
     }
 
@@ -71,6 +79,8 @@ enum ExportFormat: String, CaseIterable, Identifiable {
         case .csv: "csv"
         case .json: "json"
         case .sitemap: "xml"
+        case .llms: "txt"
+        case .schema: "json"
         }
     }
 }
@@ -98,19 +108,39 @@ enum Export {
                 // menu item is disabled when it refused, so this is never a
                 // silent no-op.
                 if let xml = report.sitemap?.xml { try? Data(xml.utf8).write(to: destination) }
+            case .llms:
+                if let text = report.llms?.text { try? Data(text.utf8).write(to: destination) }
+            case .schema:
+                if let json = report.schema?.json { try? Data(json.utf8).write(to: destination) }
             case .html, .markdown, .csv:
-                Task { await render(format, report: report, engine: engine, to: destination) }
+                Task { await render(format, report: report, raw: raw, engine: engine, to: destination) }
             }
         }
     }
 
-    private static func render(_ format: ExportFormat, report: Report, engine: URL?, to destination: URL) async {
+    /// The report goes back to the engine as the bytes it arrived in.
+    ///
+    /// It used to be re-encoded from the decoded models, and that quietly
+    /// dropped every field this app had not been taught about — the day the
+    /// engine started scoring a run, an HTML report exported from this window
+    /// lost the score panel the window itself was showing. The JSON export has
+    /// written `raw` verbatim for exactly this reason since it shipped; this
+    /// now does the same, and the encoders below are only the fallback for a
+    /// report whose bytes are no longer to hand.
+    private static func render(
+        _ format: ExportFormat,
+        report: Report,
+        raw: Data?,
+        engine: URL?,
+        to destination: URL
+    ) async {
         guard let engine else { return }
         var request = URLRequest(url: engine.appending(path: "render")
             .appending(queryItems: [.init(name: "as", value: format.rawValue)]))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try? JSONEncoder().encode(RenderRequest(meta: report.meta, findings: report.findings))
+        request.httpBody = raw
+            ?? (try? JSONEncoder().encode(RenderRequest(meta: report.meta, findings: report.findings)))
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200
@@ -118,8 +148,8 @@ enum Export {
         try? data.write(to: destination)
     }
 
-    /// The findings, going back the way they came. Encodable mirrors of the
-    /// decoded models, because the engine wants the shape it sent.
+    /// The findings, going back the way they came. Only reached when the bytes
+    /// the engine sent are not available.
     private struct RenderRequest: Encodable {
         let meta: Meta
         let findings: [Finding]

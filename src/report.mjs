@@ -49,9 +49,42 @@ export function counts(findings) {
   };
 }
 
-export function terminal(findings, meta) {
+/** The score, as something to look at rather than a number to find.
+ *
+ *  A bar, because 80 and 62 are two numbers and a bar is two lengths. Drawn in
+ *  block characters rather than colour alone, so it survives NO_COLOR, a pipe
+ *  into a file and a CI log. */
+export function scoreBar(score, width = 28) {
+  const filled = Math.round((score / 100) * width);
+  return '█'.repeat(filled) + dim('░'.repeat(width - filled));
+}
+
+const scorePaint = (score) => (score >= 80 ? (s) => c('32', s) : score >= 60 ? yellow : red);
+
+/** What a check costs, keyed by id, for the "start here" list. */
+const costsById = (score) => new Map((score?.failed ?? []).map((f) => [f.id, f]));
+
+/** A cause's share of what its check is costing.
+ *
+ *  A check can be a cause under two sections, and printing the whole check's
+ *  cost against each would say the site can gain the same points twice. Split
+ *  by pages, which is the only thing that divides it honestly. */
+function causeCost(cause, costs) {
+  const check = costs.get(cause.id);
+  if (!check) return null;
+  const share = check.pages ? Math.min(1, cause.pages.length / check.pages) : 1;
+  const points = check.cost * share;
+  return points < 0.05 ? null : Math.round(points * 10) / 10;
+}
+
+const SEVERE = new Set(['error', 'warn']);
+
+/** Every renderer takes the same third argument, so a caller that has a score
+ *  hands it over the same way whichever format it asked for. */
+export function terminal(findings, meta, { score } = {}) {
   const lines = [];
   const n = counts(findings);
+  const rule = (name) => dim(`  ── ${name} ${'─'.repeat(Math.max(0, 58 - name.length))}`);
 
   lines.push('');
   lines.push(bold(`  ${meta.origin}`));
@@ -63,49 +96,98 @@ export function terminal(findings, meta) {
   );
   lines.push('');
 
+  // --- The score ----------------------------------------------------------
+  // First, because it is the one line somebody reads when they have not got
+  // time to read the rest, and because everything below it is the working.
+  if (score?.score !== null && score?.score !== undefined) {
+    const paint = scorePaint(score.score);
+    lines.push(`  ${paint(bold(`${score.score}`))}${dim('/100')}   ${paint(bold(score.grade))}   ${paint(scoreBar(score.score))}`);
+    lines.push(
+      dim(
+        `  ${score.lost} points across ${score.checks.failed} check${score.checks.failed === 1 ? '' : 's'} · ` +
+          `${score.checks.passed} passed · ${score.checks.skipped} did not apply`,
+      ),
+    );
+    if (score.ifErrorsFixed > score.score) {
+      lines.push(dim(`  Clear the errors alone and it is ${score.ifErrorsFixed}.`));
+    }
+    lines.push('');
+  } else if (score?.why) {
+    lines.push(dim(`  No score: ${score.why}`));
+    lines.push('');
+  }
+
   if (!findings.length) {
     lines.push(`  ${c('32', '✓')} nothing to report`);
     lines.push('');
+    if (score?.passed?.length) lines.push(...passingBlock(score, rule));
     return lines.join('\n');
   }
 
+  const costs = costsById(score);
   const causes = worstCauses(findings);
   if (causes.length) {
     const total = byCause(findings).length;
-    lines.push(dim(`  ── Start here ${'─'.repeat(46)}`));
+    lines.push(rule('Start here'));
     lines.push('');
     lines.push(dim(`  ${findings.length} findings are ${total} things to change. The widest:`));
     lines.push('');
     for (const cause of causes) {
+      // The points a fix is worth, where the check is one the score counts.
+      // Notes have no number because they take nothing off.
+      const points = causeCost(cause, costs);
+      const gain = points ? c('32', `+${points.toFixed(1)}`.padStart(6)) : dim('      ');
       lines.push(
-        `  ${PAINT[cause.level](MARK[cause.level])} ${bold(cause.title)}` +
+        `  ${gain}  ${PAINT[cause.level](MARK[cause.level])} ${bold(cause.title)}` +
           dim(`  ${causeScope(cause, meta.pages)}`),
       );
     }
     lines.push('');
   }
 
-  for (const { name, entries } of byCategory(findings)) {
-    lines.push(dim(`  ── ${name} ${'─'.repeat(Math.max(0, 58 - name.length))}`));
-    lines.push('');
-    for (const entry of entries) {
-      const paint = PAINT[entry.level];
-      const count = entry.items.length;
-      lines.push(
-        `  ${paint(MARK[entry.level])} ${bold(entry.title)}${count > 1 ? dim(` ×${count}`) : ''}`,
-      );
-      // One example in full, then the other pages by URL only — the detail
-      // repeats and the list is what you act on.
-      lines.push(`    ${dim(entry.items[0].detail)}`);
-      for (const item of entry.items.slice(0, 8)) {
-        // A page Google will not index is a page whose problems cost nothing.
-        const aside = item.indexable === false ? dim('  (not indexable)') : '';
-        lines.push(`    ${dim('·')} ${item.url ?? ''}${aside}`);
+  // --- What is wrong, then what is only worth knowing ---------------------
+  // Split rather than interleaved: a note is "worth knowing, may be
+  // deliberate", and reading forty of them mixed in with the errors is how a
+  // reader loses track of which is which.
+  const problems = findings.filter((f) => SEVERE.has(f.level));
+  const notes = findings.filter((f) => !SEVERE.has(f.level));
+
+  const listing = (list) => {
+    const out = [];
+    for (const { name, entries } of byCategory(list)) {
+      out.push(rule(name));
+      out.push('');
+      for (const entry of entries) {
+        const paint = PAINT[entry.level];
+        const count = entry.items.length;
+        out.push(
+          `  ${paint(MARK[entry.level])} ${bold(entry.title)}${count > 1 ? dim(` ×${count}`) : ''}`,
+        );
+        // One example in full, then the other pages by URL only — the detail
+        // repeats and the list is what you act on.
+        out.push(`    ${dim(entry.items[0].detail)}`);
+        for (const item of entry.items.slice(0, 8)) {
+          // A page Google will not index is a page whose problems cost nothing.
+          const aside = item.indexable === false ? dim('  (not indexable)') : '';
+          out.push(`    ${dim('·')} ${item.url ?? ''}${aside}`);
+        }
+        if (count > 8) out.push(`    ${dim(`… and ${count - 8} more`)}`);
+        out.push('');
       }
-      if (count > 8) lines.push(`    ${dim(`… and ${count - 8} more`)}`);
-      lines.push('');
     }
+    return out;
+  };
+
+  lines.push(...listing(problems));
+  if (notes.length) {
+    lines.push(dim(`  ${'═'.repeat(60)}`));
+    lines.push(dim('  Worth knowing. None of this costs the score anything, and some of'));
+    lines.push(dim('  it is deliberate — a note is a fact, not an instruction.'));
+    lines.push('');
+    lines.push(...listing(notes));
   }
+
+  lines.push(...passingBlock(score, rule));
 
   lines.push(
     `  ${red(`${n.error} error`)}  ${yellow(`${n.warn} warning`)}  ${blue(`${n.info} note`)}`,
@@ -114,7 +196,40 @@ export function terminal(findings, meta) {
   return lines.join('\n');
 }
 
-export function markdown(findings, meta) {
+/** What passed, and what never came up.
+ *
+ *  A report that only ever lists faults reads as a list of everything the tool
+ *  knows how to say, and there is no way to tell a check that passed from one
+ *  that was never run. Both are named here, and the second says why. */
+function passingBlock(score, rule) {
+  const out = [];
+  if (!score?.passed?.length && !score?.skipped?.length) return out;
+
+  if (score.passed.length) {
+    out.push(rule('Passing'));
+    out.push('');
+    for (const check of score.passed) out.push(`  ${c('32', '✓')} ${check.pass}`);
+    out.push('');
+  }
+  if (score.skipped.length) {
+    out.push(rule('Not checked'));
+    out.push(dim(`  ${score.skipped.length} checks did not apply to this run, and are not counted either way.`));
+    out.push('');
+    // By reason rather than by check: "no page declares hreflang" said once
+    // over five checks, instead of five times.
+    const byReason = new Map();
+    for (const check of score.skipped) {
+      byReason.set(check.why, [...(byReason.get(check.why) ?? []), check.id]);
+    }
+    for (const [why, ids] of byReason) {
+      out.push(`  ${dim('·')} ${why} ${dim(`(${ids.join(', ')})`)}`);
+    }
+    out.push('');
+  }
+  return out;
+}
+
+export function markdown(findings, meta, { score } = {}) {
   const n = counts(findings);
   const out = [];
 
@@ -125,22 +240,29 @@ export function markdown(findings, meta) {
   );
   out.push('');
 
+  out.push(...scoreMarkdown(score));
+
   if (!findings.length) {
     out.push('Nothing to report.');
     out.push('');
+    out.push(...passingMarkdown(score));
     return out.join('\n');
   }
 
+  const costs = costsById(score);
   const causes = worstCauses(findings);
   if (causes.length) {
     out.push('## Start here');
     out.push('');
     out.push(`${findings.length} findings are **${byCause(findings).length} things to change**. The widest:`);
     out.push('');
-    out.push('| | What to change | Where |');
-    out.push('|:-:|---|---|');
+    out.push('| | What to change | Where | Worth |');
+    out.push('|:-:|---|---|--:|');
     for (const cause of causes) {
-      out.push(`| ${MARK[cause.level]} | ${cause.title} | ${causeScope(cause, meta.pages)} |`);
+      const points = causeCost(cause, costs);
+      out.push(
+        `| ${MARK[cause.level]} | ${cause.title} | ${causeScope(cause, meta.pages)} | ${points ? `+${points.toFixed(1)}` : '—'} |`,
+      );
     }
     out.push('');
   }
@@ -156,22 +278,47 @@ export function markdown(findings, meta) {
   }
   out.push('');
 
-  for (const { name, entries } of byCategory(findings)) {
-    out.push(`## ${name}`);
-    out.push('');
-    for (const entry of entries) {
-      out.push(`### ${MARK[entry.level]} ${entry.title}`);
-      out.push('');
-      // Every item carries its own detail (word counts, filenames, hop
-      // chains), so each line stands alone rather than repeating a shared
-      // preamble that only fits the first one.
-      for (const item of entry.items) {
-        const aside = item.indexable === false ? ' _(not indexable)_' : '';
-        out.push(`- ${item.url ?? ''}${aside}${item.detail ? `  \n  ${item.detail}` : ''}`);
+  // Errors and warnings first, notes after them, because a note is "worth
+  // knowing, may be deliberate" and reading forty of them mixed into the
+  // faults is how a reader loses track of which is which.
+  const listing = (list) => {
+    const body = [];
+    for (const { name, entries } of byCategory(list)) {
+      body.push(`### ${name}`);
+      body.push('');
+      for (const entry of entries) {
+        body.push(`#### ${MARK[entry.level]} ${entry.title}`);
+        body.push('');
+        // Every item carries its own detail (word counts, filenames, hop
+        // chains), so each line stands alone rather than repeating a shared
+        // preamble that only fits the first one.
+        for (const item of entry.items) {
+          const aside = item.indexable === false ? ' _(not indexable)_' : '';
+          body.push(`- ${item.url ?? ''}${aside}${item.detail ? `  \n  ${item.detail}` : ''}`);
+        }
+        body.push('');
       }
-      out.push('');
     }
+    return body;
+  };
+
+  const problems = findings.filter((f) => SEVERE.has(f.level));
+  const notes = findings.filter((f) => !SEVERE.has(f.level));
+
+  if (problems.length) {
+    out.push('## What to fix');
+    out.push('');
+    out.push(...listing(problems));
   }
+  if (notes.length) {
+    out.push('## Worth knowing');
+    out.push('');
+    out.push('None of this costs the score anything, and some of it is deliberate — a note is a fact, not an instruction.');
+    out.push('');
+    out.push(...listing(notes));
+  }
+
+  out.push(...passingMarkdown(score));
 
   out.push('---');
   out.push('');
@@ -183,6 +330,78 @@ export function markdown(findings, meta) {
   out.push('');
   return out.join('\n');
 }
+
+/** The score, in a file somebody sends to a client. */
+function scoreMarkdown(score) {
+  if (score?.score === null || score?.score === undefined) {
+    return score?.why ? [`**No score** — ${score.why}`, ''] : [];
+  }
+  const out = [];
+  out.push(`## Score: ${score.score}/100 (${score.grade})`);
+  out.push('');
+  out.push(
+    `\`${scoreBarPlain(score.score)}\`  **${score.score}**`,
+  );
+  out.push('');
+  out.push(
+    `${score.lost} points across ${score.checks.failed} check${score.checks.failed === 1 ? '' : 's'}. ` +
+      `${score.checks.passed} passed and ${score.checks.skipped} did not apply.` +
+      (score.ifErrorsFixed > score.score ? ` Clear the errors alone and it is **${score.ifErrorsFixed}**.` : ''),
+  );
+  out.push('');
+  out.push('An error-level check costs 12 points and a warning 4, spread across the pages it is on. ' +
+    'Notes cost nothing. A check that could not apply is left out rather than counted as passed.');
+  out.push('');
+
+  const lost = score.areas.filter((a) => a.lost > 0);
+  if (lost.length) {
+    out.push('| Area | Costing | Passing | Failing |');
+    out.push('|---|--:|--:|--:|');
+    for (const area of lost) out.push(`| ${area.name} | −${area.lost} | ${area.passed} | ${area.failed} |`);
+    out.push('');
+  }
+  return out;
+}
+
+/** What passed, and what never came up. */
+function passingMarkdown(score) {
+  const out = [];
+  if (score?.passed?.length) {
+    out.push(`## Passing — ${score.passed.length} checks`);
+    out.push('');
+    let area = null;
+    for (const check of score.passed) {
+      if (check.area !== area) {
+        area = check.area;
+        out.push('');
+        out.push(`**${area}**`);
+        out.push('');
+      }
+      out.push(`- ✅ ${check.pass}`);
+    }
+    out.push('');
+  }
+  if (score?.skipped?.length) {
+    out.push(`## Not checked — ${score.skipped.length} checks`);
+    out.push('');
+    out.push('These did not apply to this run and are not counted either way.');
+    out.push('');
+    const byReason = new Map();
+    for (const check of score.skipped) byReason.set(check.why, [...(byReason.get(check.why) ?? []), check.id]);
+    out.push('| Why | Checks |');
+    out.push('|---|---|');
+    for (const [why, ids] of byReason) out.push(`| ${why} | ${ids.map((i) => `\`${i}\``).join(', ')} |`);
+    out.push('');
+  }
+  return out;
+}
+
+/** The bar again, without the block characters a Markdown viewer may render at
+ *  a different width from the surrounding monospace. */
+const scoreBarPlain = (score, width = 28) => {
+  const filled = Math.round((score / 100) * width);
+  return '#'.repeat(filled) + '.'.repeat(width - filled);
+};
 
 // --- Categories -------------------------------------------------------------
 // Moved to areas.mjs, and re-exported here because this is where every caller
@@ -249,11 +468,28 @@ const host = (run) => {
   }
 };
 
-/** Per-site tallies, worst site first — that is the row you act on. */
+/** Per-site tallies, worst site first — that is the row you act on.
+ *
+ *  Ordered by score where every run has one, since that is the comparison a
+ *  portfolio exists to make and it weighs a site-wide error against a warning
+ *  on one page of four hundred, which counting errors does not. Falls back to
+ *  the tallies where a run has no score — an unreachable site has none, and it
+ *  must not sort as though it were perfect. */
 export function portfolioRows(runs) {
-  return runs
-    .map((run) => ({ host: host(run), run, n: counts(run.findings) }))
-    .sort((a, b) => b.n.error - a.n.error || b.n.warn - a.n.warn || a.host.localeCompare(b.host));
+  const rows = runs.map((run) => ({
+    host: host(run),
+    run,
+    n: counts(run.findings),
+    score: typeof run.score?.score === 'number' ? run.score.score : null,
+  }));
+  const scored = rows.every((row) => row.score !== null);
+  return rows.sort(
+    (a, b) =>
+      (scored ? a.score - b.score : 0) ||
+      b.n.error - a.n.error ||
+      b.n.warn - a.n.warn ||
+      a.host.localeCompare(b.host),
+  );
 }
 
 export function portfolio(runs) {
@@ -278,16 +514,25 @@ export function portfolio(runs) {
 
   const width = Math.max(4, ...rows.map((r) => r.host.length));
   const pad = (s, n) => String(s).padStart(n);
+  const anyScored = rows.some((r) => r.score !== null);
   lines.push(
-    dim(`  ${'SITE'.padEnd(width)}  ${pad('PAGES', 5)}  ${pad('✗', 4)}  ${pad('!', 4)}  ${pad('·', 4)}`),
+    dim(
+      `  ${'SITE'.padEnd(width)}  ${anyScored ? `${pad('SCORE', 5)}  ` : ''}` +
+        `${pad('PAGES', 5)}  ${pad('✗', 4)}  ${pad('!', 4)}  ${pad('·', 4)}`,
+    ),
   );
 
-  for (const { host: h, run, n } of rows) {
+  for (const { host: h, run, n, score } of rows) {
     // A site that never answered has no tallies worth lining up — say so in
     // the row rather than printing four zeros that look like a clean bill.
     const failed = run.meta.pages === 0;
+    // A dash rather than a zero where there is no score: an unreachable site
+    // has not scored nothing, it has not been scored.
+    const column = anyScored
+      ? `${score === null ? dim(pad('—', 5)) : scorePaint(score)(pad(score, 5))}  `
+      : '';
     lines.push(
-      `  ${h.padEnd(width)}  ${pad(run.meta.pages ?? 0, 5)}  ` +
+      `  ${h.padEnd(width)}  ${column}${pad(run.meta.pages ?? 0, 5)}  ` +
         `${n.error ? red(pad(n.error, 4)) : dim(pad(0, 4))}  ` +
         `${n.warn ? yellow(pad(n.warn, 4)) : dim(pad(0, 4))}  ` +
         `${n.info ? blue(pad(n.info, 4)) : dim(pad(0, 4))}` +
@@ -316,17 +561,20 @@ export function portfolioMarkdown(runs) {
   out.push('');
   out.push(`${runs[0]?.meta.date ?? ''} · ${rows.length} sites`);
   out.push('');
-  out.push('| Site | Pages | Errors | Warnings | Notes |');
-  out.push('|---|---:|---:|---:|---:|');
-  for (const { host: h, run, n } of rows) {
-    out.push(`| [${h}](${run.meta.origin}) | ${run.meta.pages ?? 0} | ${n.error} | ${n.warn} | ${n.info} |`);
+  out.push('| Site | Score | Pages | Errors | Warnings | Notes |');
+  out.push('|---|---:|---:|---:|---:|---:|');
+  for (const { host: h, run, n, score } of rows) {
+    const cell = score === null ? '—' : `${score}${run.score?.grade ? ` (${run.score.grade})` : ''}`;
+    out.push(
+      `| [${h}](${run.meta.origin}) | ${cell} | ${run.meta.pages ?? 0} | ${n.error} | ${n.warn} | ${n.info} |`,
+    );
   }
   out.push('');
   out.push('---');
   out.push('');
   // Each site's own report, unchanged, so a single site's section can be
   // lifted out and sent to whoever owns that site.
-  for (const { run } of rows) out.push(markdown(run.findings, run.meta), '');
+  for (const { run } of rows) out.push(markdown(run.findings, run.meta, { score: run.score }), '');
   return out.join('\n');
 }
 
@@ -344,7 +592,7 @@ export function portfolioHtml(runs) {
   // produced on its own.
   const sections = rows
     .map(({ run }) => {
-      const body = html(run.findings, run.meta).match(/<main>([\s\S]*)<\/main>/)?.[1] ?? '';
+      const body = html(run.findings, run.meta, { score: run.score }).match(/<main>([\s\S]*)<\/main>/)?.[1] ?? '';
       return `<section class="site" id="${esc(host(run))}">${body}</section>`;
     })
     .join('');
@@ -354,11 +602,15 @@ export function portfolioHtml(runs) {
   <h1>SEO audit — ${rows.length} sites</h1>
   <p class="meta">${esc(runs[0]?.meta.date ?? '')}</p>
   <table>
-    <thead><tr><th>Site</th><th class="n">Pages</th><th class="n">Errors</th><th class="n">Warnings</th><th class="n">Notes</th></tr></thead>
+    <thead><tr><th>Site</th><th class="n">Score</th><th class="n">Pages</th><th class="n">Errors</th><th class="n">Warnings</th><th class="n">Notes</th></tr></thead>
     <tbody>${rows
       .map(
-        ({ host: h, run, n }) =>
-          `<tr><td><a href="#${esc(h)}">${esc(h)}</a></td><td class="n">${run.meta.pages ?? 0}</td>` +
+        ({ host: h, run, n, score }) =>
+          `<tr><td><a href="#${esc(h)}">${esc(h)}</a></td>` +
+          // A dash, never a zero: a site that never answered has not scored
+          // nothing, it has not been scored.
+          `<td class="n">${score === null ? '—' : `${score}${run.score?.grade ? ` ${esc(run.score.grade)}` : ''}`}</td>` +
+          `<td class="n">${run.meta.pages ?? 0}</td>` +
           `<td class="n">${n.error}</td><td class="n">${n.warn}</td><td class="n">${n.info}</td></tr>`,
       )
       .join('')}</tbody>
@@ -423,15 +675,31 @@ export function diffReport({ added, fixed, unchanged, previousDate }) {
  *  Written with a byte-order mark, which is the difference between Excel
  *  showing "Maison Éthérique" and showing "Maison Ã‰thÃ©rique". Every other
  *  reader ignores it. */
-export function csv(findings, meta) {
+export function csv(findings, meta, { score } = {}) {
   // RFC 4180: quote everything that could contain a delimiter, and double any
   // quote inside. Quoting every field is simpler than deciding per value, and
   // a spreadsheet cannot tell the difference.
   const cell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+  // `points` is last, not beside `indexable` where it reads better. Every
+  // column before it keeps the index it has had since this file shipped, so a
+  // script reading by position is not quietly broken by a new feature.
   const columns = [
     'level', 'check', 'finding', 'page', 'section', 'indexable',
-    'inlinks', 'clicks_from_home', 'impressions', 'clicks', 'detail',
+    'inlinks', 'clicks_from_home', 'impressions', 'clicks', 'detail', 'points',
   ];
+
+  // What each failing check is taking off the score, so a spreadsheet can be
+  // sorted by what fixing something is worth rather than only by how often it
+  // occurs. Against the check rather than the row: the cost is the check's, and
+  // spreading it over forty rows would invite it to be summed to forty times
+  // itself.
+  const cost = new Map((score?.failed ?? []).map((row) => [row.id, row.cost]));
+  const seen = new Set();
+  const points = (id) => {
+    if (!cost.has(id) || seen.has(id)) return '';
+    seen.add(id);
+    return cost.get(id);
+  };
 
   const rows = findings.map((finding) => [
     finding.level,
@@ -445,12 +713,24 @@ export function csv(findings, meta) {
     finding.traffic?.impressions ?? '',
     finding.traffic?.clicks ?? '',
     finding.detail,
+    points(finding.id),
   ]);
+
+  // The rest of the checklist, so the file answers "what was checked" and not
+  // only "what was wrong". A missing finding reads exactly like a passing one,
+  // and in a spreadsheet it reads like nothing at all. New levels rather than
+  // new columns: anyone filtering on error/warn/info is untouched.
+  for (const check of score?.passed ?? []) {
+    rows.push(['pass', check.id, check.pass, '', '', 'yes', '', '', '', '', '', '']);
+  }
+  for (const check of score?.skipped ?? []) {
+    rows.push(['not-checked', check.id, check.pass, '', '', 'yes', '', '', '', '', check.why, '']);
+  }
 
   return `\uFEFF${[columns, ...rows].map((row) => row.map(cell).join(',')).join('\r\n')}\r\n`;
 }
 
-export function html(findings, meta, { backHref, backLabel = 'New audit' } = {}) {
+export function html(findings, meta, { backHref, backLabel = 'New audit', score } = {}) {
   const n = counts(findings);
   const esc = (s) =>
     String(s ?? '')
@@ -462,7 +742,90 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
   const LABEL = { error: 'Error', warn: 'Warning', info: 'Note' };
   const HEADING = { error: 'Errors', warn: 'Warnings', info: 'Notes' };
   const groups = byCategory(findings);
+  const costs = costsById(score);
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+  // --- The score, as a panel ----------------------------------------------
+  // A dial rather than a bar: at a glance a report is either mostly full or
+  // mostly empty, and a ring says that from across a room. Drawn as one SVG
+  // circle with a dash offset — no script, no font, nothing fetched.
+  const dial = () => {
+    if (score?.score === null || score?.score === undefined) return '';
+    const r = 52;
+    const circumference = 2 * Math.PI * r;
+    const tone = score.score >= 80 ? 'good' : score.score >= 60 ? 'fair' : 'poor';
+    return `
+  <section class="score ${tone}">
+    <div class="dial">
+      <svg viewBox="0 0 120 120" role="img" aria-label="Score ${score.score} out of 100">
+        <circle class="track" cx="60" cy="60" r="${r}"></circle>
+        <circle class="value" cx="60" cy="60" r="${r}"
+          stroke-dasharray="${circumference.toFixed(1)}"
+          stroke-dashoffset="${(circumference * (1 - score.score / 100)).toFixed(1)}"></circle>
+      </svg>
+      <div class="reading"><b>${score.score}</b><small>${esc(score.grade)}</small></div>
+    </div>
+    <div class="story">
+      <h2>${score.score} out of 100</h2>
+      <p class="lede">${score.lost} points across ${plural(score.checks.failed, 'check')}.
+        ${score.checks.passed} passed, ${score.checks.skipped} did not apply.${
+          score.ifErrorsFixed > score.score
+            ? ` Clear the errors alone and it is <b>${score.ifErrorsFixed}</b>.`
+            : ''
+        }</p>
+      ${
+        score.areas.filter((a) => a.lost > 0).length
+          ? `<ul class="areabars">${score.areas
+              .filter((a) => a.lost > 0)
+              .map(
+                (area) => `<li>
+          <span class="an">${esc(area.name)}</span>
+          <span class="ab"><i style="width:${Math.min(100, (area.lost / Math.max(1, score.lost)) * 100).toFixed(1)}%"></i></span>
+          <span class="av">−${area.lost}</span>
+        </li>`,
+              )
+              .join('')}</ul>`
+          : ''
+      }
+      <p class="fineprint">An error-level check costs 12 points and a warning 4, spread across the pages it is
+      on. Notes cost nothing. A check that could not apply here is left out rather than counted as passed.</p>
+    </div>
+  </section>`;
+  };
+
+  // --- What passed, and what never came up --------------------------------
+  // A report that only lists faults gives no way to tell a check that passed
+  // from one that was never run. Both are named, and the second says why.
+  const passing = () => {
+    if (!score?.passed?.length && !score?.skipped?.length) return '';
+    const byArea = new Map();
+    for (const check of score.passed ?? []) {
+      byArea.set(check.area, [...(byArea.get(check.area) ?? []), check]);
+    }
+    const byReason = new Map();
+    for (const check of score.skipped ?? []) {
+      byReason.set(check.why, [...(byReason.get(check.why) ?? []), check.id]);
+    }
+    return `
+  <h2 id="passing"><span>Passing</span><span class="rule"></span><span class="tick">${(score.passed ?? []).length}</span></h2>
+  <div class="passing">${[...byArea]
+    .map(
+      ([area, checks]) => `<section>
+      <h3>${esc(area)}</h3>
+      <ul>${checks.map((check) => `<li>${esc(check.pass)}</li>`).join('')}</ul>
+    </section>`,
+    )
+    .join('')}</div>
+  ${
+    byReason.size
+      ? `<h2 id="not-checked"><span>Not checked</span><span class="rule"></span><span class="tick">${(score.skipped ?? []).length}</span></h2>
+  <p class="lede">These did not apply to this run, and are counted neither for nor against the score.</p>
+  <ul class="skipped">${[...byReason]
+    .map(([why, ids]) => `<li><b>${esc(why)}</b><span>${ids.map((i) => `<code>${esc(i)}</code>`).join(' ')}</span></li>`)
+    .join('')}</ul>`
+      : ''
+  }`;
+  };
 
   const section = ({ name, entries: list }) => {
     if (!list.length) return '';
@@ -602,6 +965,65 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
   }
   .facts li { display: flex; gap: .38rem; }
   .facts b { font-weight: 600; color: var(--fg); }
+
+  /* --- Score ---------------------------------------------------------- */
+  /* A ring, one SVG circle with a dash offset. No script and no font: a
+     report that needs either renders blank in an email client. */
+  .score {
+    display: flex; align-items: center; gap: 1.75rem; flex-wrap: wrap;
+    margin: 0 0 3rem; padding: 1.5rem 1.6rem;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+  }
+  .score .dial { position: relative; flex: 0 0 auto; width: 128px; height: 128px; }
+  .score svg { width: 128px; height: 128px; transform: rotate(-90deg); }
+  .score circle { fill: none; stroke-width: 9; stroke-linecap: round; }
+  .score .track { stroke: var(--line-strong); opacity: .5; }
+  .score .value { stroke: var(--ok); transition: none; }
+  .score.fair .value { stroke: var(--warn); }
+  .score.poor .value { stroke: var(--error); }
+  .score .reading {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+  .score .reading b { font-size: 2.4rem; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .score .reading small { font-size: .8rem; color: var(--muted); margin-top: .3rem; letter-spacing: .08em; }
+  .score .story { flex: 1 1 20rem; min-width: 0; }
+  .score .story h2 {
+    display: block; font-size: 1.05rem; font-weight: 600; margin: 0 0 .35rem;
+    border: 0; padding: 0;
+  }
+  .score .lede { color: var(--muted); margin: 0 0 .9rem; font-size: .9rem; }
+  .score .lede b { color: var(--fg); }
+  .score .fineprint { color: var(--faint); font-size: .78rem; margin: .9rem 0 0; line-height: 1.5; }
+
+  .areabars { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+  .areabars li { display: grid; grid-template-columns: 9.5rem 1fr 3rem; align-items: center; gap: .6rem; font-size: .82rem; }
+  .areabars .an { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .areabars .ab { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .areabars .ab i { display: block; height: 100%; background: var(--warn); }
+  .areabars .av { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  @media (max-width: 34rem) { .areabars li { grid-template-columns: 1fr 3rem; } .areabars .ab { grid-column: 1 / -1; } }
+
+  /* What a fix is worth, beside the fix. */
+  .causes .gain {
+    font: 600 12px/1 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent);
+    border-radius: 5px; padding: .22rem .38rem; font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Passing, and not checked --------------------------------------- */
+  .passing { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 1.5rem; margin: 0 0 2.5rem; }
+  .passing section { min-width: 0; }
+  .passing h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin: 0 0 .5rem; font-weight: 600; }
+  .passing ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; }
+  .passing li { font-size: .86rem; color: var(--muted); padding-left: 1.25rem; position: relative; }
+  .passing li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 600; }
+
+  .skipped { list-style: none; margin: 0 0 2.5rem; padding: 0; display: grid; gap: .55rem; }
+  .skipped li { display: grid; gap: .25rem; padding: .65rem .85rem; border: 1px solid var(--line); border-radius: 8px; }
+  .skipped b { font-weight: 500; font-size: .88rem; }
+  .skipped code { font: 400 11.5px/1.7 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; color: var(--faint); margin-right: .45rem; }
 
   /* --- Tally ---------------------------------------------------------- */
   .tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; margin: 0 0 3rem; }
@@ -758,6 +1180,8 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
     ${meta.notIndexable ? `<li><b>${meta.notIndexable}</b> pages not indexable</li>` : ''}
   </ul>
 
+  ${dial()}
+
   ${(() => {
     const causes = worstCauses(findings);
     if (!causes.length) return '';
@@ -765,13 +1189,15 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
     <h2 id="start-here"><span>Start here</span><span class="rule"></span><span class="tick">${byCause(findings).length}</span></h2>
     <p class="lede">${findings.length} findings are ${byCause(findings).length} things to change. The widest:</p>
     <ol>${causes
-      .map(
-        (cause) => `<li class="${cause.level}">
+      .map((cause) => {
+        const points = causeCost(cause, costs);
+        return `<li class="${cause.level}">
         <span class="pill ${cause.level}">${LABEL[cause.level]}</span>
         <b>${esc(cause.title)}</b>
+        ${points ? `<span class="gain" title="What the score gains when this is clean">+${points.toFixed(1)}</span>` : ''}
         <span class="where">${esc(causeScope(cause, meta.pages))}</span>
-      </li>`,
-      )
+      </li>`;
+      })
       .join('')}</ol>
   </section>`;
   })()}
@@ -800,6 +1226,8 @@ export function html(findings, meta, { backHref, backLabel = 'New audit' } = {})
   ${groups.map(section).join('')}`
       : `<div class="clean"><b>Nothing to report</b><span>Every check passed on all ${meta.pages ?? 0} pages.</span></div>`
   }
+
+  ${passing()}
 
   <footer>
     Correctness across every page. Performance is measured by Google via

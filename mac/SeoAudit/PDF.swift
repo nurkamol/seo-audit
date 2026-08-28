@@ -84,10 +84,39 @@ enum PDF {
         for area in report.byArea {
             out.append(AnyView(AreaHeading(name: area.name, count: area.causes.count)))
             for cause in area.causes {
-                out.append(AnyView(CauseBlock(cause: cause, findings: report.findings(for: cause))))
+                out.append(AnyView(CauseBlock(
+                    cause: cause,
+                    findings: report.findings(for: cause),
+                    gain: gain(for: cause, in: report)
+                )))
+            }
+        }
+        // What passed, and what never came up. An export that shows less than
+        // the report it came from is a worse lie than no export, and until this
+        // was here a PDF sent to a client listed only faults — with no way to
+        // tell a check that passed from one that was never run.
+        if let score = report.score, score.checks?.passed ?? 0 > 0 {
+            out.append(AnyView(AreaHeading(name: "Passing", count: score.checks?.passed ?? 0)))
+            for (area, checks) in score.passedByArea {
+                out.append(AnyView(PassBlock(area: area, lines: checks.map(\.pass))))
+            }
+        }
+        if let score = report.score, score.checks?.skipped ?? 0 > 0 {
+            out.append(AnyView(AreaHeading(name: "Not checked", count: score.checks?.skipped ?? 0)))
+            for (why, ids) in score.skippedByReason {
+                out.append(AnyView(PassBlock(area: why, lines: [ids.joined(separator: ", ")], muted: true)))
             }
         }
         return out
+    }
+
+    /// A cause's share of what its check is costing the score — the same split
+    /// `causeCost()` makes in `src/report.mjs`, because a check that is a cause
+    /// under two sections must not claim the same points twice.
+    private static func gain(for cause: Cause, in report: Report) -> Double? {
+        guard let check = report.score?.failed?.first(where: { $0.id == cause.id }) else { return nil }
+        guard check.pages > 0 else { return check.cost }
+        return check.cost * min(1, Double(cause.pages.count) / Double(check.pages))
     }
 }
 
@@ -141,10 +170,25 @@ private struct Header: View {
             }
 
             HStack(spacing: 22) {
+                if let value = report.score?.score {
+                    Tally(number: value, label: "Score / 100\(report.score?.grade.map { "  ·  \($0)" } ?? "")")
+                }
                 Tally(number: report.counts.error, label: "Errors")
                 Tally(number: report.counts.warn, label: "Warnings")
                 Tally(number: report.counts.info, label: "Notes")
                 Tally(number: report.causes.count, label: "Things to change")
+            }
+
+            if let score = report.score, let value = score.score {
+                // The bar in characters, since ImageRenderer draws this and a
+                // shape here would have to be measured like everything else.
+                Text(bar(value))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text(scoreNote(score, value))
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Text("\(report.findings.count) findings are \(report.causes.count) things to change, "
@@ -191,6 +235,9 @@ private struct AreaHeading: View {
 private struct CauseBlock: View {
     let cause: Cause
     let findings: [Finding]
+    /// What the score gains when this is clean. Absent for a note, which costs
+    /// the score nothing and therefore returns nothing.
+    var gain: Double?
 
     /// Twenty-five pages is enough to see the shape of it. What is left out is
     /// counted rather than dropped quietly — a truncated list that does not say
@@ -211,6 +258,11 @@ private struct CauseBlock: View {
                         Text(cause.id)
                             .font(.system(size: 8, design: .monospaced))
                             .foregroundStyle(.tertiary)
+                        if let gain, gain >= 0.05 {
+                            Text("+\(gain, specifier: "%.1f") to the score")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -239,4 +291,51 @@ private struct CauseBlock: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 6)
     }
+}
+
+/// A run of lines under one heading — the checks that passed in an area, or the
+/// checks one reason accounts for. Plain text on paper: a tick column would be
+/// a graphic to measure for no gain at 8.5pt.
+private struct PassBlock: View {
+    let area: String
+    let lines: [String]
+    var muted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(area.uppercased())
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(.secondary)
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(.system(size: muted ? 8 : 8.5, design: muted ? .monospaced : .default))
+                    .foregroundStyle(muted ? .tertiary : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.bottom, 8)
+    }
+}
+
+/// The score bar, in characters. The same twenty-eight cells the terminal draws.
+private func bar(_ value: Int) -> String {
+    let width = 28
+    let filled = Int((Double(value) / 100 * Double(width)).rounded())
+    return String(repeating: "█", count: filled) + String(repeating: "░", count: width - filled)
+}
+
+/// The arithmetic, said once, in the words the terminal and the HTML use.
+private func scoreNote(_ score: Score, _ value: Int) -> String {
+    var line = ""
+    if let checks = score.checks {
+        line = "\(score.lost.map { String(format: "%.1f", $0) } ?? "0") points across "
+             + "\(checks.failed) check\(checks.failed == 1 ? "" : "s") · \(checks.passed) passed · "
+             + "\(checks.skipped) did not apply. "
+    }
+    if let fixed = score.ifErrorsFixed, fixed > value {
+        line += "Clear the errors alone and it is \(fixed). "
+    }
+    return line + "An error-level check costs 12 points and a warning 4, spread across the pages it is "
+        + "on. Notes cost nothing, and a check that could not apply here is left out rather than "
+        + "counted as passed."
 }

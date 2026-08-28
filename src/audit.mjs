@@ -7,6 +7,9 @@ import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
 import { certificateExpiry, siteChecks } from './site.mjs';
 import { linkGraph } from './graph.mjs';
 import { compareAgents } from './compare.mjs';
+import { scoreRun } from './score.mjs';
+import { buildLlms } from './llms.mjs';
+import { buildSchema } from './schema.mjs';
 import { searchConsole } from './console.mjs';
 import { applyIgnores, expectationChecks, matchGlob } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
@@ -632,10 +635,66 @@ export async function audit(target, opts = {}) {
     });
   }
 
+  // What this run was in a position to check at all. A site with no images has
+  // not passed the alt-text check and a run without --psi has not passed the
+  // performance ones, and a score that counted either as a pass would hand out
+  // free points for doing less. Worked out here because this is the only place
+  // that has both the crawl and the options — a front end reading the JSON
+  // gets it in `meta` rather than guessing.
+  const some = (fn) => pages.some((p) => p.doc && fn(p.doc));
+  const applicable = {
+    images: some((d) => d.images.length > 0),
+    hreflang: some((d) => d.hreflang.length > 0),
+    jsonld: some((d) => d.jsonld.length > 0),
+    ogImage: some((d) => Boolean(d.og['og:image'])),
+    twitterImage: some((d) => Boolean(d.twitter['twitter:image'])),
+    fingerprints: some((d) => d.fingerprint !== null),
+    multipage: pages.length > 1,
+    https: origin.startsWith('https:'),
+    // Certificates need a TLS socket. Node has one; the Workers runtime does
+    // not, and says so by handing in a reader that returns nothing.
+    tls: origin.startsWith('https:') && opts.readCertificateExpiry === undefined,
+    sitemap: Boolean(source),
+    // Only a site that serves llms.txt can contradict it. `llms-missing` is
+    // emitted exactly when it is absent, so the run already knows.
+    llmsTxt: !kept.some((finding) => finding.id === 'llms-missing'),
+    expect: Boolean(opts.expect?.length),
+    psi: Boolean(opts.psi?.length),
+    // Field data is Google's, not ours: it exists for a page or it does not,
+    // and PageSpeed says which by returning nothing. One page short of it is
+    // enough to leave the whole family out — under-counting is the honest way
+    // round, since the alternative scores a page on data it never had.
+    psiField: Boolean(opts.psi?.length) && !kept.some((f) => f.id === 'psi-no-field-data'),
+    redirects: Boolean(opts.redirects),
+    external: Boolean(opts.checkExternal),
+    compareAs: Boolean(opts.compareAs),
+  };
+
+  // The llms.txt this site should have had, from the same crawl and by the
+  // same rule as the sitemap: nothing invented, and a refusal rather than a
+  // file built from a fraction of the site.
+  const llms = opts.writeLlms
+    ? buildLlms(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited').length })
+    : null;
+
+  // The structured data this site could add, from what it already says and
+  // nothing else. Same refusals, and a fourth rule of its own: every value is
+  // a string this crawl read off this site.
+  const schema = opts.writeSchema
+    ? buildSchema(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited').length })
+    : null;
+
   return {
     findings: kept,
     ...(sitemap ? { sitemap } : {}),
+    ...(llms ? { llms } : {}),
+    ...(schema ? { schema } : {}),
+    // How much of the checklist this site passes. Computed here so that the
+    // terminal, the Markdown, the HTML, the window and the extension all show
+    // one number rather than five arithmetics that drift apart.
+    score: scoreRun(kept, { pages: pages.length, applicable }),
     meta: {
+      applicable,
       ignored,
       origin,
       pages: pages.length,

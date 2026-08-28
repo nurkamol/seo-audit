@@ -59,20 +59,19 @@ async function accessToken({ clientId, clientSecret, refreshToken }, fetcher = f
 
 const isoDaysAgo = (days, now) => new Date(now - days * 86400000).toISOString().slice(0, 10);
 
-/** Impressions and clicks per page for the last 28 days.
+/** One `searchAnalytics/query` call. The window is the same for every caller.
  *
- *  Search Console reports the last three days incompletely, so the window ends
- *  three days back: a page that looks like it lost all its impressions
- *  yesterday has usually just not been counted yet. */
-export async function pageTraffic(siteUrl, creds, { fetcher = fetch, now = Date.now(), rowLimit = 25000 } = {}) {
-  const token = await accessToken(creds, fetcher);
+ *  Search Console reports the last three days incompletely, so it ends three
+ *  days back: a page that looks like it lost all its impressions yesterday has
+ *  usually just not been counted yet. */
+async function query(siteUrl, token, { dimensions, rowLimit, now, fetcher }) {
   const res = await fetcher(`${API}/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       startDate: isoDaysAgo(31, now),
       endDate: isoDaysAgo(3, now),
-      dimensions: ['page'],
+      dimensions,
       rowLimit,
     }),
   });
@@ -80,16 +79,101 @@ export async function pageTraffic(siteUrl, creds, { fetcher = fetch, now = Date.
   if (!res.ok) {
     throw new Error(data.error?.message ?? `HTTP ${res.status} from Search Console`);
   }
+  return data.rows ?? [];
+}
+
+/** A URL as it is compared, here and in the crawl: no trailing slash. */
+const same = (url) => String(url ?? '').replace(/\/$/, '');
+
+/** Impressions, clicks and average position per page for the last 28 days.
+ *
+ *  `position` was in every response Google has ever sent and was being thrown
+ *  away. It is the one number in this tool that is a *ranking* rather than a
+ *  fault, and it is measured rather than estimated — which is the only reason
+ *  it is allowed anywhere near this project. Rounded to a tenth: an average
+ *  position is a mean over impressions and its second decimal is noise. */
+export async function pageTraffic(siteUrl, creds, { fetcher = fetch, now = Date.now(), rowLimit = 25000 } = {}) {
+  const token = await accessToken(creds, fetcher);
+  const rows = await query(siteUrl, token, { dimensions: ['page'], rowLimit, now, fetcher });
+
   const traffic = new Map();
-  for (const row of data.rows ?? []) {
+  for (const row of rows) {
     const page = row.keys?.[0];
     if (!page) continue;
-    traffic.set(page.replace(/\/$/, ''), {
+    traffic.set(same(page), {
       impressions: Math.round(row.impressions ?? 0),
       clicks: Math.round(row.clicks ?? 0),
+      // Absent rather than zero when Google did not send one: position 0 does
+      // not exist, and a page "ranking 0" would sort ahead of every real one.
+      ...(typeof row.position === 'number' ? { position: Math.round(row.position * 10) / 10 } : {}),
     });
   }
   return traffic;
+}
+
+/** The queries each page is actually found for, best-placed first.
+ *
+ *  A rank checker that needs no scraping and no second account: these are the
+ *  searches Google has already shown this site for, from the property whose
+ *  owner is running the audit. Nothing here asks what a page "should" rank for,
+ *  which is the part every keyword tool invents.
+ *
+ *  `perPage` is small on purpose. The point is to name what a page is found
+ *  for, not to export the property — a full query export is Search Console's
+ *  own job and it is better at it. */
+export async function pageQueries(
+  siteUrl,
+  creds,
+  { fetcher = fetch, now = Date.now(), rowLimit = 5000, perPage = 5 } = {},
+) {
+  const token = await accessToken(creds, fetcher);
+  const rows = await query(siteUrl, token, { dimensions: ['page', 'query'], rowLimit, now, fetcher });
+
+  const byPage = new Map();
+  for (const row of rows) {
+    const [page, term] = row.keys ?? [];
+    if (!page || !term) continue;
+    const list = byPage.get(same(page)) ?? [];
+    list.push({
+      query: term,
+      impressions: Math.round(row.impressions ?? 0),
+      clicks: Math.round(row.clicks ?? 0),
+      position: typeof row.position === 'number' ? Math.round(row.position * 10) / 10 : null,
+    });
+    byPage.set(same(page), list);
+  }
+
+  // Most-shown first within a page, then cut. Sorted here rather than trusted
+  // from the response: Google orders by clicks, and a query with impressions
+  // and no clicks is exactly the one worth naming.
+  for (const [page, list] of byPage) {
+    byPage.set(page, list.sort((a, b) => b.impressions - a.impressions).slice(0, perPage));
+  }
+  return byPage;
+}
+
+/** Pages that rank, just not where anybody sees them.
+ *
+ *  Positions 11 to 20 are page two of Google, where the click-through rate is
+ *  roughly nothing and the ranking is already earned. This is the only list in
+ *  this tool that is an opportunity rather than a fault, and every number in it
+ *  was measured by Google rather than worked out here.
+ *
+ *  Deliberately bounded below by impressions: a page at 13.0 that was shown
+ *  twice is noise, and naming it would make the list unreadable. */
+export function strikingDistance(traffic, queries, { from = 10.5, to = 20.5, minImpressions = 10 } = {}) {
+  const out = [];
+  for (const [page, seen] of traffic) {
+    if (typeof seen.position !== 'number') continue;
+    if (seen.position < from || seen.position > to) continue;
+    if (seen.impressions < minImpressions) continue;
+    // The query this page is closest on — the one worth looking at first.
+    const best = (queries?.get(page) ?? [])
+      .filter((row) => typeof row.position === 'number')
+      .sort((a, b) => a.position - b.position)[0] ?? null;
+    out.push({ page, ...seen, best });
+  }
+  return out.sort((a, b) => b.impressions - a.impressions);
 }
 
 /** Attach traffic to findings, and say what was found.
@@ -121,11 +205,26 @@ export async function searchConsole(origin, findings, opts = {}) {
     ];
   }
 
+  // The queries are a second call and a best-effort one: without them the
+  // positions still stand, and an optional integration's optional half must not
+  // be able to take the useful half down with it.
+  let queries = null;
+  let queriesFailed = false;
+  try {
+    queries = await pageQueries(opts.siteUrl ?? `${origin}/`, creds, opts);
+  } catch {
+    queriesFailed = true;
+  }
+
   let matched = 0;
   for (const finding of findings) {
     if (!finding.url) continue;
-    const seen = traffic.get(finding.url.replace(/\/$/, ''));
+    const seen = traffic.get(same(finding.url));
     if (!seen) continue;
+    // The page's own numbers, and nothing more. The queries are deliberately
+    // not attached here: they are the same five strings on every finding of a
+    // page, and a 300-page site's JSON report would carry them two thousand
+    // times over.
     finding.traffic = seen;
     matched++;
   }
@@ -144,13 +243,65 @@ export async function searchConsole(origin, findings, opts = {}) {
   }
   const everywhere = [...traffic.values()].reduce((n, t) => n + t.impressions, 0);
 
+  // Averaged over the crawled pages Google actually ranks, and weighted by
+  // impressions — a page shown four thousand times and one shown twice are not
+  // two equal opinions about where this site sits.
+  const ranked = [...counted]
+    .map((url) => traffic.get(same(url)))
+    .filter((seen) => seen && typeof seen.position === 'number');
+  const weight = ranked.reduce((n, seen) => n + Math.max(1, seen.impressions), 0);
+  const average = weight
+    ? ranked.reduce((n, seen) => n + seen.position * Math.max(1, seen.impressions), 0) / weight
+    : 0;
+
+  // Pages that already rank, just below where anybody looks. Bounded to the
+  // pages this crawl actually reached: a list of page-twos on URLs the run
+  // never opened is a list nobody can act on from this report.
+  const crawled = new Set(findings.map((finding) => same(finding.url)).filter(Boolean));
+  const striking = strikingDistance(traffic, queries).filter((row) => crawled.has(row.page));
+
+  const notes = [];
+  if (striking.length) {
+    const shownRows = striking.slice(0, 8).map((row) => {
+      const term = row.best ? `, best on "${row.best.query}" at ${row.best.position}` : '';
+      return `${row.page} (position ${row.position}, ${row.impressions.toLocaleString()} impressions${term})`;
+    });
+    notes.push(
+      f('info', 'search-console-striking',
+        `${striking.length} crawled page${striking.length === 1 ? '' : 's'} rank just below page one`,
+        `${shownRows.join('; ')}${striking.length > 8 ? `, and ${striking.length - 8} more` : ''}. ` +
+          'Positions 11 to 20 over 28 days, most-shown first. These already rank for something and ' +
+          'almost nobody sees them, so moving one up two places is usually less work than a new page. ' +
+          'Every number here was measured by Google, not worked out here.',
+        striking[0].page),
+    );
+  }
+
   return [
+    ...notes,
     f('info', 'search-console', `Search Console has ${traffic.size.toLocaleString()} pages for this site`,
       `${matched.toLocaleString()} of this crawl's findings ${matched === 1 ? 'is' : 'are'} on ` +
         `${counted.size.toLocaleString()} page${counted.size === 1 ? '' : 's'} Google has shown, ` +
         `${shown.toLocaleString()} time${shown === 1 ? '' : 's'} over 28 days — out of ` +
         `${everywhere.toLocaleString()} across the whole property. Findings are ordered by that where it ` +
-        'is known, and by how much of the site links to a page where it is not.', origin),
+        'is known, and by how much of the site links to a page where it is not.' +
+        (ranked.length
+          ? ` Average position across the ${ranked.length.toLocaleString()} crawled page` +
+            `${ranked.length === 1 ? '' : 's'} Google ranks: ${average.toFixed(1)}.`
+          : '') +
+        // A half that did not run reads exactly like a half that found nothing,
+        // which is the failure this project spends most of its effort avoiding.
+        // Verified against a live property: a site with 99 impressions over 28
+        // days gets HTTP 200 and zero rows for `query`, because Google withholds
+        // queries below a privacy threshold. Saying so is the difference between
+        // "no keywords" and "the tool is broken".
+        (queriesFailed
+          ? ' The queries for these pages could not be read; the positions above are unaffected.'
+          : traffic.size && queries && queries.size === 0
+            ? ' Google returned no queries for this property: it withholds any search too rare to be ' +
+              'anonymous, and a site at this traffic is usually under that threshold. The positions ' +
+              'above are unaffected.'
+            : ''), origin),
   ];
 }
 

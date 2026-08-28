@@ -9,6 +9,9 @@
 import { fingerprint } from './dupes.mjs';
 const stripTags = (s) => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
+/** The same, tolerant of the null a missing element gives. */
+const decodeText = (s) => (s === null || s === undefined ? s : decode(String(s)).trim());
+
 const decode = (s) =>
   s
     .replace(/&amp;/g, '&')
@@ -25,7 +28,36 @@ const decode = (s) =>
     .replace(/&hellip;/g, '…')
     .replace(/&(l|r)squo;/g, "'")
     .replace(/&(l|r)dquo;/g, '"')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
+    // The symbols that turn up in a title bar: a price, a company name, a spec.
+    .replace(/&pound;/g, '£')
+    .replace(/&euro;/g, '€')
+    .replace(/&yen;/g, '¥')
+    .replace(/&cent;/g, '¢')
+    .replace(/&copy;/g, '©')
+    .replace(/&reg;/g, '®')
+    .replace(/&trade;/g, '™')
+    .replace(/&deg;/g, '°')
+    .replace(/&times;/g, '×')
+    .replace(/&middot;/g, '·')
+    .replace(/&bull;/g, '•')
+    .replace(/&apos;/g, "'")
+    // Numeric references, decimal and hexadecimal. Hex was missing entirely,
+    // and `&#x2019;` is what a CMS emits for the apostrophe in "Widget's" — so
+    // a title with an apostrophe in it arrived with "&#x2019;" in the middle
+    // and was five characters longer than Google measures it.
+    .replace(/&#(\d+);/g, (_, code) => codePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => codePoint(Number.parseInt(code, 16)));
+
+/** A code point, or the entity left alone. `String.fromCodePoint` throws on
+ *  anything outside Unicode, and a malformed entity in one page's title is not
+ *  a reason for the crawl to stop. */
+function codePoint(value) {
+  try {
+    return String.fromCodePoint(value);
+  } catch {
+    return '';
+  }
+}
 
 /** Attribute value from a tag string: attr(`<img alt="x">`, 'alt') → 'x'
  *
@@ -231,7 +263,7 @@ export function parseHtml(rawHtml, pageUrl) {
 
   const headings = (level) =>
     [...markup.matchAll(new RegExp(`<h${level}\\b[^>]*>([\\s\\S]*?)</h${level}>`, 'gi'))].map((m) =>
-      stripTags(m[1]),
+      decode(stripTags(m[1])),
     );
 
   // Heading levels in document order, so a skipped level is visible — read
@@ -247,7 +279,13 @@ export function parseHtml(rawHtml, pageUrl) {
   );
 
   return {
-    title: (markup.match(/<title[^>]*>([\s\S]*?)<\/title>/i) ?? [null, null])[1]?.trim(),
+    // Decoded, like every attribute value already was. A title is element text
+    // rather than an attribute, so it went through none of this and arrived as
+    // "Widgets &amp; Co" everywhere — in the report, in the CSV, in the length
+    // Google is supposed to be measuring, and in the file handed to an
+    // assistant as the site's own name for itself. Found by generating an
+    // llms.txt for a real site and reading it.
+    title: decodeText((markup.match(/<title[^>]*>([\s\S]*?)<\/title>/i) ?? [null, null])[1]),
     description: metaBy('name', 'description'),
     robots: metaBy('name', 'robots'),
     // <meta http-equiv="refresh" content="0;url=…"> — a redirect that is not

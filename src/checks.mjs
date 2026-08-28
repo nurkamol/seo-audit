@@ -122,7 +122,7 @@ export function paginatedCanonical(url, canonical) {
 // "Get started", "Book now" and "Download the guide" are not on it — they say
 // something about the destination, and a list that grows opinions instead of
 // facts becomes a list that argues with people.
-const GENERIC_ANCHORS = new Set([
+export const GENERIC_ANCHORS = new Set([
   'read more', 'read the rest', 'continue reading', 'more', 'more info',
   'more information', 'learn more', 'find out more', 'click here', 'click',
   'here', 'this', 'this page', 'this link', 'link', 'view', 'view more',
@@ -155,7 +155,7 @@ const ASSET_FILE =
 // existence of a table. A real collision is two or three pages.
 const AMBIGUOUS_CEILING = 5;
 
-const anchorPhrase = (name) =>
+export const anchorPhrase = (name) =>
   (name ?? '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')

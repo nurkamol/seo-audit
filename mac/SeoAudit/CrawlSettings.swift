@@ -141,6 +141,11 @@ final class CrawlSettings: ObservableObject {
             // Always: rebuilding it needs per-page data that is gone by the
             // time the report arrives, and it costs one already-cached request.
             URLQueryItem(name: "sitemap-out", value: "1"),
+            // Same reasoning, and it costs no requests at all: llms.txt is
+            // built from titles and descriptions the crawl has already read.
+            URLQueryItem(name: "llms-out", value: "1"),
+            // And the structured data, from the same already-read titles.
+            URLQueryItem(name: "schema-out", value: "1"),
         ]
         if speed != .normal {
             items.append(.init(name: "concurrency", value: String(speed.connections)))

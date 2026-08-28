@@ -24,11 +24,17 @@ import {
   causePayload,
   type CrawlOptions,
   type Report,
+  type Score,
 } from "../lib/engine";
 import {
   causeRows,
   crawlOptions,
+  gainFor,
   normalise,
+  passedRows,
+  scoreLine,
+  scoreTag,
+  skippedRows,
   summaryLine,
 } from "../lib/present.mjs";
 import { ExportActions } from "./exports";
@@ -38,6 +44,37 @@ const TONE: Record<string, { icon: Icon; tint: Color }> = {
   warn: { icon: Icon.ExclamationMark, tint: Color.Orange },
   info: { icon: Icon.Info, tint: Color.Blue },
 };
+
+/** Green, amber or red. The thresholds are `gradeOf()`'s, so a dial in the
+ *  window and a tint here change colour at the same number. */
+const scoreTint = (value: number | undefined) =>
+  value === undefined
+    ? Color.SecondaryText
+    : value >= 80
+      ? Color.Green
+      : value >= 60
+        ? Color.Orange
+        : Color.Red;
+
+/** Pages affected, and — where the score counts the check — what fixing it is
+ *  worth. The points come first: it is the number that says what to do next. */
+function gainAccessories(
+  row: { pages: string[]; checkId: string },
+  score: Score | undefined,
+): List.Item.Accessory[] {
+  const gain = gainFor(row, score);
+  return [
+    ...(gain
+      ? [
+          {
+            tag: { value: `+${gain.toFixed(1)}`, color: Color.Green },
+            tooltip: "What the score gains when this is clean",
+          },
+        ]
+      : []),
+    { text: String(row.pages.length), icon: Icon.Document },
+  ];
+}
 
 export default function Command(
   // `Arguments.Audit` is generated from the manifest, so the shape of what
@@ -69,31 +106,41 @@ export function Report({ site }: { site: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const { findings, meta, sitemap } = await audit(site, {
-          ...options,
-          // Asked for during the run: rebuilding it needs the status, robots
-          // directive and canonical of every page, none of which survives past
-          // the crawl. It costs one already-cached request.
-          writeSitemap: true,
-          onProgress: (
-            event: Parameters<NonNullable<CrawlOptions["onProgress"]>>[0],
-          ) => {
-            if (cancelled) return;
-            // The same events the terminal prints, said shorter.
-            if (event.phase === "crawl" && event.url) {
-              setDone((n) => n + 1);
-              setProgress(new URL(event.url).pathname);
-            } else if (event.detail) {
-              setProgress(event.detail);
-            }
+        const { findings, meta, sitemap, llms, schema, score } = await audit(
+          site,
+          {
+            ...options,
+            // Asked for during the run: rebuilding it needs the status, robots
+            // directive and canonical of every page, none of which survives past
+            // the crawl. It costs one already-cached request.
+            writeSitemap: true,
+            // Costs no requests at all: it is built from titles and descriptions
+            // the crawl has already read.
+            writeLlms: true,
+            writeSchema: true,
+            onProgress: (
+              event: Parameters<NonNullable<CrawlOptions["onProgress"]>>[0],
+            ) => {
+              if (cancelled) return;
+              // The same events the terminal prints, said shorter.
+              if (event.phase === "crawl" && event.url) {
+                setDone((n) => n + 1);
+                setProgress(new URL(event.url).pathname);
+              } else if (event.detail) {
+                setProgress(event.detail);
+              }
+            },
           },
-        });
+        );
         if (cancelled) return;
         setReport({
           meta,
           findings,
           causes: causePayload(findings, meta.pages),
           sitemap,
+          llms,
+          schema,
+          score,
         });
       } catch (error) {
         if (!cancelled)
@@ -109,6 +156,7 @@ export function Report({ site }: { site: string }) {
 
   const rows = causeRows(report);
   const areas = [...new Set(rows.map((row) => row.area))];
+  const score = report?.score;
 
   return (
     <List isLoading={working} searchBarPlaceholder="Filter what to change">
@@ -142,11 +190,33 @@ export function Report({ site }: { site: string }) {
         />
       )}
 
+      {!working && !failed && scoreTag(score) && (
+        <List.Section title="Score" subtitle={summaryLine(report)}>
+          <List.Item
+            icon={{ source: Icon.Gauge, tintColor: scoreTint(score?.score) }}
+            title={scoreTag(score) ?? ""}
+            subtitle={scoreLine(score)}
+            actions={
+              <ActionPanel>
+                <ExportActions
+                  report={report}
+                  host={site ? new URL(site).host : ""}
+                />
+              </ActionPanel>
+            }
+          />
+        </List.Section>
+      )}
+
       {areas.map((area) => (
         <List.Section
           key={area}
           title={area}
-          subtitle={area === areas[0] ? summaryLine(report) : undefined}
+          subtitle={
+            area === areas[0] && !scoreTag(score)
+              ? summaryLine(report)
+              : undefined
+          }
         >
           {rows
             .filter((row) => row.area === area)
@@ -159,9 +229,7 @@ export function Report({ site }: { site: string }) {
                 }}
                 title={row.title}
                 subtitle={row.subtitle}
-                accessories={[
-                  { text: String(row.pages.length), icon: Icon.Document },
-                ]}
+                accessories={gainAccessories(row, score)}
                 actions={
                   <ActionPanel>
                     <ExportActions
@@ -194,6 +262,43 @@ export function Report({ site }: { site: string }) {
             ))}
         </List.Section>
       ))}
+
+      {/* What passed, and what never came up. A missing finding reads exactly
+          like a passing one, so both are named and the second says why. */}
+      {!working && !failed && passedRows(score).length > 0 && (
+        <List.Section
+          title="Passing"
+          subtitle={`${passedRows(score).length} checks`}
+        >
+          {passedRows(score).map((row) => (
+            <List.Item
+              key={row.id}
+              icon={{ source: Icon.CheckCircle, tintColor: Color.Green }}
+              title={row.title}
+              subtitle={row.subtitle}
+            />
+          ))}
+        </List.Section>
+      )}
+
+      {!working && !failed && skippedRows(score).length > 0 && (
+        <List.Section
+          title="Not Checked"
+          subtitle="Counted neither for nor against the score"
+        >
+          {skippedRows(score).map((row) => (
+            <List.Item
+              key={row.id}
+              icon={{
+                source: Icon.MinusCircle,
+                tintColor: Color.SecondaryText,
+              }}
+              title={row.title}
+              subtitle={row.subtitle}
+            />
+          ))}
+        </List.Section>
+      )}
     </List>
   );
 }

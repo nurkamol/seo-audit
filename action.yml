@@ -91,6 +91,26 @@ inputs:
       Where to write the findings as a spreadsheet, one row per finding. Off
       unless a path is given.
     required: false
+  write-sitemap:
+    description: >
+      Where to write the sitemap this site should have had — every page that
+      answered 200, is HTML, is indexable and is its own canonical. Refuses on
+      a crawl that did not see the whole site rather than writing a short one.
+      Off unless a path is given.
+    required: false
+  write-llms:
+    description: >
+      Where to write the llms.txt this site should have had, in the
+      llmstxt.org format, from the site's own titles and descriptions. Refuses
+      on a partial crawl for the same reason as write-sitemap. Off unless a
+      path is given.
+    required: false
+  write-schema:
+    description: >
+      Where to write the JSON-LD this site could add — WebSite, Organization
+      and BreadcrumbList, built only from strings the crawl actually read. Off
+      unless a path is given.
+    required: false
   comment:
     description: Post the findings as a sticky comment on the pull request
     required: false
@@ -159,6 +179,9 @@ runs:
         [ -n "$INPUT_BROWSER" ]  && args+=(--browser "$INPUT_BROWSER")
         [ -n "$INPUT_OS" ]       && args+=(--os "$INPUT_OS")
         [ -n "$INPUT_CSV" ]      && args+=(--csv "$INPUT_CSV")
+        [ -n "$INPUT_WRITE_SITEMAP" ] && args+=(--write-sitemap "$INPUT_WRITE_SITEMAP")
+        [ -n "$INPUT_WRITE_LLMS" ] && args+=(--write-llms "$INPUT_WRITE_LLMS")
+        [ -n "$INPUT_WRITE_SCHEMA" ] && args+=(--write-schema "$INPUT_WRITE_SCHEMA")
 
         node "$SEO_AUDIT_BIN" "${args[@]}"
         status=$?

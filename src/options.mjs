@@ -32,6 +32,8 @@ export const OPTIONS = [
   { flag: '--user-agent', query: 'userAgent', app: true },
   { flag: '--search-console', query: 'search-console', app: true },
   { flag: '--write-sitemap', query: 'sitemap-out', app: true, via: 'the Export menu' },
+  { flag: '--write-llms', query: 'llms-out', app: true, via: 'the Export menu' },
+  { flag: '--write-schema', query: 'schema-out', app: true, via: 'the Export menu' },
   { flag: '--ignore', query: 'ignore', app: true, via: 'right-clicking a finding, and the Settings list' },
   { flag: '--psi', query: 'psi', app: true, via: 'Settings → Performance' },
   { flag: '--psi-sample', query: 'psi-sample', app: true, via: 'Settings → Performance' },

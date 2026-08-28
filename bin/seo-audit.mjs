@@ -9,6 +9,8 @@ import { dirname, join } from 'node:path';
 import { serialize, parse, diff } from '../src/baseline.mjs';
 import { parseRedirectMap } from '../src/redirects.mjs';
 import { describe } from '../src/sitemap.mjs';
+import { describeLlms } from '../src/llms.mjs';
+import { describeSchema } from '../src/schema.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
 
@@ -32,6 +34,17 @@ const HELP = `
                        page that answered 200, is HTML, is indexable and is
                        its own canonical. Refuses on a crawl that did not
                        see the whole site, rather than writing a short one
+    --write-llms <file>
+                       write the llms.txt this site should have had — its own
+                       titles and descriptions, grouped by section, in the
+                       llmstxt.org format. Nothing is generated or rewritten,
+                       and it refuses on a partial crawl for the same reason
+    --write-schema <file>
+                       write the JSON-LD this site could add: WebSite,
+                       Organization and BreadcrumbList, built only from
+                       strings the crawl actually read. A page whose trail
+                       has an uncrawled step is skipped rather than given a
+                       name invented from its slug
     --since <date>     crawl only URLs the sitemap says changed on or after
                        this date. Refuses when lastmod cannot answer it —
                        absent, or one build stamp on every URL
@@ -140,6 +153,8 @@ function parseArgs(argv) {
     // comma-separated list, and a URL can contain a comma.
     else if (arg === '--exclude') (opts.exclude ??= []).push(value());
     else if (arg === '--write-sitemap') opts.writeSitemap = value();
+    else if (arg === '--write-llms') opts.writeLlms = value();
+    else if (arg === '--write-schema') opts.writeSchema = value();
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
     else if (arg === '--json') opts.json = value();
@@ -402,12 +417,12 @@ if (sites.length > 1) {
     const siteOpts = optionsForSite(opts, site.overrides);
     // Sites run one at a time on purpose: interleaved progress from twenty
     // hosts is unreadable, and each audit is already parallel internally.
-    const { findings, meta } = await audit(site.url, {
+    const { findings, meta, score } = await audit(site.url, {
       ...siteOpts,
       onNote: (m) => !opts.quiet && process.stderr.write(`      ${m}\n`),
       onProgress: live(site.url),
     });
-    runs.push({ findings, meta });
+    runs.push({ findings, meta, score });
   }
 
   if (!opts.quiet) console.log(portfolio(runs));
@@ -417,7 +432,11 @@ if (sites.length > 1) {
     writeFileSync(
       opts.json,
       JSON.stringify(
-        { tool: 'seo-audit', date: runs[0]?.meta.date, sites: runs.map((r) => ({ ...r.meta, findings: r.findings })) },
+        {
+          tool: 'seo-audit',
+          date: runs[0]?.meta.date,
+          sites: runs.map((r) => ({ ...r.meta, score: r.score, findings: r.findings })),
+        },
         null,
         2,
       ),
@@ -455,7 +474,7 @@ if (!opts.quiet && opts.settle) {
   process.stderr.write(`  waiting up to ${opts.settle}s for the site to serve consistent HTML …\n`);
 }
 
-const { findings, meta, sitemap } = await audit(target, {
+const { findings, meta, sitemap, llms, schema, score } = await audit(target, {
   ...opts,
   onNote: (m) => !opts.quiet && process.stderr.write(`  ${m}\n`),
   onProgress: live(target),
@@ -467,6 +486,14 @@ const { findings, meta, sitemap } = await audit(target, {
 if (opts.writeSitemap && sitemap) {
   if (sitemap.xml) writeFileSync(opts.writeSitemap, sitemap.xml);
   process.stderr.write('\n' + describe(sitemap, opts.writeSitemap));
+}
+if (opts.writeLlms && llms) {
+  if (llms.text) writeFileSync(opts.writeLlms, llms.text);
+  process.stderr.write('\n' + describeLlms(llms, opts.writeLlms));
+}
+if (opts.writeSchema && schema) {
+  if (schema.json) writeFileSync(opts.writeSchema, schema.json);
+  process.stderr.write('\n' + describeSchema(schema, opts.writeSchema));
 }
 
 // --- Compare against another deployment, if asked -----------------------
@@ -499,12 +526,12 @@ if (opts.baseline && !against) {
 
 // --- Report -------------------------------------------------------------
 if (!opts.quiet) {
-  console.log(comparison ? diffReport(comparison) : terminal(findings, meta));
+  console.log(comparison ? diffReport(comparison) : terminal(findings, meta, { score }));
 }
-if (opts.md) writeFileSync(opts.md, markdown(findings, meta));
-if (opts.html) writeFileSync(opts.html, html(findings, meta));
-if (opts.json) writeFileSync(opts.json, serialize(findings, meta, { full: true }));
-if (opts.csv) writeFileSync(opts.csv, csv(findings, meta));
+if (opts.md) writeFileSync(opts.md, markdown(findings, meta, { score }));
+if (opts.html) writeFileSync(opts.html, html(findings, meta, { score }));
+if (opts.json) writeFileSync(opts.json, serialize(findings, meta, { full: true, score }));
+if (opts.csv) writeFileSync(opts.csv, csv(findings, meta, { score }));
 if (!opts.quiet && (opts.md || opts.html || opts.json)) {
   console.log(`  ${[opts.md, opts.html, opts.json].filter(Boolean).join('  ')}\n`);
 }

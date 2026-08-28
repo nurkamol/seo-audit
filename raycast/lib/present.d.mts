@@ -5,7 +5,7 @@
 // shapes so the components get real types instead of `any`, which is not a
 // second implementation of anything: it is the same functions, described.
 
-import type { Cause, Finding, Level, Meta, Plan } from "./engine";
+import type { Cause, Finding, Level, Meta, Plan, Score } from "./engine";
 
 /**
  * The preferences, as the manifest declares them.
@@ -54,6 +54,8 @@ export interface KeptReport {
   causes: number;
   errors: number;
   warnings: number;
+  /** Present once the app that wrote the index knew how to score a run. */
+  score?: number;
   path: string;
   when: Date;
 }
@@ -64,6 +66,7 @@ export interface StoredReport {
   meta?: Meta;
   findings?: Finding[];
   causes?: Cause[];
+  score?: Score;
 }
 
 export const SPEEDS: Record<"gentle" | "normal" | "fast", number>;
@@ -73,6 +76,15 @@ export function normalise(text: string | undefined | null): string | null;
 export function previewRows(plan: Plan | null): Row[];
 export function causeRows(report: { causes?: Cause[] } | null): CauseRow[];
 export function summaryLine(report: { meta?: Meta; findings?: Finding[]; causes?: Cause[] } | null): string;
+
+export function scoreTag(score: Score | null | undefined): string | null;
+export function scoreLine(score: Score | null | undefined): string;
+export function gainFor(
+  cause: { checkId?: string; id?: string; pages?: string[] },
+  score: Score | null | undefined,
+): number | null;
+export function passedRows(score: Score | null | undefined): Row[];
+export function skippedRows(score: Score | null | undefined): Row[];
 
 export function libraryRoot(root?: string): string;
 export function keptReports(root?: string): KeptReport[];

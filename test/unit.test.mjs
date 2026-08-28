@@ -3639,3 +3639,940 @@ test('search-console counts impressions on the crawled pages, not the property',
   // And the traffic is attached to the findings that have it, and only those.
   assert.deepEqual(findings.map((f) => f.traffic?.impressions ?? null), [13, 13, null]);
 });
+
+// --- score ----------------------------------------------------------------
+// The score is the one number in this tool that is a judgement rather than a
+// measurement, so the tests are about keeping the judgement honest: that its
+// weights still match the levels the checks are actually written at, that a
+// check nobody could have run is never counted as passed, and that what it
+// says a fix is worth is what the next run actually pays out.
+
+test('every scored check is weighted at the level it is actually emitted at', async () => {
+  const { CHECKLIST, NOT_SCORED } = await import('../src/score.mjs');
+  const { emittedLevels } = await import('../scripts/check-levels.mjs');
+  const emitted = emittedLevels();
+
+  const worstOf = (levels) =>
+    levels.has('error') ? 'error' : levels.has('warn') ? 'warn' : 'info';
+
+  for (const [id, levels] of emitted) {
+    const worst = worstOf(levels);
+    if (worst === 'info') {
+      assert.ok(!CHECKLIST[id], `${id} only ever fires as a note, so it must not be scored`);
+      continue;
+    }
+    if (NOT_SCORED[id]) {
+      assert.ok(!CHECKLIST[id], `${id} cannot be both scored and excluded`);
+      assert.ok(NOT_SCORED[id].length > 20, `${id} needs a reason, not a shrug`);
+      continue;
+    }
+    assert.ok(
+      CHECKLIST[id],
+      `${id} fires at ${worst} and is neither in the checklist nor in NOT_SCORED`,
+    );
+    assert.equal(
+      CHECKLIST[id].worst,
+      worst,
+      `${id} is emitted at ${worst} and the checklist says ${CHECKLIST[id].worst}`,
+    );
+  }
+});
+
+// The other direction. A check that was renamed or deleted leaves an entry
+// behind that can never fire, and it would sit in "passing" for ever — a claim
+// the tool cannot back up. Ids built by template are exempt: `header-${name}`
+// and `psi-${metric}` are not literals the reader can see.
+test('the checklist has no entry for a check that no longer exists', async () => {
+  const { CHECKLIST } = await import('../src/score.mjs');
+  const { emittedLevels } = await import('../scripts/check-levels.mjs');
+  const emitted = emittedLevels();
+  const templated = /^(header-|psi-|og-(title|description|image)-missing$|redirect-)/;
+
+  for (const id of Object.keys(CHECKLIST)) {
+    if (templated.test(id)) continue;
+    assert.ok(emitted.has(id), `${id} is in the checklist and nothing in src/ emits it`);
+  }
+});
+
+test('every scored check has an area, a pass line and a scope', async () => {
+  const { checklist } = await import('../src/score.mjs');
+  for (const check of checklist()) {
+    assert.notEqual(check.area, 'Other', `${check.id} has no area in src/areas.mjs`);
+    assert.ok(check.pass?.length > 8, `${check.id} needs a sentence for when it passes`);
+    assert.ok(['page', 'site'].includes(check.scope), `${check.id} has scope ${check.scope}`);
+  }
+});
+
+test('a clean run scores 100 and lists what it passed', async () => {
+  const { scoreRun } = await import('../src/score.mjs');
+  const score = scoreRun([], { pages: 10, applicable: { images: true } });
+  assert.equal(score.score, 100);
+  assert.equal(score.grade, 'A');
+  assert.equal(score.lost, 0);
+  assert.equal(score.failed.length, 0);
+  assert.ok(score.passed.some((c) => c.id === 'img-alt'), 'the alt check applied and passed');
+});
+
+// The half that matters. A site with no images has not passed the alt-text
+// check, and a run without --psi has not passed the performance ones — counting
+// either as a pass hands out a hundred points for doing less.
+test('a check that could not run is skipped, not counted as passed', async () => {
+  const { scoreRun } = await import('../src/score.mjs');
+  const score = scoreRun([], { pages: 10, applicable: {} });
+  assert.ok(!score.passed.some((c) => c.id === 'img-alt'), 'no images, so nothing passed');
+  const skipped = score.skipped.find((c) => c.id === 'img-alt');
+  assert.ok(skipped, 'and it is named as skipped');
+  assert.match(skipped.why, /image/);
+  // Still 100: a check that cannot apply cannot cost anything either.
+  assert.equal(score.score, 100);
+});
+
+test('a site-wide error costs its whole weight and a one-page one costs a share', async () => {
+  const { scoreRun, WEIGHT } = await import('../src/score.mjs');
+
+  const everywhere = scoreRun(
+    Array.from({ length: 10 }, (_, i) => ({
+      level: 'error', id: 'h1-missing', url: `https://x.test/${i}`,
+    })),
+    { pages: 10, applicable: {} },
+  );
+  assert.equal(everywhere.score, 100 - WEIGHT.error);
+  assert.equal(everywhere.failed[0].cost, WEIGHT.error);
+
+  const once = scoreRun([{ level: 'error', id: 'h1-missing', url: 'https://x.test/a' }], {
+    pages: 10,
+    applicable: {},
+  });
+  assert.equal(once.failed[0].cost, WEIGHT.error / 10);
+  assert.equal(once.score, 100 - Math.round(WEIGHT.error / 10));
+});
+
+// One page tripping a check nine times is one page failing it, not nine. Left
+// uncounted this way, a page with nine images and no alt text would take a
+// forty-page site below zero on its own.
+test('a page that trips a check several times counts once', async () => {
+  const { scoreRun, WEIGHT } = await import('../src/score.mjs');
+  const nine = Array.from({ length: 9 }, () => ({
+    level: 'error', id: 'img-alt', url: 'https://x.test/a',
+  }));
+  const score = scoreRun(nine, { pages: 10, applicable: { images: true } });
+  assert.equal(score.failed[0].pages, 1);
+  assert.equal(score.failed[0].cost, WEIGHT.error / 10);
+});
+
+test('notes cost nothing', async () => {
+  const { scoreRun } = await import('../src/score.mjs');
+  const score = scoreRun(
+    [{ level: 'info', id: 'llms-missing', url: 'https://x.test/' },
+     { level: 'info', id: 'img-srcset', url: 'https://x.test/a' }],
+    { pages: 4, applicable: { images: true } },
+  );
+  assert.equal(score.score, 100);
+  assert.equal(score.failed.length, 0);
+});
+
+// What "clear the errors and it is N" promises has to be what the next run
+// pays out, or it is a number that reads like a forecast and behaves like one.
+test('the errors-fixed score is what a run with the errors gone actually scores', async () => {
+  const { scoreRun } = await import('../src/score.mjs');
+  const findings = [
+    { level: 'error', id: 'h1-missing', url: 'https://x.test/a' },
+    { level: 'error', id: 'h1-missing', url: 'https://x.test/b' },
+    { level: 'warn', id: 'desc-missing', url: 'https://x.test/a' },
+  ];
+  const now = scoreRun(findings, { pages: 4, applicable: {} });
+  const fixed = scoreRun(findings.filter((f) => f.level !== 'error'), { pages: 4, applicable: {} });
+  assert.equal(now.ifErrorsFixed, fixed.score);
+  assert.ok(now.score < fixed.score);
+});
+
+test('a run that never got a page says so instead of scoring zero', async () => {
+  const { scoreRun } = await import('../src/score.mjs');
+  const dead = scoreRun([{ level: 'error', id: 'unreachable', url: 'https://x.test/' }], { pages: 0 });
+  assert.equal(dead.score, null);
+  assert.match(dead.why, /nothing to score/);
+});
+
+test('the score is floored at zero rather than going negative', async () => {
+  const { scoreRun } = await import('../src/score.mjs');
+  const everything = ['h1-missing', 'title-missing', 'viewport-missing', 'noindex',
+    'x-robots-noindex', 'canonical-multiple', 'canonical-dead', 'mixed-content',
+    'page-status', 'canonical-noindex'].map((id) => ({ level: 'error', id, url: 'https://x.test/a' }));
+  const score = scoreRun(everything, { pages: 1, applicable: { https: true } });
+  assert.equal(score.score, 0);
+  assert.equal(score.grade, 'F');
+});
+
+// --- score, end to end ----------------------------------------------------
+
+test('a real run carries a score, and the report shows it', async () => {
+  const site = await startFixtureSite();
+  try {
+    const { findings, meta, score } = await audit(site.origin, { limit: 30 });
+    assert.ok(score.score >= 0 && score.score <= 100, `score was ${score.score}`);
+    assert.ok(score.checks.passed > 0, 'something passed');
+
+    // What the run was in a position to check travels with it, so a client
+    // reading the JSON knows what the score did and did not look at.
+    assert.equal(typeof meta.applicable, 'object');
+    assert.equal(meta.applicable.psi, false);
+
+    const md = markdown(findings, meta, { score });
+    assert.match(md, new RegExp(`## Score: ${score.score}/100`));
+    assert.match(md, /## Passing — \d+ checks/);
+    assert.match(md, /## Not checked/);
+
+    const page = html(findings, meta, { score });
+    assert.match(page, /class="score/);
+    assert.match(page, /Score \d+ out of 100/);
+    assert.match(page, /id="passing"/);
+
+    // And a report rendered with no score is still a report, because the
+    // Worker's /export route is handed whatever a client kept.
+    assert.doesNotThrow(() => html(findings, meta));
+    assert.doesNotThrow(() => markdown(findings, meta));
+  } finally {
+    await site.stop();
+  }
+});
+
+// --- comparing two deployments --------------------------------------------
+// `--against` has documented "hosts are ignored" since it shipped and passed an
+// option `diff()` never read, so comparing a rebuild with the site it replaces
+// reported every finding as both fixed and added. The Mac app could not offer
+// it at all, for the same reason underneath.
+
+test('two runs of different hosts are compared by path, not by URL', () => {
+  const previous = {
+    meta: { origin: 'https://example.com', date: '2026-01-01' },
+    findings: [
+      { level: 'error', id: 'h1-missing', title: 'No h1', url: 'https://example.com/about/' },
+      { level: 'warn', id: 'desc-missing', title: 'No description', url: 'https://example.com/gone/' },
+    ],
+  };
+  const current = [
+    // The same fault on the same page of the rebuild — not news.
+    { level: 'error', id: 'h1-missing', title: 'No h1', url: 'https://new.example.com/about' },
+    // And one the rebuild introduced.
+    { level: 'error', id: 'title-missing', title: 'No title', url: 'https://new.example.com/about' },
+  ];
+
+  const d = diff(previous, current, { currentMeta: { origin: 'https://new.example.com' } });
+  assert.equal(d.crossSite, true);
+  assert.deepEqual(d.added.map((f) => f.id), ['title-missing']);
+  assert.deepEqual(d.fixed.map((f) => f.id), ['desc-missing']);
+  assert.equal(d.unchanged, 1);
+});
+
+test('two runs of the same host are still compared by whole URL', () => {
+  const previous = {
+    meta: { origin: 'https://example.com', date: '2026-01-01' },
+    findings: [{ level: 'error', id: 'h1-missing', title: 'No h1', url: 'https://example.com/a/' }],
+  };
+  // Same check, different page. On one host those are two different problems
+  // and collapsing them would hide a regression.
+  const d = diff(previous, [{ level: 'error', id: 'h1-missing', title: 'No h1', url: 'https://example.com/b/' }], {
+    currentMeta: { origin: 'https://example.com' },
+  });
+  assert.equal(d.crossSite, false);
+  assert.equal(d.added.length, 1);
+  assert.equal(d.fixed.length, 1);
+});
+
+test('a trailing slash is not a difference between two deployments', () => {
+  const previous = {
+    meta: { origin: 'https://old.test' },
+    findings: [{ level: 'warn', id: 'thin-content', title: 'Thin', url: 'https://old.test/blog/post' }],
+  };
+  const d = diff(previous, [{ level: 'warn', id: 'thin-content', title: 'Thin', url: 'https://new.test/blog/post/' }], {
+    currentMeta: { origin: 'https://new.test' },
+  });
+  assert.equal(d.added.length, 0);
+  assert.equal(d.fixed.length, 0);
+});
+
+// A query string is not a trailing slash: /search?q=a and /search?q=b are two
+// pages on any host.
+test('the query survives a cross-site comparison', () => {
+  const previous = {
+    meta: { origin: 'https://old.test' },
+    findings: [{ level: 'warn', id: 'thin-content', title: 'Thin', url: 'https://old.test/s?q=a' }],
+  };
+  const d = diff(previous, [{ level: 'warn', id: 'thin-content', title: 'Thin', url: 'https://new.test/s?q=b' }], {
+    currentMeta: { origin: 'https://new.test' },
+  });
+  assert.equal(d.added.length, 1);
+  assert.equal(d.fixed.length, 1);
+});
+
+// Found only because somebody asked whether the exports had been updated: the
+// score reached the terminal and the HTML and stopped there. The CSV had no
+// column for it, the portfolio table had no column for it, and the macOS
+// window re-encoded the report from its own models on the way to `/render`,
+// which dropped every field the Swift side had not been taught about — so an
+// HTML report exported from the window lost the score panel the window itself
+// was showing. One test per writer, so the next field to travel with a report
+// cannot go missing in four places quietly.
+test('every writer carries the score, or says nothing about it at all', async () => {
+  const { csv: csvOf, portfolio: portfolioOf, portfolioMarkdown: portfolioMd, portfolioHtml: portfolioPage } =
+    await import('../src/report.mjs');
+  const { scoreRun } = await import('../src/score.mjs');
+
+  const findings = [{ level: 'error', id: 'h1-missing', title: 'No h1', detail: 'none', url: 'https://x.test/a' }];
+  const meta = { origin: 'https://x.test', pages: 4, date: '2026-01-01' };
+  const score = scoreRun(findings, { pages: 4, applicable: {} });
+
+  // CSV: a points column, and the rest of the checklist as rows, so the file
+  // answers "what was checked" and not only "what was wrong".
+  const sheet = csvOf(findings, meta, { score });
+  const header = sheet.split('\r\n')[0].split(',').map((c) => c.replace(/^\uFEFF?"|"$/g, ''));
+  // Appended, not inserted: every column that existed before keeps its index,
+  // so a script reading by position is not quietly broken by a new feature.
+  assert.equal(header.at(-1), 'points');
+  assert.equal(header.indexOf('detail'), 10);
+  assert.equal(header.indexOf('inlinks'), 6);
+  assert.match(sheet, /"pass","h1-multiple"/);
+  assert.match(sheet, /"not-checked",/);
+  // And with no score it is exactly the findings file it has always been.
+  const plain = csvOf(findings, meta);
+  assert.equal(plain.split('\r\n').filter(Boolean).length, 2);
+
+  // Portfolio: one column, since "which of my twenty sites is worst" is the
+  // only question a portfolio exists to answer.
+  const runs = [
+    { findings, meta, score },
+    { findings: [], meta: { ...meta, origin: 'https://y.test' }, score: scoreRun([], { pages: 4, applicable: {} }) },
+  ];
+  assert.match(portfolioOf(runs), /SCORE/);
+  assert.match(portfolioMd(runs), /\| Site \| Score \|/);
+  assert.match(portfolioPage(runs), /<th class="n">Score<\/th>/);
+
+  // The worst site is the row you act on, so it is the first one.
+  const { portfolioRows: rowsOf } = await import('../src/report.mjs');
+  assert.equal(rowsOf(runs)[0].host, 'x.test');
+
+  // A run that never answered sorts on its tallies and prints a dash, never a
+  // zero — it has not scored nothing, it has not been scored.
+  const dead = { findings: [], meta: { ...meta, origin: 'https://z.test', pages: 0 }, score: { score: null } };
+  assert.match(portfolioOf([...runs, dead]), /—/);
+});
+
+// --- AI crawlers ----------------------------------------------------------
+// The one check in this tool whose subject is a decision rather than a fault.
+// A publisher who does not want their work in a training set and says so in
+// robots.txt has done the right thing correctly, so this is a note, phrased as
+// a fact — and the tests below are mostly about it staying that way.
+
+test('AI access is read from robots.txt, per agent, the way Google reads it', async () => {
+  const { aiAccess } = await import('../src/agents-ai.mjs');
+  const groups = parseRobots(`
+User-agent: *
+Disallow: /private
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+Allow: /blog/
+`);
+  const at = (path) => Object.fromEntries(
+    aiAccess(groups, robotsVerdict, path).map((row) => [row.agent.token, row]),
+  );
+
+  const root = at('/');
+  assert.equal(root.gptbot.allowed, false);
+  assert.equal(root.gptbot.explicit, true, 'GPTBot is named, so this is a decision');
+  // Not named anywhere, and the only `*` rule is about /private — so it is in.
+  assert.equal(root.claudebot.allowed, true);
+  assert.equal(root.claudebot.explicit, false);
+
+  // A longer Allow beats a Disallow, which is the rule this project already
+  // implements once and must not implement a second time here.
+  assert.equal(at('/blog/post')['perplexitybot'].allowed, true);
+  assert.equal(root.perplexitybot.allowed, false);
+});
+
+// The distinction that matters, and the one everybody gets wrong: blocking a
+// training crawler costs nothing today, blocking an answering one removes the
+// site from answers now.
+test('blocking is described by what it costs, and by whether anybody chose it', async () => {
+  const { aiAccess, describeAccess } = await import('../src/agents-ai.mjs');
+
+  const chosen = describeAccess(aiAccess(parseRobots('User-agent: GPTBot\nDisallow: /'), robotsVerdict));
+  assert.equal(chosen.blocked.length, 1);
+  assert.equal(chosen.training.length, 1);
+  assert.equal(chosen.answering.length, 0);
+  assert.match(chosen.detail, /changes nothing about whether the site can be cited today/);
+  assert.match(chosen.detail, /looks deliberate — this is a note, not a fault/);
+
+  // A `*` block catches everybody and names nobody: usually a CDN default.
+  const swept = describeAccess(aiAccess(parseRobots('User-agent: *\nDisallow: /'), robotsVerdict));
+  assert.equal(swept.decided, false);
+  assert.match(swept.detail, /usually a CDN or plugin default rather than a decision anybody made/);
+  assert.ok(swept.answering.length > 0, 'the answering crawlers are shut out too');
+});
+
+// The half that matters: a site that lets the answer engines in says nothing at
+// all, rather than a line per agent confirming it.
+test('a site that blocks no AI crawler produces no finding', async () => {
+  const { aiAccess, describeAccess } = await import('../src/agents-ai.mjs');
+  assert.equal(describeAccess(aiAccess(parseRobots('User-agent: *\nAllow: /'), robotsVerdict)), null);
+  assert.equal(describeAccess(aiAccess(parseRobots(''), robotsVerdict)), null);
+  // A Disallow that does not reach the root is not a block on the site.
+  assert.equal(
+    describeAccess(aiAccess(parseRobots('User-agent: *\nDisallow: /admin'), robotsVerdict)),
+    null,
+  );
+});
+
+// End to end through siteChecks, which is where the two files are actually
+// fetched — and where the contradiction lives.
+test('llms.txt beside a Disallow on the answering crawlers is a conflict', async () => {
+  const origin = 'https://x.test';
+  const routes = (url) => {
+    if (url.endsWith('/robots.txt')) {
+      return { body: 'User-agent: PerplexityBot\nDisallow: /\nUser-agent: GPTBot\nDisallow: /' };
+    }
+    if (url.endsWith('/llms.txt')) return { body: '# x.test\n\n- [Home](/)' };
+    return notFound(url);
+  };
+  const out = await siteChecks(origin, fakeFetcher(routes), bareSite(origin), {
+    sitemapUrls: [`${origin}/p/`],
+  });
+
+  const blocked = out.find((finding) => finding.id === 'ai-crawler-blocked');
+  assert.ok(blocked, 'expected the block to be reported');
+  assert.equal(blocked.level, 'info', 'blocking is a decision, not a fault');
+
+  const conflict = out.find((finding) => finding.id === 'ai-crawler-conflict');
+  assert.ok(conflict, 'expected the contradiction to be reported');
+  assert.equal(conflict.level, 'warn');
+  assert.match(conflict.detail, /PerplexityBot/);
+  // GPTBot trains rather than answers, so it is not part of the contradiction:
+  // an llms.txt is still readable by an assistant that was never going to fetch
+  // the page live.
+  assert.doesNotMatch(conflict.detail, /GPTBot/);
+});
+
+// Both halves of the "does not fire" case: no llms.txt, and no block.
+test('the AI conflict stays quiet without both halves of it', async () => {
+  const origin = 'https://x.test';
+  const run = async (routes) =>
+    (await siteChecks(origin, fakeFetcher(routes), bareSite(origin), { sitemapUrls: [`${origin}/p/`] }))
+      .map((finding) => finding.id);
+
+  // Blocked, but nothing invited them in the first place. The 404 is spelled
+  // out because this fixture answers 200 to anything it was not told about,
+  // which is indistinguishable from a site serving an empty llms.txt.
+  const noLlms = await run((url) => {
+    if (url.endsWith('/robots.txt')) return { body: 'User-agent: PerplexityBot\nDisallow: /' };
+    if (url.endsWith('/llms.txt')) return { status: 404 };
+    return notFound(url);
+  });
+  assert.ok(noLlms.includes('ai-crawler-blocked'));
+  assert.ok(!noLlms.includes('ai-crawler-conflict'));
+
+  // llms.txt, and everybody let in.
+  const welcoming = await run((url) => {
+    if (url.endsWith('/robots.txt')) return { body: 'User-agent: *\nAllow: /' };
+    if (url.endsWith('/llms.txt')) return { body: '# x.test' };
+    return notFound(url);
+  });
+  assert.ok(!welcoming.includes('ai-crawler-blocked'));
+  assert.ok(!welcoming.includes('ai-crawler-conflict'));
+  assert.ok(!welcoming.includes('llms-missing'));
+});
+
+// --- Search Console: position and queries ---------------------------------
+// The one ranking in this tool, and it is allowed here for one reason: Google
+// measured it. Nothing below asks what a page *should* rank for, which is the
+// part every keyword tool invents.
+
+test('position comes back with the traffic, rounded to a tenth', async () => {
+  const { pageTraffic } = await import('../src/console.mjs');
+  const traffic = await pageTraffic('https://x.test/', { clientId: 'c', clientSecret: 's', refreshToken: 'r' }, {
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      return {
+        ok: true,
+        json: async () => ({
+          rows: [
+            { keys: ['https://x.test/a/'], impressions: 400, clicks: 9, position: 12.3456 },
+            // No position in the row: absent, never zero. A page "ranking 0"
+            // would sort ahead of every real one.
+            { keys: ['https://x.test/b/'], impressions: 3, clicks: 0 },
+          ],
+        }),
+      };
+    },
+  });
+  assert.equal(traffic.get('https://x.test/a').position, 12.3);
+  assert.equal('position' in traffic.get('https://x.test/b'), false);
+});
+
+test('queries come back per page, most-shown first and capped', async () => {
+  const { pageQueries } = await import('../src/console.mjs');
+  const byPage = await pageQueries('https://x.test/', { clientId: 'c', clientSecret: 's', refreshToken: 'r' }, {
+    perPage: 2,
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      return {
+        ok: true,
+        json: async () => ({
+          rows: [
+            // Google orders by clicks; a query with impressions and no clicks
+            // is exactly the one worth naming, so this re-sorts.
+            { keys: ['https://x.test/a/', 'cheap widgets'], impressions: 10, clicks: 5, position: 4 },
+            { keys: ['https://x.test/a/', 'best widgets'], impressions: 900, clicks: 0, position: 11.2 },
+            { keys: ['https://x.test/a/', 'widget reviews'], impressions: 50, clicks: 1, position: 30 },
+            { keys: ['https://x.test/b/', 'about us'], impressions: 4, clicks: 0, position: 2 },
+          ],
+        }),
+      };
+    },
+  });
+  assert.deepEqual(byPage.get('https://x.test/a').map((r) => r.query), ['best widgets', 'widget reviews']);
+  assert.equal(byPage.get('https://x.test/b').length, 1);
+});
+
+test('striking distance is page two, with enough impressions to be real', async () => {
+  const { strikingDistance } = await import('../src/console.mjs');
+  const traffic = new Map([
+    ['https://x.test/two', { impressions: 900, clicks: 1, position: 12.4 }],
+    // Page one already. Not an opportunity, it is a result.
+    ['https://x.test/one', { impressions: 5000, clicks: 400, position: 3.1 }],
+    // Page two, and shown twice. Noise, and naming it makes the list unreadable.
+    ['https://x.test/noise', { impressions: 2, clicks: 0, position: 13.0 }],
+    // Far enough back that "two places" is not the fix.
+    ['https://x.test/far', { impressions: 800, clicks: 0, position: 44 }],
+    // Ranked by nothing Google told us.
+    ['https://x.test/unranked', { impressions: 900, clicks: 0 }],
+  ]);
+  const queries = new Map([
+    ['https://x.test/two', [
+      { query: 'widgets', impressions: 900, clicks: 1, position: 14 },
+      { query: 'best widgets', impressions: 100, clicks: 0, position: 11.1 },
+    ]],
+  ]);
+
+  const rows = strikingDistance(traffic, queries);
+  assert.deepEqual(rows.map((r) => r.page), ['https://x.test/two']);
+  // The query it is closest on, not the one it is shown most for — that is the
+  // one worth looking at first.
+  assert.equal(rows[0].best.query, 'best widgets');
+
+  // And with no queries fetched at all, the positions still stand.
+  assert.equal(strikingDistance(traffic, null)[0].best, null);
+});
+
+// A cause carries where Google puts its best page, so the ordering in every
+// report can prefer a template on page two over one nobody has ever been shown.
+test('a cause carries the best position of its pages', () => {
+  const findings = [
+    { level: 'warn', id: 'desc-missing', title: 'x', url: 'https://x.test/a/', traffic: { impressions: 10, clicks: 0, position: 30 } },
+    { level: 'warn', id: 'desc-missing', title: 'x', url: 'https://x.test/b/', traffic: { impressions: 90, clicks: 1, position: 4.2 } },
+  ];
+  const [cause] = byCause(findings);
+  assert.equal(cause.position, 4.2);
+  assert.match(causeScope(cause, 2), /100 impressions in 28 days, best at position 4.2/);
+
+  // Without Search Console there is no position and the sentence does not
+  // mention one, rather than saying "position null".
+  const [plain] = byCause(findings.map(({ traffic, ...rest }) => rest));
+  assert.equal(plain.position, null);
+  assert.doesNotMatch(causeScope(plain, 2), /position/);
+});
+
+// End to end: two calls, and the second one failing must not take the first
+// one's answer down with it.
+test('the queries call is best-effort, and its failure keeps the positions', async () => {
+  const { searchConsole } = await import('../src/console.mjs');
+  const findings = [{ id: 'thin-content', url: 'https://x.test/two/' }];
+
+  let call = 0;
+  const notes = await searchConsole('https://x.test', findings, {
+    credentials: { clientId: 'c', clientSecret: 's', refreshToken: 'r' },
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      call += 1;
+      // First call is the per-page one; the second asks for queries and fails.
+      if (call > 1) return { ok: false, status: 500, json: async () => ({ error: { message: 'nope' } }) };
+      return {
+        ok: true,
+        json: async () => ({
+          rows: [{ keys: ['https://x.test/two/'], impressions: 900, clicks: 1, position: 12.4 }],
+        }),
+      };
+    },
+  });
+
+  // The position still reached the finding.
+  assert.equal(findings[0].traffic.position, 12.4);
+  // And the striking list is still there, without a query to name.
+  const striking = notes.find((note) => note.id === 'search-console-striking');
+  assert.ok(striking, 'expected the page-two list');
+  assert.match(striking.detail, /position 12.4, 900 impressions/);
+  assert.doesNotMatch(striking.detail, /best on/);
+  // And the report says the half that did not run, rather than leaving it to
+  // read as "no keywords".
+  const summary = notes.find((note) => note.id === 'search-console');
+  assert.match(summary.detail, /queries for these pages could not be read/);
+  // Notes, never errors: this is an opportunity, not a fault.
+  assert.ok(notes.every((note) => note.level === 'info'));
+});
+
+// The half that matters: a site whose pages all rank on page one, or not at
+// all, gets no page-two list rather than an empty one.
+test('no page-two list when nothing is on page two', async () => {
+  const { searchConsole } = await import('../src/console.mjs');
+  const notes = await searchConsole('https://x.test', [{ id: 'thin-content', url: 'https://x.test/a/' }], {
+    credentials: { clientId: 'c', clientSecret: 's', refreshToken: 'r' },
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      return {
+        ok: true,
+        json: async () => ({ rows: [{ keys: ['https://x.test/a/'], impressions: 5000, clicks: 400, position: 2.1 }] }),
+      };
+    },
+  });
+  assert.ok(!notes.some((note) => note.id === 'search-console-striking'));
+  // The average position is weighted by impressions and reported once.
+  assert.match(notes[0].detail, /Average position across the 1 crawled page Google ranks: 2.1/);
+});
+
+// Found on a live property, not by a test: a site with 99 impressions over 28
+// days gets HTTP 200 and zero rows for the query dimension, because Google
+// withholds any search too rare to be anonymous. Silence there reads exactly
+// like "this site is found for nothing", which is a different claim.
+test('an empty query answer is explained, not left to look like no keywords', async () => {
+  const { searchConsole } = await import('../src/console.mjs');
+  let call = 0;
+  const notes = await searchConsole('https://x.test', [{ id: 'thin-content', url: 'https://x.test/a/' }], {
+    credentials: { clientId: 'c', clientSecret: 's', refreshToken: 'r' },
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      call += 1;
+      if (call > 1) return { ok: true, json: async () => ({ rows: [] }) };
+      return {
+        ok: true,
+        json: async () => ({ rows: [{ keys: ['https://x.test/a/'], impressions: 15, clicks: 1, position: 1.2 }] }),
+      };
+    },
+  });
+  const summary = notes.find((note) => note.id === 'search-console');
+  assert.match(summary.detail, /withholds any search too rare to be anonymous/);
+  assert.match(summary.detail, /positions above are unaffected/);
+});
+
+// And a property that does return queries says nothing about thresholds.
+test('a property with query data gets no explanation it does not need', async () => {
+  const { searchConsole } = await import('../src/console.mjs');
+  let call = 0;
+  const notes = await searchConsole('https://x.test', [{ id: 'thin-content', url: 'https://x.test/a/' }], {
+    credentials: { clientId: 'c', clientSecret: 's', refreshToken: 'r' },
+    fetcher: async (url) => {
+      if (String(url).includes('/token')) return { ok: true, json: async () => ({ access_token: 't' }) };
+      call += 1;
+      if (call > 1) {
+        return { ok: true, json: async () => ({ rows: [{ keys: ['https://x.test/a/', 'widgets'], impressions: 9, clicks: 0, position: 3 }] }) };
+      }
+      return { ok: true, json: async () => ({ rows: [{ keys: ['https://x.test/a/'], impressions: 15, clicks: 1, position: 1.2 }] }) };
+    },
+  });
+  const summary = notes.find((note) => note.id === 'search-console');
+  assert.doesNotMatch(summary.detail, /threshold|could not be read/);
+});
+
+// --- llms.txt -------------------------------------------------------------
+// Sibling to the sitemap writer, and held to the same rule: every line is a
+// string the site already serves. The refusals matter more than the file — this
+// is handed to an assistant as the authoritative summary of a site, and one
+// built from a third of it is worse than none, because it looks complete.
+
+const llmsPage = (url, doc = {}) => ({
+  url,
+  res: { ok: true, status: 200 },
+  doc: { title: 'A page', description: '', robots: null, canonical: [], ...doc },
+});
+
+test('llms.txt is the site\'s own words, grouped by section', async () => {
+  const { buildLlms } = await import('../src/llms.mjs');
+  const built = buildLlms(
+    [
+      llmsPage('https://x.test/', { title: 'Widgets Ltd', description: 'We make widgets.' }),
+      llmsPage('https://x.test/blog/one', { title: 'One', description: 'The first post.' }),
+      llmsPage('https://x.test/blog/two', { title: 'Two' }),
+    ],
+    { origin: 'https://x.test' },
+  );
+
+  assert.equal(built.refused, null);
+  // The site's own name for itself, from the home page, never invented.
+  assert.match(built.text, /^# Widgets Ltd\n/);
+  assert.match(built.text, /^> We make widgets\.$/m);
+  assert.match(built.text, /^## \/blog\/$/m);
+  assert.match(built.text, /^- \[One\]\(https:\/\/x\.test\/blog\/one\): The first post\.$/m);
+  // A page with no description gets a line without one rather than a sentence
+  // somebody made up about it.
+  assert.match(built.text, /^- \[Two\]\(https:\/\/x\.test\/blog\/two\)$/m);
+  assert.equal(built.urls.length, 3);
+});
+
+test('a title with Markdown in it cannot break the link', async () => {
+  const { buildLlms } = await import('../src/llms.mjs');
+  const built = buildLlms([llmsPage('https://x.test/', { title: 'Widgets [2026] (new)' })], {
+    origin: 'https://x.test',
+  });
+  // An unescaped ] closes the link early and silently swallows the URL — the
+  // sort of thing that turns up on one product page in four hundred.
+  assert.match(built.text, /# Widgets \\\[2026\\\] \\\(new\\\)/);
+});
+
+test('llms.txt leaves out what a sitemap would leave out, and counts it', async () => {
+  const { buildLlms } = await import('../src/llms.mjs');
+  const built = buildLlms(
+    [
+      llmsPage('https://x.test/', { title: 'Home' }),
+      llmsPage('https://x.test/hidden', { title: 'Hidden', robots: 'noindex' }),
+      llmsPage('https://x.test/dupe', { title: 'Dupe', canonical: ['https://x.test/'] }),
+      llmsPage('https://x.test/untitled', { title: null }),
+      { url: 'https://x.test/gone', res: { ok: false, status: 404 }, doc: null },
+    ],
+    { origin: 'https://x.test' },
+  );
+  assert.deepEqual(built.urls, ['https://x.test/']);
+  assert.deepEqual(built.excluded, {
+    noindex: 1, 'canonical-elsewhere': 1, 'no-title': 1, status: 1,
+  });
+});
+
+// The half that matters. A file built from a fraction of a site is worse than
+// no file: it looks complete.
+test('a partial crawl writes no llms.txt, and says which run would', async () => {
+  const { buildLlms, describeLlms } = await import('../src/llms.mjs');
+
+  const cut = buildLlms([llmsPage('https://x.test/')], { origin: 'https://x.test', truncated: 300 });
+  assert.equal(cut.text, null);
+  assert.match(cut.refused, /--limit 301/);
+  assert.match(describeLlms(cut, 'llms.txt'), /Did not write llms.txt/);
+
+  const throttled = buildLlms([llmsPage('https://x.test/')], { origin: 'https://x.test', rateLimited: 4 });
+  assert.equal(throttled.text, null);
+  assert.match(throttled.refused, /lower --concurrency/);
+
+  // And nothing worth writing is a refusal too, not an empty file.
+  const nothing = buildLlms([llmsPage('https://x.test/', { title: null })], { origin: 'https://x.test' });
+  assert.equal(nothing.text, null);
+  assert.match(nothing.refused, /nothing to write/);
+});
+
+test('a run only builds llms.txt when it was asked to', async () => {
+  const site = await startFixtureSite();
+  try {
+    const quiet = await audit(site.origin, { limit: 30 });
+    assert.equal(quiet.llms, undefined, 'not asked for, so not built');
+
+    const asked = await audit(site.origin, { limit: 30, writeLlms: 'llms.txt' });
+    assert.ok(asked.llms, 'asked for, so built');
+    assert.ok(asked.llms.text || asked.llms.refused, 'either a file or a reason there is none');
+  } finally {
+    await site.stop();
+  }
+});
+
+// Found by generating an llms.txt for a real site and reading it: the file
+// introduced the site as "Nurkamol Vakhidov — Web Developer, Automation &amp;
+// DevOps". `attr()` has decoded entities since it was written, so every meta
+// description was fine — but a <title> and an <h1> are element text, went
+// through none of it, and arrived undecoded in the report, in the CSV, in the
+// length `title-long` is supposed to be measuring against what Google shows,
+// and in the file handed to an assistant as the site's own name for itself.
+test('a title and a heading are decoded, like every attribute already was', () => {
+  const doc = parseHtml(
+    '<html><head><title>Widgets &amp; Co &mdash; Home</title>' +
+      '<meta name="description" content="Tea &amp; coffee"></head>' +
+      '<body><main><h1>Tea &amp; Coffee</h1><h2>Prices &lt; &pound;10</h2></main></body></html>',
+    'https://x.test/',
+  );
+  assert.equal(doc.title, 'Widgets & Co — Home');
+  assert.equal(doc.description, 'Tea & coffee');
+  assert.deepEqual(doc.h1, ['Tea & Coffee']);
+  assert.equal(doc.h2[0], 'Prices < £10');
+
+  // And the length checks now measure the characters Google shows rather than
+  // the five an ampersand was costing.
+  assert.equal(doc.title.length, 19);
+});
+
+// Hex numeric references were not handled at all, and `&#x2019;` is what a CMS
+// emits for the apostrophe in "Widget's" — so that title arrived eight
+// characters longer than Google measures it.
+test('numeric entities decode in both bases, and a malformed one is survivable', () => {
+  const doc = parseHtml(
+    '<html><head><title>Widget&#x2019;s &pound;10 &#215; 3</title></head><body></body></html>',
+    'https://x.test/',
+  );
+  assert.equal(doc.title, 'Widget\u2019s £10 × 3');
+
+  // A code point outside Unicode throws from String.fromCodePoint, and one
+  // page's broken title is not a reason for a crawl to stop.
+  const bad = parseHtml('<html><head><title>a &#999999999; b</title></head></html>', 'https://x.test/');
+  assert.equal(bad.title, 'a  b');
+});
+
+test('a page with no title is still null, not the string "null"', () => {
+  const doc = parseHtml('<html><head></head><body></body></html>', 'https://x.test/');
+  assert.equal(doc.title, null);
+});
+
+// --- structured data, generated ------------------------------------------
+// The narrowest rule in this project, and an absolute one: every value emitted
+// is a string this crawl read off this site. Structured data that describes a
+// site inaccurately is worse than none — it is a machine-readable claim the
+// page does not support, which is a manual-action category at Google.
+
+const schemaPage = (url, doc = {}) => ({
+  url,
+  res: { ok: true, status: 200 },
+  doc: {
+    title: 'A page', description: '', robots: null, canonical: [], h1: [], og: {}, icons: [],
+    jsonld: [], links: { internal: [], inMain: [], external: [], anchorTexts: [] },
+    ...doc,
+  },
+});
+
+test('a breadcrumb is named by the site, never by its slug', async () => {
+  const { buildSchema } = await import('../src/schema.mjs');
+  const built = buildSchema(
+    [
+      schemaPage('https://x.test/', { title: 'Widgets Ltd | Home', h1: ['Widgets'] }),
+      schemaPage('https://x.test/docs', { title: 'Docs | Widgets Ltd', h1: ['Docs'] }),
+      schemaPage('https://x.test/docs/assets', { title: 'Assets | Widgets Ltd', h1: ['Assets'] }),
+    ],
+    { origin: 'https://x.test' },
+  );
+
+  const crumb = built.generated.find((e) => e.url === 'https://x.test/docs/assets');
+  // The h1s, not the titles. A trail built from titles renders the whole site
+  // name at every step, which is what the first live run of this produced.
+  assert.deepEqual(crumb.jsonld.itemListElement.map((i) => i.name), ['Widgets', 'Docs', 'Assets']);
+  assert.deepEqual(crumb.jsonld.itemListElement.map((i) => i.position), [1, 2, 3]);
+});
+
+test('what the site calls a page in its own links is a name too', async () => {
+  const { buildSchema } = await import('../src/schema.mjs');
+  const linksTo = (href, name, times = 2) => ({
+    links: { internal: [], inMain: [], external: [], anchorTexts: Array(times).fill({ href, name }) },
+  });
+  const built = buildSchema(
+    [
+      schemaPage('https://x.test/', { h1: ['Widgets'], ...linksTo('https://x.test/docs', 'Documentation') }),
+      // Two h1s: the page does not clearly name itself, which this tool already
+      // reports as a fault. The navigation does name it, consistently.
+      schemaPage('https://x.test/docs', { title: 'Docs | Widgets Ltd', h1: ['Widgets', 'Docs'] }),
+      schemaPage('https://x.test/docs/assets', { h1: ['Assets'] }),
+    ],
+    { origin: 'https://x.test' },
+  );
+  const crumb = built.generated.find((e) => e.url === 'https://x.test/docs/assets');
+  assert.deepEqual(crumb.jsonld.itemListElement.map((i) => i.name), ['Widgets', 'Documentation', 'Assets']);
+});
+
+// The half that matters, three times over: no name, no trail, no markup.
+test('a step that cannot be named honestly is skipped, not invented', async () => {
+  const { buildSchema } = await import('../src/schema.mjs');
+
+  // "Read more" is a link, not a name.
+  const generic = buildSchema(
+    [
+      schemaPage('https://x.test/', {
+        h1: ['Widgets'],
+        links: { internal: [], inMain: [], external: [], anchorTexts: [
+          { href: 'https://x.test/docs', name: 'read more' },
+          { href: 'https://x.test/docs', name: 'read more' },
+        ] },
+      }),
+      schemaPage('https://x.test/docs', { title: 'Docs | Widgets Ltd', h1: ['A', 'B'] }),
+      schemaPage('https://x.test/docs/assets', { h1: ['Assets'] }),
+    ],
+    { origin: 'https://x.test' },
+  );
+  assert.ok(!generic.generated.some((e) => e.jsonld['@type'] === 'BreadcrumbList'));
+  // One page could not be named. The other two are at the top of the site and
+  // need no trail at all, which is a different answer and counted as one.
+  assert.equal(generic.skipped['no-complete-trail'], 1);
+  assert.equal(generic.skipped['top-level'], 2);
+
+  // An ancestor that was never crawled: no title, no anchor, no trail.
+  const gap = buildSchema(
+    [
+      schemaPage('https://x.test/', { h1: ['Widgets'] }),
+      schemaPage('https://x.test/docs/assets', { h1: ['Assets'] }),
+    ],
+    { origin: 'https://x.test' },
+  );
+  assert.ok(!gap.generated.some((e) => e.jsonld['@type'] === 'BreadcrumbList'));
+
+  // And a site that names itself nowhere gets no Organization, rather than one
+  // named after the home page's title with the tagline still attached.
+  assert.ok(!gap.generated.some((e) => e.jsonld['@type'] === 'Organization'));
+  assert.equal(gap.skipped['no-og-site-name'], 1);
+});
+
+test('markup a page already has is never generated a second time', async () => {
+  const { buildSchema } = await import('../src/schema.mjs');
+  const built = buildSchema(
+    [
+      schemaPage('https://x.test/', {
+        h1: ['Widgets'],
+        og: { 'og:site_name': 'Widgets Ltd' },
+        jsonld: [
+          { ok: true, data: { '@graph': [{ '@type': 'WebSite' }, { '@type': 'Organization' }] } },
+        ],
+      }),
+      schemaPage('https://x.test/docs', { h1: ['Docs'] }),
+      schemaPage('https://x.test/docs/assets', {
+        h1: ['Assets'],
+        jsonld: [{ ok: true, data: { '@type': 'BreadcrumbList' } }],
+      }),
+    ],
+    { origin: 'https://x.test' },
+  );
+  // Found inside a @graph, which is where most CMSs put it.
+  assert.equal(built.skipped['already-has-website'], 1);
+  assert.equal(built.skipped['already-has-organization'], 1);
+  assert.equal(built.skipped['already-has-breadcrumbs'], 1);
+
+  // A site that already declares everything and a site that gave nothing to
+  // build from are two different answers. Throwing the reasons away on the
+  // refusal made them read the same.
+  assert.match(built.refused, /already declares everything.*good version of this answer/);
+  const { describeSchema } = await import('../src/schema.mjs');
+  assert.match(describeSchema(built, 'schema.json'), /already declares a BreadcrumbList/);
+});
+
+test('the organisation is named only by og:site_name', async () => {
+  const { buildSchema } = await import('../src/schema.mjs');
+  const built = buildSchema(
+    [schemaPage('https://x.test/', {
+      title: 'Widgets Ltd | The best widgets in the world, since 1994',
+      h1: ['Widgets'],
+      og: { 'og:site_name': 'Widgets Ltd' },
+      icons: ['https://x.test/icon.png'],
+    })],
+    { origin: 'https://x.test' },
+  );
+  const org = built.generated.find((e) => e.jsonld['@type'] === 'Organization');
+  assert.equal(org.jsonld.name, 'Widgets Ltd');
+  assert.equal(org.jsonld.logo, 'https://x.test/icon.png');
+  assert.equal(org.jsonld.url, 'https://x.test');
+});
+
+test('a partial crawl generates no structured data at all', async () => {
+  const { buildSchema, describeSchema } = await import('../src/schema.mjs');
+  const cut = buildSchema([schemaPage('https://x.test/')], { origin: 'https://x.test', truncated: 40 });
+  assert.equal(cut.json, null);
+  assert.match(cut.refused, /--limit 41/);
+  assert.match(describeSchema(cut, 'schema.json'), /Did not write schema.json/);
+});

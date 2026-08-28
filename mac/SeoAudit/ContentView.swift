@@ -127,7 +127,7 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .newAudit)) { _ in startOver() }
             .sheet(item: $comparing) { pair in
                 if let later = session.openedFrom ?? library.mostRecent(of: pair.host) {
-                    ComparisonSheet(host: pair.host, earlier: pair.earlier, later: later, library: library)
+                    ComparisonSheet(earlier: pair.earlier, later: later, library: library)
                         .environmentObject(engine)
                 }
             }
