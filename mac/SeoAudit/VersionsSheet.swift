@@ -140,30 +140,68 @@ private struct Detail: View {
             if release.version != updates.current {
                 VStack(alignment: .leading, spacing: 10) {
                     Divider()
-                    let command = updates.command(for: release)
-                    Text(command)
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .glassEffect(.regular, in: .rect(cornerRadius: Radius.control))
+                    // Absent for an older release: Homebrew has one cask and it
+                    // tracks the latest, so it can move forward and not back.
+                    if let command = updates.command(for: release) {
+                        Text(command)
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassEffect(.regular, in: .rect(cornerRadius: Radius.control))
+                    }
 
                     HStack(spacing: 10) {
-                        Button {
-                            updates.runInTerminal(command)
-                        } label: {
-                            Label(updates.current < release.version ? "Update" : "Downgrade",
-                                  systemImage: updates.current < release.version ? "arrow.up" : "arrow.down")
-                        }
-                        .buttonStyle(.glass)
+                        switch updates.upgradeState {
+                        case .running(let line):
+                            ProgressView().controlSize(.small)
+                            Text(line)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        case .done:
+                            Label("Installed", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.callout)
+                            Button("Relaunch") { updates.relaunch() }.buttonStyle(.glassProminent)
+                        default:
+                            if let command = updates.command(for: release) {
+                                Button {
+                                    Task { await updates.upgrade(release) }
+                                } label: {
+                                    Label("Update", systemImage: "arrow.up")
+                                }
+                                .buttonStyle(.glass)
 
-                        Button("Copy command") { updates.copy(command) }.buttonStyle(.glass)
+                                Button("Run in Terminal") { updates.runInTerminal(command) }.buttonStyle(.glass)
+                                Button("Copy") { updates.copy(command) }.buttonStyle(.glass)
+                            } else {
+                                // An older release: the zip is the only route,
+                                // and it works for any version.
+                                Button {
+                                    Task { await updates.download(release) }
+                                } label: {
+                                    Label("Download \(release.version.description)", systemImage: "arrow.down")
+                                }
+                                .buttonStyle(.glass)
+                            }
+                        }
                         Spacer(minLength: 0)
                         Button("Release notes") { updates.open(release) }.buttonStyle(.glass)
                     }
 
-                    // Said plainly rather than buried: this app does not replace
-                    // itself, and the reason is that it cannot do it safely.
+                    if case .failed(let why) = updates.upgradeState {
+                        Text(why)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    // Said plainly rather than buried: Homebrew does the
+                    // replacing, and this runs it rather than replacing the
+                    // bundle behind its back.
                     Text(note)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -184,7 +222,9 @@ private struct Detail: View {
     private var note: String {
         switch updates.install {
         case .homebrew:
-            "Homebrew verifies the download's checksum before replacing anything. The app will quit while it does."
+            "Homebrew runs here rather than in Terminal, and it verifies the download against the checksum the "
+            + "build wrote before replacing anything. Relaunching afterwards is what makes the new version the "
+            + "one on screen."
         case .elsewhere:
             "This copy was not installed by Homebrew. `brew install --cask nurkamol/seo-audit/seo-audit` takes it "
             + "over, or use the release notes to download it by hand — this app will not replace itself, because "

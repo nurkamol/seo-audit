@@ -140,11 +140,16 @@ struct ContentView: View {
                 // think to open — so the app knew for a week and said nothing.
                 // Dismissible, and it stays dismissed for that version: a bar
                 // that comes back every launch is a bar people learn to ignore.
-                if let newer = updates.available, dismissedUpdate != newer.tagName {
+                if let newer = updates.available ?? updates.unconfirmed,
+                   dismissedUpdate != newer.tagName {
                     VStack {
                         UpdateBanner(
                             updates: updates,
                             release: newer,
+                            // The API could not confirm what kind of release
+                            // this is, so the banner says that rather than
+                            // asserting it or saying nothing.
+                            confirmed: updates.available != nil,
                             onDismiss: { withAnimation(.snappy) { dismissedUpdate = newer.tagName } },
                             onDetails: { showingVersions = true },
                         )
@@ -156,6 +161,7 @@ struct ContentView: View {
                 }
             }
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: updates.available)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: updates.unconfirmed)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: engine.state)
         }
         .navigationTitle("")
@@ -284,6 +290,10 @@ struct Card<Content: View>: View {
 struct UpdateBanner: View {
     @ObservedObject var updates: Updates
     let release: Release
+    /// Whether GitHub's API confirmed this is a full release. False when the
+    /// quota was exhausted and only the Atom feed answered, which cannot tell a
+    /// prerelease from a release.
+    var confirmed = true
     let onDismiss: () -> Void
     let onDetails: () -> Void
 
@@ -294,7 +304,9 @@ struct UpdateBanner: View {
                 .foregroundStyle(.tint)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Version \(release.version.description) is available")
+                Text(confirmed
+                     ? "Version \(release.version.description) is available"
+                     : "Version \(release.version.description) appeared")
                     .font(.system(.body, design: .rounded).weight(.semibold))
                 Text(subtitle)
                     .font(.callout)
@@ -318,10 +330,26 @@ struct UpdateBanner: View {
                     .buttonStyle(.borderedProminent)
             } else if case .unpacking = updates.downloadState {
                 ProgressView().controlSize(.small)
+            } else if case .running(let line) = updates.upgradeState {
+                ProgressView().controlSize(.small)
+                Text(line)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else if case .done = updates.upgradeState {
+                Text("Installed").font(.caption).foregroundStyle(.green)
+                Button("Relaunch") { updates.relaunch() }
+                    .buttonStyle(.borderedProminent)
             } else {
                 Button("What's new") { onDetails() }
-                Button(isHomebrew ? "Upgrade…" : "Download") {
-                    Task { await updates.download(release) }
+                // Homebrew installed it, so Homebrew replaces it — run here
+                // rather than in Terminal. The button used to hand over a
+                // command, which is a tool explaining how to update itself.
+                Button("Update") {
+                    Task {
+                        if isHomebrew { await updates.upgrade(release) } else { await updates.download(release) }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -352,7 +380,11 @@ struct UpdateBanner: View {
         case .unpacking: "Unpacking…"
         case .ready: "Drag it into Applications, replacing this one."
         case .downloading: "Downloading…"
-        case .idle: isHomebrew ? "Homebrew installed this one." : "You are on \(updates.current.description)."
+        case .idle:
+            if case .failed(let why) = updates.upgradeState { why }
+            else if !confirmed {
+                "GitHub's API was out of quota, so whether this is a full release could not be checked."
+            } else { isHomebrew ? "Homebrew installed this one." : "You are on \(updates.current.description)." }
         }
     }
 

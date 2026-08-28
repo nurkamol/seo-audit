@@ -57,7 +57,42 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store and a Worker is handed nothing, which is also the right answer for a
   shared host: keeping strangers' crawls is a thing nobody asked for.
 
+- **The app updates itself, rather than explaining how to.** Pressing Update
+  opened Terminal and pasted `brew upgrade --cask seo-audit` into it, which is a
+  tool telling somebody how to update it. It now runs Homebrew in the window,
+  streams what Homebrew says line by line, and offers **Relaunch** when it is
+  done.
+
+  Homebrew still does the part that matters — it verifies the download against
+  the checksum the build wrote, and it keeps its own records straight, which is
+  exactly why this app must not replace its own bundle behind its back. What
+  changed is where it runs. No `sudo`: the cask installs into `/Applications`
+  and clears the quarantine flag without one, so nothing can sit waiting for a
+  password nobody can type. Terminal and Copy are still there for anyone who
+  would rather watch it happen.
+
+  Verified by downgrading a real install to 1.33.1 and pressing the button.
+
 ### Fixed
+- **The update banner never appeared on a machine whose GitHub quota was
+  spent.** The anonymous API allows sixty calls an hour **per address**, shared
+  with every other tool on the machine, so exhausting it is ordinary — this one
+  was at 0 of 60. The app falls back to the Atom feed there, and a feed release
+  is never allowed to announce an update, because the feed cannot tell a
+  prerelease from a release.
+
+  So it said nothing at all. No banner reads exactly like "you are up to date",
+  which is the failure this project's entire report format exists to avoid,
+  applied to itself. A newer version found only in the feed is now announced as
+  what it is: *"Version 1.34.0 appeared — GitHub's API was out of quota, so
+  whether this is a full release could not be checked."* The person decides.
+
+- **Downgrade offered a command that has never worked.** There is one cask and
+  it tracks the latest version, so `brew install --cask seo-audit@1.33.1` was
+  offered for older releases and answered *"Error: No casks found"*. Found by
+  pressing it. Homebrew can move forward and not back, so an older release now
+  offers its zip, which works for any version.
+
 - **A perfect score read as "0 points across 0 checks"**, which is arithmetic
   rather than a sentence. It now says nothing took points off.
 

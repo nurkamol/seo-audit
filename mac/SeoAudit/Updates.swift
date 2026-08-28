@@ -95,6 +95,8 @@ final class Updates: ObservableObject {
     @Published private(set) var problem: String?
     @Published var lastChecked: Date?
     @Published var downloadState: DownloadState = .idle
+    /// Where an in-app Homebrew upgrade has got to.
+    @Published var upgradeState: UpgradeState = .idle
 
     private let endpoint = URL(string: "https://api.github.com/repos/nurkamol/seo-audit/releases?per_page=30")!
     /// The same releases as an Atom feed, served by github.com rather than
@@ -118,11 +120,37 @@ final class Updates: ObservableObject {
 
     var available: Release? {
         // A feed-sourced list cannot tell a prerelease from a release, so it is
-        // never allowed to announce an update. Showing the list is useful;
-        // pushing somebody onto a prerelease because the feed did not say so is
-        // the same false positive this project refuses in its reports.
-        guard let newest, !newest.fromFeed, current < newest.version else { return nil }
-        return newest
+        // never allowed to announce an update *as* one. Showing the list is
+        // useful; pushing somebody onto a prerelease because the feed did not
+        // say so is the same false positive this project refuses in its reports.
+        Updates.announce(in: releases, current: current).confirmed
+    }
+
+    /// A newer version that the feed knows about and the API could not confirm.
+    ///
+    /// GitHub's anonymous quota is sixty an hour **per address**, shared with
+    /// every other tool on the machine, so exhausting it is ordinary — and when
+    /// it is exhausted this app fell back to the feed and then said nothing at
+    /// all, because `available` refuses to announce a feed release. No banner
+    /// reads exactly like "you are up to date", which is the failure this
+    /// project spends its whole report format avoiding, applied to itself.
+    ///
+    /// So it is announced, and worded as what it is: something is newer, and
+    /// whether it is a full release could not be checked. The person decides.
+    var unconfirmed: Release? {
+        Updates.announce(in: releases, current: current).unconfirmed
+    }
+
+    /// Which of the two a list amounts to, if either.
+    ///
+    /// A pure function so the rule can be tested without a window, a network or
+    /// a bundle version — the same reason the Homebrew helpers below are.
+    nonisolated static func announce(in releases: [Release], current: Version)
+        -> (confirmed: Release?, unconfirmed: Release?) {
+        guard let newest = releases.filter({ !$0.prerelease }).max(by: { $0.version < $1.version }),
+              current < newest.version
+        else { return (nil, nil) }
+        return newest.fromFeed ? (nil, newest) : (newest, nil)
     }
 
     /// True when what is on screen came from the feed, and so is a list rather
@@ -281,11 +309,22 @@ final class Updates: ObservableObject {
         return .elsewhere(path)
     }
 
-    func command(for release: Release) -> String {
-        let version = release.version.description
-        return current < release.version
-            ? "brew upgrade --cask seo-audit"
-            : "brew install --cask nurkamol/seo-audit/seo-audit@\(version)"
+    /// The Homebrew command for a release, or `nil` when there is not one.
+    ///
+    /// There is one cask and it tracks the latest version, so Homebrew can move
+    /// forward and cannot move back — `seo-audit@1.33.1` was offered for years
+    /// and has never existed, so pressing Downgrade produced *"Error: No casks
+    /// found"*. Found by trying it. An older release is reached by downloading
+    /// its zip instead, which works for any version.
+    func command(for release: Release) -> String? {
+        Updates.brewCommand(from: current, to: release.version)
+    }
+
+    /// Pure, so the rule can be tested without a bundle version — under
+    /// `swift test` `Bundle.main` is the test bundle and `current` is whatever
+    /// that parses to, which is not a version anybody chose.
+    nonisolated static func brewCommand(from current: Version, to target: Version) -> String? {
+        current < target ? "brew upgrade --cask seo-audit" : nil
     }
 
     /// Run it in Terminal rather than silently: replacing an application while
@@ -325,6 +364,182 @@ enum DownloadState: Equatable {
     case failed(String)
 }
 
+// MARK: - Letting Homebrew do it, here rather than in Terminal
+
+/// Where an upgrade has got to.
+///
+/// `.running` carries the last line Homebrew printed rather than a percentage:
+/// `brew` reports its own progress in words, and inventing a bar over somebody
+/// else's output would be a number this app made up.
+/// What running something came to. A process that never started and one that
+/// started and failed are different answers, and only the second has anything
+/// to show for itself.
+enum Ran: Equatable {
+    case neverStarted(String)
+    case finished(status: Int32, transcript: [String])
+}
+
+enum UpgradeState: Equatable {
+    case idle
+    case running(String)
+    case done
+    case failed(String)
+}
+
+extension Updates {
+    /// Homebrew, if this machine has it.
+    ///
+    /// Looked for by path rather than by asking the shell: an app launched from
+    /// the Finder inherits a minimal `PATH` with neither prefix on it, so
+    /// `which brew` finds nothing and the update button would report Homebrew
+    /// missing on a machine that installed the app *with* Homebrew.
+    /// `nonisolated` because none of it touches the object: three pure
+    /// functions, which is also what makes them testable without a window.
+    nonisolated static func brewPath(
+        exists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
+    ) -> String? {
+        ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"].first(where: exists)
+    }
+
+    /// What to run, as a program and its arguments.
+    ///
+    /// The same words `command(for:)` prints, split rather than re-decided —
+    /// the string on screen and the process that runs have to be the same
+    /// upgrade or the screen is lying.
+    nonisolated static func brewArguments(for command: String) -> [String] {
+        command.split(separator: " ").dropFirst().map(String.init)
+    }
+
+    /// A `PATH` Homebrew can work in.
+    ///
+    /// An app launched from the Finder gets almost none, and `brew` shells out
+    /// to `curl`, `unzip`, `xattr` and its own Ruby. Handing it the prefix plus
+    /// the system directories is the difference between an upgrade and a
+    /// puzzling failure three steps in.
+    nonisolated static func brewEnvironment(prefix: String, base: [String: String]) -> [String: String] {
+        var environment = base
+        let path = environment["PATH"] ?? ""
+        environment["PATH"] = "\(prefix)/bin:/usr/bin:/bin:/usr/sbin:/sbin" + (path.isEmpty ? "" : ":\(path)")
+        // Homebrew asks questions when it thinks somebody is watching, and
+        // nobody is watching a subprocess of a window.
+        environment["HOMEBREW_NO_AUTO_UPDATE"] = "1"
+        environment["HOMEBREW_NO_ENV_HINTS"] = "1"
+        environment["HOMEBREW_NO_ANALYTICS"] = "1"
+        return environment
+    }
+
+    /// Run the upgrade here, streaming what Homebrew says.
+    ///
+    /// The button used to open Terminal and paste a command into it, which is a
+    /// tool telling somebody how to update it rather than updating. Homebrew
+    /// still does the part that matters — it verifies the download against the
+    /// checksum the build wrote, and it keeps its own records straight, which
+    /// is exactly why this app must not replace its own bundle behind its back.
+    ///
+    /// No `sudo`: the cask installs into `/Applications` and its postflight
+    /// clears the quarantine flag without one, so nothing here can sit waiting
+    /// for a password nobody can type.
+    func upgrade(_ release: Release) async {
+        guard let words = command(for: release).map(Updates.brewArguments) else {
+            upgradeState = .failed("Homebrew has one cask and it tracks the latest version, so it can "
+                                   + "move forward but not back. Download this release instead.")
+            return
+        }
+        guard let brew = Updates.brewPath() else {
+            upgradeState = .failed("Homebrew is not on this machine, so there is nothing to run. "
+                                   + "The command is above if you want to run it yourself.")
+            return
+        }
+        let prefix = brew.hasPrefix("/opt/homebrew") ? "/opt/homebrew" : "/usr/local"
+
+        upgradeState = .running("Starting \(words.joined(separator: " "))…")
+
+        let result = await Updates.stream(
+            executable: brew,
+            arguments: words,
+            environment: Updates.brewEnvironment(prefix: prefix, base: ProcessInfo.processInfo.environment),
+            onLine: { line in Task { @MainActor in self.upgradeState = .running(line) } },
+        )
+
+        switch result {
+        case .neverStarted(let why):
+            upgradeState = .failed(why)
+        case .finished(0, _):
+            upgradeState = .done
+        case .finished(let status, let transcript):
+            // Homebrew explains itself in its last few lines, and a failure
+            // that shows only "exit 1" is a failure nobody can act on.
+            let why = transcript.suffix(6).joined(separator: "\n")
+            upgradeState = .failed(why.isEmpty ? "Homebrew exited \(status)." : why)
+        }
+    }
+
+    /// Run something and watch it talk.
+    ///
+    /// Split out of `upgrade` because it is the part most likely to be wrong in
+    /// a way nothing notices — an exit status read before the pipe drains, a
+    /// line handler that never fires — and none of that is testable through a
+    /// button. `onLine` gets every non-empty line as it arrives; the transcript
+    /// comes back whole for the failure message.
+    nonisolated static func stream(
+        executable: String,
+        arguments: [String],
+        environment: [String: String],
+        onLine: @escaping @Sendable (String) -> Void,
+    ) async -> Ran {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = arguments
+        task.environment = environment
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+
+        do {
+            try task.run()
+        } catch {
+            return .neverStarted("Could not start \(executable): \(error.localizedDescription)")
+        }
+
+        var transcript: [String] = []
+        do {
+            for try await line in pipe.fileHandleForReading.bytes.lines {
+                // Bounded: a long upgrade prints hundreds of lines and only the
+                // last few are ever shown.
+                transcript.append(line)
+                if transcript.count > 200 { transcript.removeFirst() }
+                // A line of spaces, since `AsyncLineSequence` has already
+                // dropped the empty ones. A progress label that blinks blank
+                // is worse than one that stands still.
+                let shown = line.trimmingCharacters(in: .whitespaces)
+                if !shown.isEmpty { onLine(shown) }
+            }
+        } catch {
+            // The pipe closing is how a finished process ends. The exit status
+            // is what decides whether this worked, so it is read either way.
+        }
+
+        task.waitUntilExit()
+        return .finished(status: task.terminationStatus, transcript: transcript)
+    }
+
+    /// Quit, and come back as the version that was just installed.
+    ///
+    /// The running process still holds the old bundle's files; the path now
+    /// points at the new one, so opening it after this process is gone is what
+    /// makes the swap visible. The sleep is for the quit to finish — `open` on
+    /// a path an app still occupies would just bring the old one forward.
+    func relaunch() {
+        let path = Bundle.main.bundlePath
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 1.5; open \"\(path)\""]
+        try? task.run()
+        NSApp.terminate(nil)
+    }
+}
+
 extension Updates {
     /// Fetch a release's zip, unpack it, and reveal it.
     ///
@@ -333,10 +548,16 @@ extension Updates {
     /// is Sparkle's entire job — and if Homebrew installed this, overwriting the
     /// bundle behind its back leaves its records describing a version that is no
     /// longer there. So this does the slow part, and hands over.
+    ///
+    /// Where Homebrew *can* do it, `upgrade` does it here instead, and the last
+    /// step is a Relaunch rather than a drag.
     func download(_ release: Release) async {
-        guard case .elsewhere = install else {
-            // A cask install has one correct answer and it is not this.
-            runInTerminal(command(for: release))
+        // A cask install has one correct answer for a *newer* version and it is
+        // Homebrew, which now runs in the window rather than in Terminal. Going
+        // backwards has no cask at all, so the zip is the only route — and it
+        // works for any version, which is why this is not gated on the install.
+        if case .homebrew = install, command(for: release) != nil {
+            await upgrade(release)
             return
         }
         guard let url = release.downloadUrl else {

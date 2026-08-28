@@ -762,3 +762,162 @@ struct SharedDetailTests {
         #expect(Set(group.map(\.detail)).count == 2)
     }
 }
+
+// MARK: - Updating, without leaving the window
+
+/// The button used to open Terminal and paste a command into it, which is a
+/// tool explaining how to update itself rather than updating. Homebrew still
+/// does the part that matters — it verifies the download against the checksum
+/// the build wrote — so what changed is where it runs, not who does it.
+/// Somewhere for a `@Sendable` handler to put what it was given.
+private final class Collected: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [String] = []
+    func add(_ line: String) { lock.lock(); stored.append(line); lock.unlock() }
+    var lines: [String] { lock.lock(); defer { lock.unlock() }; return stored }
+}
+
+@Suite("Letting Homebrew do it, here")
+struct UpgradeTests {
+    @Test("a newer version the API could not confirm is still announced")
+    func unconfirmed() {
+        // GitHub's anonymous quota is sixty an hour per address, shared with
+        // every other tool on the machine, so exhausting it is ordinary. When
+        // it was exhausted this app fell back to the Atom feed and then said
+        // nothing at all — and no banner reads exactly like "you are up to
+        // date", which is the failure this project's whole report format exists
+        // to avoid, applied to itself. Found on a real machine at 0 of 60.
+        let release = { (tag: String, fromFeed: Bool, prerelease: Bool) in
+            Release(tagName: tag, name: nil, body: nil, publishedAt: nil,
+                    htmlUrl: "https://x.test", prerelease: prerelease, fromFeed: fromFeed)
+        }
+        let here = Version("1.33.1")
+
+        let feed = Updates.announce(in: [release("v1.34.0", true, false)], current: here)
+        #expect(feed.confirmed == nil, "a feed release must not be announced as a full one")
+        #expect(feed.unconfirmed?.tagName == "v1.34.0", "but it must be announced as something")
+
+        // Confirmed by the API: the ordinary case, and only one of the two.
+        let api = Updates.announce(in: [release("v1.34.0", false, false)], current: here)
+        #expect(api.confirmed?.tagName == "v1.34.0")
+        #expect(api.unconfirmed == nil, "one banner, not two")
+
+        // Nothing newer, from either source.
+        let same = Updates.announce(in: [release("v1.33.1", true, false)], current: here)
+        #expect(same.confirmed == nil)
+        #expect(same.unconfirmed == nil)
+
+        // And a prerelease is still never the newest, whichever source said so.
+        let pre = Updates.announce(in: [release("v2.0.0", false, true)], current: here)
+        #expect(pre.confirmed == nil)
+        #expect(pre.unconfirmed == nil)
+    }
+
+    @Test("Homebrew is found by path, because a Finder-launched app has no PATH")
+    func found() {
+        // `which brew` finds nothing in an app launched from the Finder: it
+        // inherits a minimal PATH with neither prefix on it, so the update
+        // button would report Homebrew missing on a machine that installed the
+        // app *with* Homebrew.
+        #expect(Updates.brewPath { $0 == "/opt/homebrew/bin/brew" } == "/opt/homebrew/bin/brew")
+        #expect(Updates.brewPath { $0 == "/usr/local/bin/brew" } == "/usr/local/bin/brew")
+        // Apple Silicon first where a machine somehow has both.
+        #expect(Updates.brewPath { _ in true } == "/opt/homebrew/bin/brew")
+        #expect(Updates.brewPath { _ in false } == nil)
+    }
+
+    @Test("Homebrew moves forward and is not offered a way back")
+    func direction() {
+        // One cask, tracking the latest version. `seo-audit@1.33.1` was offered
+        // for years and has never existed, so pressing Downgrade produced
+        // "Error: No casks found for seo-audit@1.33.1". Found by trying it.
+        #expect(Updates.brewCommand(from: Version("1.34.0"), to: Version("1.33.1")) == nil,
+                "there is no cask to go back to")
+        #expect(Updates.brewCommand(from: Version("1.34.0"), to: Version("1.34.0")) == nil,
+                "and nothing to do when it is the one already installed")
+        #expect(Updates.brewCommand(from: Version("1.33.1"), to: Version("1.34.0"))
+                == "brew upgrade --cask seo-audit")
+    }
+
+    @Test("what runs is what the screen says runs")
+    func arguments() {
+        // Split rather than re-decided: the command on screen and the process
+        // that runs have to be the same upgrade, or the screen is lying.
+        #expect(Updates.brewArguments(for: "brew upgrade --cask seo-audit")
+            == ["upgrade", "--cask", "seo-audit"])
+        #expect(Updates.brewArguments(for: "brew install --cask nurkamol/seo-audit/seo-audit@1.2.0")
+            == ["install", "--cask", "nurkamol/seo-audit/seo-audit@1.2.0"])
+    }
+
+    @Test("output arrives line by line, and the exit status is read either way")
+    func streaming() async {
+        // The part most likely to be wrong in a way nothing notices: an exit
+        // status read before the pipe drains, or a line handler that never
+        // fires. Neither is testable through a button.
+        let seen = Collected()
+        let ran = await Updates.stream(
+            executable: "/bin/sh",
+            arguments: ["-c", "echo one; echo two; echo; echo three"],
+            environment: [:],
+            onLine: { line in seen.add(line) },
+        )
+        guard case .finished(let status, let transcript) = ran else {
+            #expect(Bool(false), "expected it to finish; got \(ran)")
+            return
+        }
+        #expect(status == 0)
+        // `AsyncLineSequence` drops the blank line before this ever sees it,
+        // which is worth knowing rather than assuming: the whitespace guard in
+        // `stream` is for a line of spaces, not for this.
+        #expect(transcript == ["one", "two", "three"], "transcript was \(transcript)")
+        #expect(seen.lines == ["one", "two", "three"])
+    }
+
+    @Test("a failure keeps what the process said about it")
+    func failure() async {
+        let ran = await Updates.stream(
+            executable: "/bin/sh",
+            arguments: ["-c", "echo 'Error: no such cask' >&2; exit 1"],
+            environment: [:],
+            onLine: { _ in },
+        )
+        #expect(ran == .finished(status: 1, transcript: ["Error: no such cask"]))
+    }
+
+    @Test("a program that is not there never started, rather than exiting oddly")
+    func missing() async {
+        let ran = await Updates.stream(
+            executable: "/nowhere/brew",
+            arguments: [],
+            environment: [:],
+            onLine: { _ in },
+        )
+        guard case .neverStarted(let why) = ran else {
+            #expect(Bool(false), "expected it not to start")
+            return
+        }
+        #expect(why.contains("/nowhere/brew"))
+    }
+
+    @Test("Homebrew is handed a PATH it can actually work in")
+    func environment() {
+        let made = Updates.brewEnvironment(prefix: "/opt/homebrew", base: ["PATH": "/existing"])
+        let path = try! #require(made["PATH"])
+        // brew shells out to curl, unzip, xattr and its own Ruby. Without these
+        // an upgrade fails three steps in, puzzlingly.
+        #expect(path.hasPrefix("/opt/homebrew/bin:"))
+        #expect(path.contains("/usr/bin"))
+        #expect(path.contains("/bin"))
+        // And whatever was already there is kept rather than replaced.
+        #expect(path.contains("/existing"))
+
+        // Nobody is watching a subprocess of a window, so it must not stop to
+        // ask anything or spend the upgrade updating itself first.
+        #expect(made["HOMEBREW_NO_AUTO_UPDATE"] == "1")
+        #expect(made["HOMEBREW_NO_ENV_HINTS"] == "1")
+
+        // The Intel prefix is not hard-coded to the Apple Silicon one.
+        let intel = Updates.brewEnvironment(prefix: "/usr/local", base: [:])
+        #expect(try! #require(intel["PATH"]).hasPrefix("/usr/local/bin:"))
+    }
+}
