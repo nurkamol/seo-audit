@@ -29,6 +29,8 @@
   "scripts": {
     "pretest": "node scripts/link-engine.mjs",
     "test": "node --test test/*.test.mjs",
+    "pretest:all": "node scripts/link-engine.mjs",
+    "test:all": "node scripts/test-all.mjs",
     "audit": "node bin/seo-audit.mjs"
   },
   "keywords": [

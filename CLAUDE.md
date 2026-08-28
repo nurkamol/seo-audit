@@ -11,10 +11,19 @@ node bin/seo-audit.mjs https://example.com --html r.html --md r.md --json r.json
 node bin/seo-audit.mjs https://example.com --psi https://example.com/
 node bin/seo-audit.mjs https://example.com --psi "/journal/**" --psi-sample 3
 node bin/seo-audit.mjs https://example.com --verbose             # watch it work
-npm test                                                # 193 tests, no install
+npm test                                                # the engine; no install, any platform
+npm run test:all                                        # and the macOS app's own suite
 ```
 
 Node 22 (`nvm use 22`). There is nothing to install and no build step.
+
+There are **two** suites and `npm test` runs one of them. `node --test` over
+`test/` is portable and needs nothing installed, which is the premise; the app's
+own suite is `swift test` over `mac/Tests/` and needs a toolchain most machines
+touching this repo do not have. `npm run test:all` runs both and says plainly
+when it could not run the second, because a suite that was skipped reads exactly
+like a suite that passed. 1.34.0 published while `swift test` was failing on
+main, which is why that script exists.
 
 `npm test` runs `node --test` over `test/`, serving its own fixture site on
 localhost so it works offline and cannot be broken by a real site changing.

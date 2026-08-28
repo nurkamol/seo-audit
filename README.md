@@ -936,6 +936,13 @@ Two rules that keep the tool trustworthy:
 1. **No false positives.** A check that cries wolf gets the whole report ignored. If a pattern is sometimes legitimate, it is a `note`, not an `error`.
 2. **No dependencies.** It must keep running with a bare `npx` on a machine with nothing installed.
 
+```bash
+npm test          # the engine, the Worker and the extension — no install, any platform
+npm run test:all  # and the macOS app's own Swift suite, where there is a toolchain for it
+```
+
+There are two suites and `npm test` runs one. Keeping it portable is the point — it works on a machine with nothing on it. `test:all` runs both and says plainly when it could not run the second, rather than exiting green having skipped half the work.
+
 See [ROADMAP.md](ROADMAP.md) for what is planned, [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Licence
