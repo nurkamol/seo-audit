@@ -639,7 +639,7 @@ The macOS app is a thin client over a local server, and that server runs anywher
 npx @nurkamol/seo-audit --serve
 ```
 
-It opens a browser, and everything the command line takes is in the form — the same table that decides what the macOS window reaches decides what this draws, so neither can quietly fall behind the other. Finished runs are kept and listed at `/reports`, two of them can be compared, and on macOS it is **the same folder the app uses**: a crawl started in the window is in the browser's list a second later, because there is one folder rather than two.
+It opens a browser onto the same window the macOS app draws: a sidebar of kept runs down the left, the report beside it, score ring and all. Everything the command line takes is in the form — the same table that decides what the macOS window reaches decides what this draws, so neither can quietly fall behind the other. Finished runs are kept and listed at `/reports`, two of them can be compared, and on macOS it is **the same folder the app uses**: a crawl started in the window is in the browser's list a second later, because there is one folder rather than two.
 
 Nothing leaves the machine. It binds to the loopback address, which is the whole of its security model.
 

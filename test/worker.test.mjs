@@ -626,3 +626,67 @@ test('a preview is a page as well as a payload', async () => {
   assert.equal(res.status, 400);
   assert.match(await read(res), /Not previewed/);
 });
+
+// --- the window, in a browser ---------------------------------------------
+
+test('a served report is the report, not a second rendering of it', async () => {
+  const { reportParts } = await import('../src/report.mjs');
+  const meta = { origin: 'https://x.test', pages: 3, date: '2026-01-01' };
+  const findings = [
+    { level: 'warn', id: 'desc-missing', title: 'No description', detail: 'x', url: 'https://x.test/a' },
+  ];
+  const rows = [{
+    id: '11111111-1111-4111-8111-111111111111',
+    host: 'x.test', finishedAt: '2026-01-01T10:00:00Z', pages: 3, causes: 1, score: 74,
+    payload: { meta, findings, causes: [] },
+  }];
+  const store = {
+    list: () => rows,
+    read: (id) => rows.find((r) => r.id === id)?.payload ?? null,
+    keep: () => null, where: () => '/tmp', bytes: () => 0,
+  };
+
+  const html = await read(await handle(
+    get('/reports/11111111-1111-4111-8111-111111111111', { token: SECRET }), env({ STORE: store })));
+
+  // The report's own body, character for character — the served page composes
+  // the same parts `--html` writes rather than drawing its own version. Two
+  // renderings of one report is exactly the drift this project refuses.
+  const parts = reportParts(findings, meta, {});
+  assert.ok(html.includes(parts.body), 'the served page should carry the report body verbatim');
+  assert.ok(html.includes('--error:'), 'and the report stylesheet, not a second one');
+
+  // The window's chrome around it: the sidebar the macOS app has, with the run
+  // that is on screen marked as the one on screen.
+  assert.match(html, /class="side"/);
+  assert.match(html, /New audit/);
+  assert.match(html, /aria-current="page"/);
+  // 74 is fair, not good — the same thresholds gradeOf() uses.
+  assert.match(html, /class="chip fair">74/);
+});
+
+test('a deployed Worker serves a document, not a window', async () => {
+  // No store means no library, so there is no sidebar to draw and the report
+  // has to stand alone — which is what a hosted report has always been.
+  const html = await read(await handle(get('/', { token: SECRET }), env()));
+  assert.doesNotMatch(html, /class="run"/);
+  // The form is still the form.
+  assert.match(html, /name="url"/);
+});
+
+test('the score chip changes colour where the dial does', async () => {
+  const rows = (score) => [{
+    id: '11111111-1111-4111-8111-111111111111', host: 'x.test',
+    finishedAt: '2026-01-01T10:00:00Z', pages: 1, causes: 0, score,
+  }];
+  const at = async (score) => read(await handle(get('/', { token: SECRET }), env({
+    STORE: { list: () => rows(score), read: () => null, keep: () => null, where: () => '/tmp', bytes: () => 0 },
+  })));
+
+  // gradeOf()'s thresholds, so a dial in the window and a chip here never
+  // disagree about what 80 looks like.
+  assert.match(await at(80), /chip good/);
+  assert.match(await at(79), /chip fair/);
+  assert.match(await at(60), /chip fair/);
+  assert.match(await at(59), /chip poor/);
+});

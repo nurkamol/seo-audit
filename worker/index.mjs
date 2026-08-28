@@ -11,7 +11,7 @@
 //
 // See docs/hosting.md for what it costs and what it is allowed to reach.
 import { audit, preview } from '../src/audit.mjs';
-import { html as htmlReport, markdown as markdownReport, csv as csvReport } from '../src/report.mjs';
+import { html as htmlReport, markdown as markdownReport, csv as csvReport, reportParts } from '../src/report.mjs';
 import { causePayload } from '../src/causes.mjs';
 import { scoreRun, checklist, WEIGHT } from '../src/score.mjs';
 import { diff } from '../src/baseline.mjs';
@@ -313,6 +313,190 @@ function controls(env) {
   return `<details><summary>Settings</summary>${drawn.join('')}</details>`;
 }
 
+/// The window, in a browser.
+///
+/// The macOS app is a sidebar of kept runs beside a report, and until now this
+/// served a page with a form on it — the same engine behind two products that
+/// did not resemble each other. This is that window's shape: the same sidebar,
+/// the same library, the same report, on the two platforms the app does not
+/// ship to.
+///
+/// It borrows the report's own stylesheet rather than inventing a second one,
+/// so a report on screen and a report in a file are the same document. The
+/// chrome around it is the only new CSS here.
+const CHROME = `
+  :root {
+    --sidebar: 268px;
+    --glass: color-mix(in srgb, var(--panel) 82%, transparent);
+    --accent: #2563eb;
+    --on-accent: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --accent: #2f6fe4; }
+  }
+  html, body { height: 100%; }
+  body { margin: 0; padding: 0; overflow: hidden; }
+
+  .app { display: grid; grid-template-columns: var(--sidebar) 1fr; height: 100vh; }
+
+  /* --- The sidebar ---------------------------------------------------- */
+  .side {
+    display: flex; flex-direction: column; gap: .75rem;
+    padding: 1rem .75rem; min-height: 0;
+    background: var(--panel); border-right: 1px solid var(--line);
+  }
+  .side .new {
+    display: block; text-align: center; text-decoration: none;
+    padding: .7rem 1rem; border-radius: 12px; font-weight: 600; font-size: .92rem;
+    background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg);
+    border: 1px solid var(--line-strong);
+  }
+  .side .new:hover { background: color-mix(in srgb, var(--fg) 13%, transparent); }
+  .side h2 {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--faint); margin: .5rem 0 0; padding: 0 .5rem; font-weight: 600; border: 0;
+  }
+  .side .runs { overflow-y: auto; margin: 0 -.25rem; padding: 0 .25rem; flex: 1; min-height: 0; }
+  .side .run {
+    display: grid; grid-template-columns: 1fr auto; gap: .15rem .5rem; align-items: baseline;
+    padding: .5rem .55rem; border-radius: 9px; text-decoration: none; color: inherit;
+  }
+  .side .run:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+  .side .run[aria-current] { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+  /* Every cell placed. With only a row set on the chip, auto-placement put it
+     in column one and pushed the host into column two — a stretched green bar
+     beside a right-aligned name. */
+  .side .run b {
+    grid-column: 1; grid-row: 1; font-weight: 600; font-size: .87rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .side .run small {
+    grid-column: 1; grid-row: 2; color: var(--faint); font-size: .74rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .side .chip {
+    grid-column: 2; grid-row: 1 / span 2; align-self: center; justify-self: end;
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: .28rem .4rem; border-radius: 6px; font-variant-numeric: tabular-nums;
+  }
+  .chip.good { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+  .chip.fair { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .chip.poor { color: var(--error); background: color-mix(in srgb, var(--error) 14%, transparent); }
+  .side .foot { font-size: .72rem; color: var(--faint); padding: 0 .5rem; }
+  .side .foot a { color: var(--faint); }
+
+  /* --- The stage ------------------------------------------------------- */
+  .stage { overflow-y: auto; min-width: 0; }
+  .stage > main { max-width: 62rem; margin-inline: auto; padding: 0 1.75rem 5rem; }
+
+  /* The report's own masthead is the window's title bar here. */
+  .stage .bar { padding-top: 1.4rem; }
+
+  /* --- The one thing on an empty stage --------------------------------- */
+  .hero { display: grid; place-items: center; min-height: 100vh; padding: 2rem; }
+  .hero .inner { width: min(38rem, 100%); text-align: center; }
+  .hero h1 { font-size: 2rem; letter-spacing: -.025em; margin: 0 0 .4rem; }
+  .hero .sub { color: var(--muted); margin: 0 0 2rem; }
+  .card {
+    text-align: left; padding: 1.4rem; border-radius: 18px;
+    border: 1px solid var(--line); background: var(--glass);
+    backdrop-filter: blur(20px) saturate(140%);
+  }
+  .card label { display: block; font-weight: 600; margin: 1rem 0 .35rem; font-size: .85rem; }
+  .card label:first-of-type { margin-top: 0; }
+  .card input, .card select {
+    width: 100%; padding: .68rem .8rem; font: inherit; color: inherit;
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
+    border: 1px solid var(--line-strong); border-radius: 10px;
+  }
+  .card input:focus, .card select:focus { outline: 2px solid color-mix(in srgb, var(--info) 60%, transparent); outline-offset: 1px; }
+  .card .fine { color: var(--faint); font-size: .78rem; margin: .3rem 0 0; line-height: 1.5; }
+  .card details { margin-top: 1.1rem; border-top: 1px solid var(--line); padding-top: .35rem; }
+  .card summary { cursor: pointer; font-weight: 600; font-size: .85rem; padding: .5rem 0; color: var(--muted); }
+  .card summary:hover { color: var(--fg); }
+  .card .check { display: flex; gap: .55rem; align-items: center; margin-top: 1rem; }
+  .card .check input { width: auto; }
+  .card .check label { margin: 0; font-weight: 400; font-size: .9rem; }
+  .actions { display: flex; gap: .6rem; margin-top: 1.4rem; }
+  /* Its own pair rather than the note colour, which is light enough in dark
+     mode that white text on it is barely readable. A button's background and
+     its text are one decision. */
+  button, .cta {
+    padding: .68rem 1.2rem; font: inherit; font-weight: 600; font-size: .92rem;
+    border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent);
+    cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  button.secondary, .cta.secondary {
+    background: color-mix(in srgb, var(--fg) 7%, transparent); color: var(--fg);
+    border: 1px solid var(--line-strong);
+  }
+  button:hover { filter: brightness(1.08); }
+
+  /* --- Running --------------------------------------------------------- */
+  .log {
+    white-space: pre-wrap; word-break: break-word; margin: 1.25rem 0 0;
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 1rem; max-height: 22rem; overflow: auto;
+    font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted);
+  }
+  .spinner {
+    width: 15px; height: 15px; border-radius: 50%; display: inline-block;
+    border: 2px solid var(--line-strong); border-top-color: var(--info);
+    animation: spin .7s linear infinite; vertical-align: -2px; margin-right: .5rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+  @media (max-width: 52rem) {
+    .app { grid-template-columns: 1fr; }
+    .side { display: none; }
+  }
+`;
+
+/** A run's score, as a chip class. The same thresholds `gradeOf()` uses, so a
+ *  dial in the window and a chip here change colour at the same number. */
+const tone = (score) => (score >= 80 ? 'good' : score >= 60 ? 'fair' : 'poor');
+
+/** The sidebar: what the macOS window has down its left-hand side. */
+function sidebar(env, currentId) {
+  const runs = env.STORE?.list?.() ?? [];
+  return `<aside class="side">
+    <a class="new" href="/">+ New audit</a>
+    ${runs.length ? '<h2>Reports</h2>' : ''}
+    <div class="runs">${runs
+      .map((run) => `<a class="run" href="/reports/${esc(run.id)}"${run.id === currentId ? ' aria-current="page"' : ''}>
+        <b>${esc(run.host ?? '')}</b>
+        ${typeof run.score === 'number'
+          ? `<span class="chip ${tone(run.score)}">${run.score}</span>`
+          : ''}
+        <small>${esc(String(run.finishedAt ?? '').replace('T', ' ').slice(0, 16))} · ${run.pages ?? 0} pages</small>
+      </a>`)
+      .join('')}</div>
+    ${runs.length > 1 ? '<a class="foot" href="/reports">Compare two runs →</a>' : ''}
+    <span class="foot">Nothing leaves this machine.</span>
+  </aside>`;
+}
+
+/** A page inside the window. `main` is already the stage's content. */
+function shell(title, main, env, { currentId, css = '' } = {}) {
+  // The report's stylesheet, from the report itself. Rendering an empty one is
+  // the cheapest way to ask for it and costs nothing worth measuring.
+  const base = reportParts([], { origin: '', pages: 0, date: '' }).css;
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>${esc(title)}</title>
+<style>${base}${CHROME}${css}</style>
+</head><body>
+<div class="app">
+  ${sidebar(env, currentId)}
+  <div class="stage">${main}</div>
+</div>
+</body></html>`;
+}
+
 const page = (title, body) => `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -404,33 +588,31 @@ export async function handle(request, env, ctx, deps = {}) {
   if (!authorized(request, env)) return unlockPage();
 
   if (url.pathname === '/') {
-    return htmlResponse(
-      page('SEO audit', `
-        <h1>SEO audit</h1>
-        <p class="sub">Crawls every page a sitemap lists, not just the homepage.
-          Nothing leaves this machine.</p>
-        <form action="/run">
+    return htmlResponse(shell('SEO audit', `
+      <div class="hero"><div class="inner">
+        <h1>Audit every page</h1>
+        <p class="sub">Not just the homepage. Nothing leaves this machine.</p>
+        <form class="card" action="/run">
           <label for="url">Site</label>
-          <input id="url" name="url" type="url" placeholder="https://example.com" required autofocus>
+          <input id="url" name="url" type="url" placeholder="example.com" required autofocus>
           ${controls(env)}
-          <div class="row">
+          <div class="actions">
             <button type="submit">Audit</button>
             <button type="submit" formaction="/plan" class="secondary">Preview</button>
           </div>
         </form>
-        <p class="fine">Preview costs a handful of requests and says what a crawl would do.
-          Every setting the command line takes is here; the ones that are not are
-          <a href="/options">listed with the reason</a>.${
-            env.STORE ? ' Finished runs are kept — <a href="/reports">see them all</a>.' : ''
-          }</p>`),
-    );
+        <p class="fine" style="margin-top:1rem">Preview costs a handful of requests and says what a
+          crawl would do. Every setting the command line takes is in Settings; the ones that are not
+          are <a href="/options">listed with the reason</a>.</p>
+      </div></div>`, env));
   }
 
   if (url.pathname === '/run') {
     const target = targetFor(url.searchParams.get('url'), env);
     if (target.error) {
       return htmlResponse(
-        page('Not audited', `<h1>Not audited</h1><p class="sub">${esc(target.error)}</p><p><a href="/">Back</a></p>`),
+        shell('Not audited', `<main><div class="bar"></div><h1>Not audited</h1>
+          <p class="sub">${esc(target.error)}</p><p><a class="cta secondary" href="/">Back</a></p></main>`, env),
         400,
       );
     }
@@ -449,10 +631,16 @@ export async function handle(request, env, ctx, deps = {}) {
     // audit takes a minute or two and a blank tab for that long reads as a
     // hang. The report replaces this page when it arrives.
     return htmlResponse(
-      page(`Auditing ${esc(target.url)}`, `
-        <h1>Auditing ${esc(target.url)}</h1>
-        <p class="sub" id="status">Crawling. The report will replace this page when it is done.</p>
-        <pre id="log"></pre>
+      shell(`Auditing ${esc(target.url)}`, `
+      <main>
+        <div class="bar">
+          <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+        </div>
+        <h1>${esc(target.url)}</h1>
+        <p class="sub" id="status"><span class="spinner"></span>Crawling every page the sitemap
+          lists. The report replaces this when it is done.</p>
+        <pre class="log" id="log"></pre>
+      </main>
         <script>
           const log = document.getElementById('log');
           const status = document.getElementById('status');
@@ -471,7 +659,7 @@ export async function handle(request, env, ctx, deps = {}) {
             document.write(JSON.parse(e.data));
             document.close();
           });
-        </script>`),
+        </script>`, env),
     );
   }
 
@@ -484,7 +672,8 @@ export async function handle(request, env, ctx, deps = {}) {
     const target = targetFor(url.searchParams.get('url'), env);
     if (target.error) {
       return htmlResponse(
-        page('Not previewed', `<h1>Not previewed</h1><p class="sub">${esc(target.error)}</p><p><a href="/">Back</a></p>`),
+        shell('Not previewed', `<main><div class="bar"></div><h1>Not previewed</h1>
+          <p class="sub">${esc(target.error)}</p><p><a class="cta secondary" href="/">Back</a></p></main>`, env),
         400,
       );
     }
@@ -521,13 +710,19 @@ export async function handle(request, env, ctx, deps = {}) {
 
     const audit = new URLSearchParams(url.searchParams);
     return htmlResponse(
-      page(`Preview — ${esc(target.url)}`, `
+      shell(`Preview — ${esc(target.url)}`, `
+      <main>
+        <div class="bar">
+          <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+        </div>
         <h1>${esc(target.url)}</h1>
         <p class="sub">What a crawl would do, without doing it.</p>
-        <table>${rows
+        <div class="scroll"><table>${rows
           .map(([name, value]) => `<tr><th>${esc(name)}</th><td>${esc(value)}</td></tr>`)
-          .join('')}</table>
-        <p class="row"><a class="cta" href="/run?${audit}">Audit it</a> <a href="/">Change something</a></p>`),
+          .join('')}</table></div>
+        <p class="actions"><a class="cta" href="/run?${audit}">Audit it</a>
+          <a class="cta secondary" href="/">Change something</a></p>
+      </main>`, env),
     );
   }
 
@@ -595,11 +790,12 @@ export async function handle(request, env, ctx, deps = {}) {
   if (url.pathname === '/reports' && env.STORE) {
     const rows = env.STORE.list();
     if (!rows.length) {
-      return htmlResponse(page('Reports', `
-        <h1>Nothing kept yet</h1>
-        <p class="sub">Every finished run is kept here, in
-          <code>${esc(env.STORE.where())}</code>.</p>
-        <p><a class="cta" href="/">Audit a site</a></p>`));
+      return htmlResponse(shell('Reports', `
+        <div class="hero"><div class="inner">
+          <h1>Nothing kept yet</h1>
+          <p class="sub">Every finished run is kept in <code>${esc(env.STORE.where())}</code>.</p>
+          <p><a class="cta" href="/">Audit a site</a></p>
+        </div></div>`, env));
     }
 
     // A comparison needs two, so the list is a form: tick two, press Compare.
@@ -617,46 +813,50 @@ export async function handle(request, env, ctx, deps = {}) {
         .join('')}</table>`)
       .join('');
 
-    return htmlResponse(page('Reports', `
-      <h1>Reports</h1>
-      <p class="sub">${rows.length} kept on this machine.
-        ${env.STORE.bytes ? `${Math.max(1, Math.round(env.STORE.bytes() / 1024))} KB in ` : ''}
-        <code>${esc(env.STORE.where())}</code>.</p>
-      <form action="/compare">
-        ${body}
-        <p class="row"><button type="submit">Compare the two you ticked</button>
-          <a href="/">Audit another site</a></p>
-        <p class="fine">Two runs of one site answer "did my fix work". Two runs of
-          different sites are matched by path instead, which is how a rebuild is
-          compared with the site it replaces.</p>
-      </form>`));
+    return htmlResponse(shell('Reports', `
+      <main>
+        <div class="bar">
+          <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+        </div>
+        <h1>Reports</h1>
+        <p class="sub">${rows.length} kept on this machine,
+          ${env.STORE.bytes ? `${Math.max(1, Math.round(env.STORE.bytes() / 1024))} KB in ` : 'in '}
+          <code>${esc(env.STORE.where())}</code>.</p>
+        <form action="/compare">
+          ${body}
+          <p class="actions"><button type="submit">Compare the two you ticked</button>
+            <a class="cta secondary" href="/">Audit another site</a></p>
+          <p class="fine">Two runs of one site answer "did my fix work". Two runs of different
+            sites are matched by path instead, which is how a rebuild is compared with the site
+            it replaces.</p>
+        </form>
+      </main>`, env));
   }
 
   if (url.pathname.startsWith('/reports/') && env.STORE) {
     const kept = env.STORE.read(url.pathname.slice('/reports/'.length));
     if (!kept) {
-      return htmlResponse(page('Not found', `<h1>No such report</h1>
+      return htmlResponse(shell('Not found', `<main><div class="bar"></div><h1>No such report</h1>
         <p class="sub">It may have been dropped to keep the list a list.</p>
-        <p><a href="/reports">All reports</a></p>`), 404);
+        <p><a class="cta secondary" href="/reports">All reports</a></p></main>`, env), 404);
     }
-    return htmlResponse(htmlReport(kept.findings ?? [], kept.meta, {
-      backHref: '/reports',
-      backLabel: 'All reports',
-      score: kept.score,
+    const parts = reportParts(kept.findings ?? [], kept.meta, { score: kept.score });
+    return htmlResponse(shell(parts.title, `<main>${parts.body}</main>`, env, {
+      currentId: url.pathname.slice('/reports/'.length),
     }));
   }
 
   if (url.pathname === '/compare' && env.STORE) {
     const picked = url.searchParams.getAll('run');
     if (picked.length !== 2) {
-      return htmlResponse(page('Compare', `<h1>Pick two</h1>
+      return htmlResponse(shell('Compare', `<main><div class="bar"></div><h1>Pick two</h1>
         <p class="sub">A comparison is between two runs; ${picked.length} ${picked.length === 1 ? 'was' : 'were'} ticked.</p>
-        <p><a href="/reports">Back to the list</a></p>`), 400);
+        <p><a class="cta secondary" href="/reports">Back to the list</a></p></main>`, env), 400);
     }
     const [a, b] = picked.map((id) => env.STORE.read(id));
     if (!a || !b) {
-      return htmlResponse(page('Compare', `<h1>One of those is gone</h1>
-        <p><a href="/reports">Back to the list</a></p>`), 404);
+      return htmlResponse(shell('Compare', `<main><div class="bar"></div><h1>One of those is gone</h1>
+        <p><a class="cta secondary" href="/reports">Back to the list</a></p></main>`, env), 404);
     }
     // Older first, so "what moved" moves forward in time whichever order the
     // boxes were ticked in.
@@ -672,17 +872,22 @@ export async function handle(request, env, ctx, deps = {}) {
           .join('')}</table>`
       : '';
 
-    return htmlResponse(page('Compare', `
-      <h1>${esc(before.meta?.origin ?? '')} → ${esc(after.meta?.origin ?? '')}</h1>
-      <p class="sub">${esc(String(before.meta?.date ?? ''))} compared with ${esc(String(after.meta?.date ?? ''))}${
-        crossSite ? ' · matched by path, since the hosts differ' : ''
-      }</p>
-      ${list('Appeared', 'Not there last time. Start here.', causePayload(added, after.meta?.pages ?? 0))}
-      ${list('Gone', 'Reported last time and not this time.', causePayload(fixed, before.meta?.pages ?? 0))}
-      ${!added.length && !fixed.length ? '<p>Nothing moved.</p>' : ''}
-      <p class="fine">${unchanged} finding${unchanged === 1 ? '' : 's'} unchanged, and not listed —
-        a comparison is for what moved.</p>
-      <p><a href="/reports">All reports</a></p>`));
+    return htmlResponse(shell('Compare', `
+      <main>
+        <div class="bar">
+          <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+        </div>
+        <h1>${esc(before.meta?.origin ?? '')} → ${esc(after.meta?.origin ?? '')}</h1>
+        <p class="sub">${esc(String(before.meta?.date ?? ''))} compared with ${esc(String(after.meta?.date ?? ''))}${
+          crossSite ? ' · matched by path, since the hosts differ' : ''
+        }</p>
+        ${list('Appeared', 'Not there last time. Start here.', causePayload(added, after.meta?.pages ?? 0))}
+        ${list('Gone', 'Reported last time and not this time.', causePayload(fixed, before.meta?.pages ?? 0))}
+        ${!added.length && !fixed.length ? '<p>Nothing moved.</p>' : ''}
+        <p class="fine">${unchanged} finding${unchanged === 1 ? '' : 's'} unchanged, and not listed —
+          a comparison is for what moved.</p>
+        <p><a class="cta secondary" href="/reports">All reports</a></p>
+      </main>`, env));
   }
 
   // Every check the score counts, with what it costs and what it says when it
@@ -831,11 +1036,14 @@ export async function handle(request, env, ctx, deps = {}) {
           // way back to the form — otherwise the only route is the browser's
           // back button, onto a page that has finished streaming and shows a
           // stale log.
-          await send('done', render(all, meta, {
-            backHref: kept ? '/reports' : '/',
-            backLabel: kept ? 'All reports' : 'Audit another site',
-            score: scored,
-          }));
+          // Into the window rather than over it: the report replaces the
+          // document, so without the shell the sidebar would vanish the moment
+          // a crawl finished — which is the one moment somebody wants to click
+          // back to what they ran before.
+          const parts = reportParts(all, meta, { score: scored });
+          await send('done', env.STORE
+            ? shell(parts.title, `<main>${parts.body}</main>`, env, { currentId: kept?.id })
+            : render(all, meta, { backHref: '/', backLabel: 'Audit another site', score: scored }));
         }
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);
