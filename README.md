@@ -14,6 +14,7 @@
 <p align="center">
   <a href="https://github.com/marketplace/actions/full-site-seo-audit"><img src="https://img.shields.io/badge/GitHub%20Marketplace-Full--site%20SEO%20Audit-f97316?logo=github&logoColor=white" alt="GitHub Marketplace"></a>
   <a href="https://github.com/nurkamol/seo-audit/actions/workflows/test.yml"><img src="https://github.com/nurkamol/seo-audit/actions/workflows/test.yml/badge.svg" alt="tests"></a>
+  <a href="https://github.com/nurkamol/seo-audit/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20app-0a0a0a?logo=apple&logoColor=white" alt="Download the macOS app"></a>
   <a href="https://www.npmjs.com/package/@nurkamol/seo-audit"><img src="https://img.shields.io/npm/v/@nurkamol/seo-audit?color=cb3837&logo=npm&logoColor=white&label=npm" alt="npm"></a>
   <a href="https://github.com/nurkamol/seo-audit/releases"><img src="https://img.shields.io/github/v/release/nurkamol/seo-audit?color=f97316" alt="release"></a>
   <img src="https://img.shields.io/badge/node-%E2%89%A518-3c873a" alt="node >= 18">
