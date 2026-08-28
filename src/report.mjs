@@ -104,7 +104,9 @@ export function terminal(findings, meta, { score } = {}) {
     lines.push(`  ${paint(bold(`${score.score}`))}${dim('/100')}   ${paint(bold(score.grade))}   ${paint(scoreBar(score.score))}`);
     lines.push(
       dim(
-        `  ${score.lost} points across ${score.checks.failed} check${score.checks.failed === 1 ? '' : 's'} · ` +
+        `  ${score.checks.failed
+          ? `${score.lost} points across ${score.checks.failed} check${score.checks.failed === 1 ? '' : 's'}`
+          : 'Nothing took points off'} · ` +
           `${score.checks.passed} passed · ${score.checks.skipped} did not apply`,
       ),
     );
@@ -344,7 +346,9 @@ function scoreMarkdown(score) {
   );
   out.push('');
   out.push(
-    `${score.lost} points across ${score.checks.failed} check${score.checks.failed === 1 ? '' : 's'}. ` +
+    `${score.checks.failed
+      ? `${score.lost} points across ${score.checks.failed} check${score.checks.failed === 1 ? '' : 's'}. `
+      : 'Nothing took points off. '}` +
       `${score.checks.passed} passed and ${score.checks.skipped} did not apply.` +
       (score.ifErrorsFixed > score.score ? ` Clear the errors alone and it is **${score.ifErrorsFixed}**.` : ''),
   );
@@ -767,8 +771,13 @@ export function html(findings, meta, { backHref, backLabel = 'New audit', score 
     </div>
     <div class="story">
       <h2>${score.score} out of 100</h2>
-      <p class="lede">${score.lost} points across ${plural(score.checks.failed, 'check')}.
-        ${score.checks.passed} passed, ${score.checks.skipped} did not apply.${
+      <p class="lede">${
+        // "0 points across 0 checks" is what a perfect score used to read as,
+        // which is arithmetic rather than a sentence.
+        score.checks.failed
+          ? `${score.lost} points across ${plural(score.checks.failed, 'check')}. `
+          : 'Nothing took points off. '
+      }${score.checks.passed} passed, ${score.checks.skipped} did not apply.${
           score.ifErrorsFixed > score.score
             ? ` Clear the errors alone and it is <b>${score.ifErrorsFixed}</b>.`
             : ''

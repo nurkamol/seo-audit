@@ -16,7 +16,7 @@ import { causePayload } from '../src/causes.mjs';
 import { scoreRun, checklist, WEIGHT } from '../src/score.mjs';
 import { diff } from '../src/baseline.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
-import { runParameters, notInApp } from '../src/options.mjs';
+import { runParameters, notInApp, formFields } from '../src/options.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
 // 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
@@ -249,6 +249,70 @@ const NO_CERTIFICATE_CHECK = {
     'npx github:nurkamol/seo-audit@v1',
 };
 
+/** A preset's name, as a person writes it. The *value* stays the engine's own
+ *  token — `--browser googlebot-desktop` is what the command line takes, and a
+ *  form that sent something prettier would be a second vocabulary to keep in
+ *  step. This only changes what the menu reads. */
+const readable = (name) =>
+  ({ macos: 'macOS', ios: 'iOS', 'googlebot-desktop': 'Googlebot (desktop)' })[name]
+    ?? name.charAt(0).toUpperCase() + name.slice(1);
+
+/** The form's controls, from the one table that knows what a run can be told.
+ *
+ *  Drawn here rather than hard-coded: this page offered two inputs while the
+ *  engine took a dozen parameters, so somebody at a browser reached a sixth of
+ *  what somebody at a terminal did. Adding a flag with a `field` in
+ *  `src/options.mjs` now adds the control.
+ *
+ *  Everything past the URL is inside a `<details>`. A form that opens with
+ *  twelve inputs asks somebody to have an opinion about twelve things before
+ *  they can audit anything, and the answer to all of them is already the right
+ *  one — which is why none of them is sent unless it was changed. */
+function controls(env) {
+  const allow = (key) => env[key] === '1';
+  const fields = formFields(allow);
+  if (!fields.length) return '';
+
+  const drawn = fields.map((field) => {
+    const id = `f-${field.query}`;
+    const label = `<label for="${esc(id)}">${esc(field.label)}</label>`;
+    const help = field.help ? `<p class="fine">${esc(field.help)}</p>` : '';
+
+    if (field.type === 'checkbox') {
+      return `<div class="check"><input id="${esc(id)}" name="${esc(field.query)}" type="checkbox" ` +
+        `value="${esc(field.value ?? '1')}"><label for="${esc(id)}">${esc(field.label)}</label></div>${help}`;
+    }
+    if (field.type === 'select') {
+      const options = field.choices
+        .map(([value, text]) => `<option value="${esc(value)}">${esc(text)}</option>`)
+        .join('');
+      return `${label}<select id="${esc(id)}" name="${esc(field.query)}">${options}</select>${help}`;
+    }
+    // The browser and system menus are the engine's own list, asked for rather
+    // than copied — the same reason /agents exists.
+    if (field.type === 'agent') {
+      const names = field.which === 'browser' ? BROWSER_NAMES : OS_NAMES;
+      const options = ['<option value="">Whatever the engine defaults to</option>']
+        .concat(names.map((name) => `<option value="${esc(name)}">${esc(readable(name))}</option>`))
+        .join('');
+      return `${label}<select id="${esc(id)}" name="${esc(field.query)}">${options}</select>${help}`;
+    }
+
+    // Empty means "leave the default in the engine", which is the rule every
+    // control here follows — so the placeholder has to say what that default
+    // is, or a blank box reads as an unanswered question rather than as the
+    // right answer already being in place.
+    const isLimit = field.query === 'limit';
+    const bound = isLimit ? pageLimit(null, env) : null;
+    const placeholder = isLimit ? `${bound}` : field.placeholder;
+    return `${label}<input id="${esc(id)}" name="${esc(field.query)}" type="${esc(field.type)}"` +
+      `${field.min ? ` min="${field.min}"` : ''}${isLimit ? ` max="${bound}"` : ''}` +
+      `${placeholder ? ` placeholder="${esc(placeholder)}"` : ''}>${help}`;
+  });
+
+  return `<details><summary>Settings</summary>${drawn.join('')}</details>`;
+}
+
 const page = (title, body) => `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -260,6 +324,24 @@ const page = (title, body) => `<!doctype html>
   h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
   p.sub { color: #6b7280; margin: 0 0 2rem; }
   label { display: block; font-weight: 600; margin: 1.25rem 0 .35rem; }
+  select { width: 100%; padding: .6rem .7rem; font: inherit; border: 1px solid #9ca3af; border-radius: .4rem; background: transparent; color: inherit; }
+  details { margin-top: 1.5rem; border-top: 1px solid #9ca3af40; padding-top: .5rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .4rem 0; }
+  details[open] summary { margin-bottom: .5rem; }
+  .check { display: flex; align-items: center; gap: .5rem; margin-top: 1.25rem; }
+  .check input { width: auto; }
+  .check label { margin: 0; font-weight: 400; }
+  .fine { color: #6b7280; font-size: .85rem; margin: .35rem 0 0; }
+  .row { display: flex; gap: .6rem; align-items: center; }
+  button.secondary { background: transparent; color: inherit; border: 1px solid #9ca3af; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid #9ca3af30; vertical-align: top; }
+  th { font-weight: 600; white-space: nowrap; width: 12rem; }
+  .cta { display: inline-block; padding: .6rem 1.1rem; font-weight: 600; border-radius: .4rem; background: #2563eb; color: #fff; text-decoration: none; }
+  h2 { font-size: 1rem; margin: 2rem 0 .5rem; }
+  td.pick { width: 2rem; }
+  td.pick input { width: auto; }
+  td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
   input { width: 100%; padding: .6rem .7rem; font: inherit; border: 1px solid #9ca3af; border-radius: .4rem; background: transparent; color: inherit; }
   button { margin-top: 1.25rem; padding: .6rem 1.1rem; font: inherit; font-weight: 600; border: 0; border-radius: .4rem; background: #2563eb; color: #fff; cursor: pointer; }
   pre { white-space: pre-wrap; word-break: break-word; background: #11182710; padding: 1rem; border-radius: .4rem; font: 13px/1.5 ui-monospace, monospace; }
@@ -325,15 +407,22 @@ export async function handle(request, env, ctx, deps = {}) {
     return htmlResponse(
       page('SEO audit', `
         <h1>SEO audit</h1>
-        <p class="sub">Crawls every page a sitemap lists, not just the homepage.</p>
+        <p class="sub">Crawls every page a sitemap lists, not just the homepage.
+          Nothing leaves this machine.</p>
         <form action="/run">
           <label for="url">Site</label>
           <input id="url" name="url" type="url" placeholder="https://example.com" required autofocus>
-          <label for="limit">Pages at most</label>
-          <input id="limit" name="limit" type="number" min="1" max="${pageLimit(null, env)}"
-                 value="${pageLimit(null, env)}">
-          <button type="submit">Audit</button>
-        </form>`),
+          ${controls(env)}
+          <div class="row">
+            <button type="submit">Audit</button>
+            <button type="submit" formaction="/plan" class="secondary">Preview</button>
+          </div>
+        </form>
+        <p class="fine">Preview costs a handful of requests and says what a crawl would do.
+          Every setting the command line takes is here; the ones that are not are
+          <a href="/options">listed with the reason</a>.${
+            env.STORE ? ' Finished runs are kept — <a href="/reports">see them all</a>.' : ''
+          }</p>`),
     );
   }
 
@@ -345,7 +434,17 @@ export async function handle(request, env, ctx, deps = {}) {
         400,
       );
     }
-    const stream = `/stream?url=${encodeURIComponent(target.url)}&limit=${pageLimit(url.searchParams.get('limit'), env)}`;
+    // Everything the form collected, not the two parameters this used to
+    // forward. A control somebody set and the engine never saw is worse than
+    // no control: it is a setting that quietly does nothing, which is the
+    // failure `src/options.mjs` exists to prevent on the other side of this.
+    const carried = new URLSearchParams({ url: target.url });
+    for (const { query } of formFields(() => true)) {
+      const value = url.searchParams.get(query);
+      if (value !== null && value !== '') carried.set(query, value);
+    }
+    carried.set('limit', String(pageLimit(url.searchParams.get('limit'), env)));
+    const stream = `/stream?${carried}`;
     // The log is streamed rather than the page being held back, because an
     // audit takes a minute or two and a blank tab for that long reads as a
     // hang. The report replaces this page when it arrives.
@@ -378,6 +477,60 @@ export async function handle(request, env, ctx, deps = {}) {
 
   // The findings, handed back and rendered. The native app holds the JSON it
   // was streamed and asks for a format when somebody exports; re-rendering here
+  // The same preview, as a page rather than as JSON. `/preview` answers a
+  // client; this answers a person, and it is the button beside Audit — the
+  // whole point of a preview is being reachable before the minutes are spent.
+  if (url.pathname === '/plan') {
+    const target = targetFor(url.searchParams.get('url'), env);
+    if (target.error) {
+      return htmlResponse(
+        page('Not previewed', `<h1>Not previewed</h1><p class="sub">${esc(target.error)}</p><p><a href="/">Back</a></p>`),
+        400,
+      );
+    }
+    const plan = await preview(target.url, {
+      limit: pageLimit(url.searchParams.get('limit'), env),
+      concurrency: crawlConcurrency(url.searchParams.get('concurrency'), env),
+      sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
+      userAgent: agentFor(url.searchParams, env),
+    });
+
+    const rows = [];
+    if (!plan.reachable) {
+      rows.push(['Nothing answered', plan.rateLimited
+        ? 'Every request came back HTTP 429. Wait, or set the speed to Gentle.'
+        : `${plan.origin} did not return a single response.`]);
+    } else {
+      if (plan.redirected) {
+        rows.push(['Would read', `${plan.origin} — ${plan.redirected.from} redirects there`]);
+      }
+      rows.push(['Sitemap', plan.sitemap ?? 'none found; links would be followed from the home page']);
+      if (plan.listed) rows.push(['URLs listed', plan.listed.toLocaleString()]);
+      rows.push(['Would check', plan.wouldCheck === null
+        ? `up to ${plan.limit}, since there is no sitemap to count`
+        : plan.wouldCheck.toLocaleString()]);
+      if (plan.skippedByLimit) {
+        rows.push(['Past the limit', `${plan.skippedByLimit.toLocaleString()} — raise "Pages at most"`]);
+      }
+      if (plan.excluded) rows.push(['Excluded', plan.excluded.toLocaleString()]);
+      for (const section of plan.sections ?? []) {
+        rows.push([section.path, `${section.count.toLocaleString()} URL${section.count === 1 ? '' : 's'}`]);
+      }
+    }
+    rows.push(['This preview cost', `${plan.requests} requests, ${(plan.ms / 1000).toFixed(1)}s — no page was fetched`]);
+
+    const audit = new URLSearchParams(url.searchParams);
+    return htmlResponse(
+      page(`Preview — ${esc(target.url)}`, `
+        <h1>${esc(target.url)}</h1>
+        <p class="sub">What a crawl would do, without doing it.</p>
+        <table>${rows
+          .map(([name, value]) => `<tr><th>${esc(name)}</th><td>${esc(value)}</td></tr>`)
+          .join('')}</table>
+        <p class="row"><a class="cta" href="/run?${audit}">Audit it</a> <a href="/">Change something</a></p>`),
+    );
+  }
+
   // What a run would do, without doing it. A handful of requests instead of
   // hundreds, so somebody can find out whether the tool is pointed at the right
   // site before spending the minutes — and, on the hosted version, before
@@ -433,6 +586,103 @@ export async function handle(request, env, ctx, deps = {}) {
       }),
       { headers: { 'content-type': 'application/json' } },
     );
+  }
+
+  // --- Runs this machine has kept ----------------------------------------
+  // Only where a store was handed over, which is the local server and never a
+  // deployed Worker. The list, one report, and a comparison between two — the
+  // three things the macOS window has had since 1.23.0 and the browser has not.
+  if (url.pathname === '/reports' && env.STORE) {
+    const rows = env.STORE.list();
+    if (!rows.length) {
+      return htmlResponse(page('Reports', `
+        <h1>Nothing kept yet</h1>
+        <p class="sub">Every finished run is kept here, in
+          <code>${esc(env.STORE.where())}</code>.</p>
+        <p><a class="cta" href="/">Audit a site</a></p>`));
+    }
+
+    // A comparison needs two, so the list is a form: tick two, press Compare.
+    const grouped = new Map();
+    for (const row of rows) grouped.set(row.host, [...(grouped.get(row.host) ?? []), row]);
+
+    const body = [...grouped]
+      .map(([host, runs]) => `<h2>${esc(host)}</h2><table>${runs
+        .map((row) => `<tr>
+          <td class="pick"><input type="checkbox" name="run" value="${esc(row.id)}"></td>
+          <td><a href="/reports/${esc(row.id)}">${esc(String(row.finishedAt).replace('T', ' ').slice(0, 16))}</a></td>
+          <td>${row.pages} pages · ${row.causes} thing${row.causes === 1 ? '' : 's'} to change</td>
+          <td class="n">${typeof row.score === 'number' ? `${row.score}/100` : '—'}</td>
+        </tr>`)
+        .join('')}</table>`)
+      .join('');
+
+    return htmlResponse(page('Reports', `
+      <h1>Reports</h1>
+      <p class="sub">${rows.length} kept on this machine.
+        ${env.STORE.bytes ? `${Math.max(1, Math.round(env.STORE.bytes() / 1024))} KB in ` : ''}
+        <code>${esc(env.STORE.where())}</code>.</p>
+      <form action="/compare">
+        ${body}
+        <p class="row"><button type="submit">Compare the two you ticked</button>
+          <a href="/">Audit another site</a></p>
+        <p class="fine">Two runs of one site answer "did my fix work". Two runs of
+          different sites are matched by path instead, which is how a rebuild is
+          compared with the site it replaces.</p>
+      </form>`));
+  }
+
+  if (url.pathname.startsWith('/reports/') && env.STORE) {
+    const kept = env.STORE.read(url.pathname.slice('/reports/'.length));
+    if (!kept) {
+      return htmlResponse(page('Not found', `<h1>No such report</h1>
+        <p class="sub">It may have been dropped to keep the list a list.</p>
+        <p><a href="/reports">All reports</a></p>`), 404);
+    }
+    return htmlResponse(htmlReport(kept.findings ?? [], kept.meta, {
+      backHref: '/reports',
+      backLabel: 'All reports',
+      score: kept.score,
+    }));
+  }
+
+  if (url.pathname === '/compare' && env.STORE) {
+    const picked = url.searchParams.getAll('run');
+    if (picked.length !== 2) {
+      return htmlResponse(page('Compare', `<h1>Pick two</h1>
+        <p class="sub">A comparison is between two runs; ${picked.length} ${picked.length === 1 ? 'was' : 'were'} ticked.</p>
+        <p><a href="/reports">Back to the list</a></p>`), 400);
+    }
+    const [a, b] = picked.map((id) => env.STORE.read(id));
+    if (!a || !b) {
+      return htmlResponse(page('Compare', `<h1>One of those is gone</h1>
+        <p><a href="/reports">Back to the list</a></p>`), 404);
+    }
+    // Older first, so "what moved" moves forward in time whichever order the
+    // boxes were ticked in.
+    const [before, after] = String(a.meta?.date ?? '') <= String(b.meta?.date ?? '') ? [a, b] : [b, a];
+    const { added, fixed, unchanged, crossSite } = diff(before, after.findings ?? [], {
+      currentMeta: after.meta,
+    });
+
+    const list = (title, note, causes) => causes.length
+      ? `<h2>${esc(title)} · ${causes.length}</h2><p class="fine">${esc(note)}</p><table>${causes
+          .map((cause) => `<tr><th>${esc(cause.level)}</th><td>${esc(cause.title)}</td>
+            <td>${esc(cause.scope)}</td></tr>`)
+          .join('')}</table>`
+      : '';
+
+    return htmlResponse(page('Compare', `
+      <h1>${esc(before.meta?.origin ?? '')} → ${esc(after.meta?.origin ?? '')}</h1>
+      <p class="sub">${esc(String(before.meta?.date ?? ''))} compared with ${esc(String(after.meta?.date ?? ''))}${
+        crossSite ? ' · matched by path, since the hosts differ' : ''
+      }</p>
+      ${list('Appeared', 'Not there last time. Start here.', causePayload(added, after.meta?.pages ?? 0))}
+      ${list('Gone', 'Reported last time and not this time.', causePayload(fixed, before.meta?.pages ?? 0))}
+      ${!added.length && !fixed.length ? '<p>Nothing moved.</p>' : ''}
+      <p class="fine">${unchanged} finding${unchanged === 1 ? '' : 's'} unchanged, and not listed —
+        a comparison is for what moved.</p>
+      <p><a href="/reports">All reports</a></p>`));
   }
 
   // Every check the score counts, with what it costs and what it says when it
@@ -559,22 +809,33 @@ export async function handle(request, env, ctx, deps = {}) {
         // with them, from the same causePayload() the CLI's --json calls, so
         // that a report from here and a report from the command line are the
         // same document.
+        const payload = {
+          meta,
+          findings: all,
+          causes: causePayload(all, meta.pages),
+          score: scored,
+          ...(sitemap ? { sitemap } : {}),
+          ...(llms ? { llms } : {}),
+          ...(schema ? { schema } : {}),
+        };
+
+        // Kept where there is somewhere to keep it — the local server hands one
+        // over, a deployed Worker does not. A seven-minute crawl should only
+        // ever happen once, and that is not a macOS-only claim.
+        const kept = env.STORE?.keep?.(payload, { site: target.url }) ?? null;
+
         if (url.searchParams.get('format') === 'json') {
-          await send('done', {
-            meta,
-            findings: all,
-            causes: causePayload(all, meta.pages),
-            score: scored,
-            ...(sitemap ? { sitemap } : {}),
-            ...(llms ? { llms } : {}),
-            ...(schema ? { schema } : {}),
-          });
+          await send('done', payload);
         } else {
           // The report replaces this page entirely, so it has to carry its own
           // way back to the form — otherwise the only route is the browser's
           // back button, onto a page that has finished streaming and shows a
           // stale log.
-          await send('done', render(all, meta, { backHref: '/', backLabel: 'Audit another site', score: scored }));
+          await send('done', render(all, meta, {
+            backHref: kept ? '/reports' : '/',
+            backLabel: kept ? 'All reports' : 'Audit another site',
+            score: scored,
+          }));
         }
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);

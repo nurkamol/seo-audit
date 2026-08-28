@@ -4576,3 +4576,160 @@ test('a partial crawl generates no structured data at all', async () => {
   assert.match(cut.refused, /--limit 41/);
   assert.match(describeSchema(cut, 'schema.json'), /Did not write schema.json/);
 });
+
+// --- opening a browser ----------------------------------------------------
+// Nine lines rather than a dependency, and the platform table is the whole of
+// it. `start` is the one that bites: it is a cmd builtin rather than a program,
+// and without the empty title argument it steals the URL as the window title
+// and opens nothing.
+
+test('every platform gets the launcher it actually has', async () => {
+  const { opener } = await import('../src/open-url.mjs');
+  assert.deepEqual(opener('darwin'), { command: 'open', args: [] });
+  assert.deepEqual(opener('linux'), { command: 'xdg-open', args: [] });
+  assert.deepEqual(opener('win32'), { command: 'cmd', args: ['/c', 'start', ''] });
+  // A system with no answer says so rather than guessing at one.
+  assert.equal(opener('android'), null);
+});
+
+test('opening is detached, ignored and never fatal', async () => {
+  const { openUrl } = await import('../src/open-url.mjs');
+  const calls = [];
+  const fake = (command, args, options) => {
+    calls.push({ command, args, options });
+    return { on() {}, unref() {} };
+  };
+
+  assert.equal(openUrl('http://127.0.0.1:4321/', { platform: 'linux', spawnFn: fake }), true);
+  assert.deepEqual(calls[0].args, ['http://127.0.0.1:4321/']);
+  // A server must outlive the launcher it started.
+  assert.equal(calls[0].options.detached, true);
+  assert.equal(calls[0].options.stdio, 'ignore');
+
+  // The empty title, or Windows opens nothing at all.
+  openUrl('http://x/', { platform: 'win32', spawnFn: fake });
+  assert.deepEqual(calls[1].args, ['/c', 'start', '', 'http://x/']);
+
+  // Nothing to try, and a launcher that will not start: false, never a throw.
+  // Failing to open a browser is not a reason for a server not to run.
+  assert.equal(openUrl('http://x/', { platform: 'android', spawnFn: fake }), false);
+  assert.equal(
+    openUrl('http://x/', { platform: 'linux', spawnFn: () => { throw new Error('ENOENT'); } }),
+    false,
+  );
+});
+
+// --- the library the local server keeps -----------------------------------
+// The window has kept every finished run since 1.23.0 and `--serve` kept none,
+// so somebody on Linux or Windows got one report and lost it the moment they
+// audited something else. A seven-minute crawl should only ever happen once,
+// and that is not a macOS-only claim.
+
+test('each platform keeps reports where that platform keeps documents', async () => {
+  const { libraryRoot } = await import('../src/library.mjs');
+  const env = { HOME: '/h' };
+  // Deliberately the same path Support.directory() uses on the Swift side —
+  // named for the bundle id — so the window and the browser share one library
+  // rather than each having their own.
+  assert.match(libraryRoot(env, 'darwin'), /Library\/Application Support\/seo-audit$/);
+  assert.match(libraryRoot({ ...env, APPDATA: 'C:\\Users\\a\\AppData\\Roaming' }, 'win32'), /seo-audit$/);
+  assert.match(libraryRoot({ ...env, XDG_DATA_HOME: '/h/.local/share' }, 'linux'), /\.local\/share\/seo-audit$/);
+  assert.equal(libraryRoot({ SEO_AUDIT_HOME: '/somewhere' }, 'linux'), '/somewhere');
+});
+
+test('a run is kept byte for byte, and listed newest first', async () => {
+  const { library } = await import('../src/library.mjs');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const root = mkdtempSync(join(tmpdir(), 'seo-lib-'));
+  try {
+    const store = library(root);
+    const payload = (origin, score) => ({
+      meta: { origin, pages: 3 },
+      findings: [{ level: 'warn', id: 'desc-missing', title: 'x', detail: 'y', url: `${origin}/a` }],
+      causes: [{ id: 'desc-missing' }],
+      score: { score },
+      // A field this store knows nothing about. It must survive, which is the
+      // whole reason the engine's exact JSON is what gets written.
+      somethingLater: { kept: true },
+    });
+
+    const first = store.keep(payload('https://a.test', 91), { finishedAt: '2026-01-01T00:00:00Z' });
+    const second = store.keep(payload('https://b.test', 40), { finishedAt: '2026-02-01T00:00:00Z' });
+
+    assert.equal(first.host, 'a.test');
+    assert.equal(first.score, 91);
+    assert.equal(first.warnings, 1);
+    assert.deepEqual(store.list().map((r) => r.id), [second.id, first.id]);
+
+    const back = store.read(first.id);
+    assert.equal(back.meta.origin, 'https://a.test');
+    assert.deepEqual(back.somethingLater, { kept: true });
+    assert.ok(store.bytes() > 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// An id arrives off a URL, so it is checked rather than trusted. Anything but a
+// UUID must not be able to become a path.
+test('an id that is not an id cannot become a path', async () => {
+  const { library } = await import('../src/library.mjs');
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const root = mkdtempSync(join(tmpdir(), 'seo-lib-'));
+  try {
+    writeFileSync(join(root, 'secret.json'), '{"meta":{"origin":"nope"}}');
+    const store = library(root);
+    for (const attempt of ['../secret', '../../etc/passwd', '', null, 'a'.repeat(36)]) {
+      assert.equal(store.read(attempt), null, `${attempt} should not resolve`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the list is a list to click, not an archive', async () => {
+  const { library } = await import('../src/library.mjs');
+  const { mkdtempSync, rmSync, readdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const root = mkdtempSync(join(tmpdir(), 'seo-lib-'));
+  try {
+    const store = library(root);
+    for (let i = 0; i < 45; i += 1) {
+      store.keep({ meta: { origin: 'https://x.test', pages: 1 }, findings: [], causes: [] },
+        { finishedAt: `2026-01-${String((i % 28) + 1).padStart(2, '0')}T00:00:0${i % 10}Z` });
+    }
+    assert.equal(store.list().length, 40);
+    // And the files went with the rows, rather than accumulating unseen.
+    assert.equal(readdirSync(join(root, 'reports')).length, 40);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// An index entry whose file is gone is a row that opens onto nothing, which is
+// worse than not listing it — a folder can be emptied by a sync tool without
+// the index being told.
+test('a row whose file has gone is not listed', async () => {
+  const { library } = await import('../src/library.mjs');
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const root = mkdtempSync(join(tmpdir(), 'seo-lib-'));
+  try {
+    const store = library(root);
+    const kept = store.keep({ meta: { origin: 'https://x.test', pages: 1 }, findings: [], causes: [] });
+    rmSync(join(root, 'reports', `${kept.id}.json`));
+    assert.deepEqual(store.list(), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -3,6 +3,64 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`--serve` is the desktop UI for Linux and Windows.** It always was, in the
+  sense that the macOS window is a thin client over exactly this server — but
+  it printed a URL and offered a form with two inputs, so nobody read it that
+  way and nobody could have.
+
+  It now **opens a browser** when a person ran the command, and never when
+  something else did. The same distinction the pipe check already made: the
+  macOS window spawns this and draws its own report, and would otherwise get a
+  browser it never asked for on every launch. `--no-open` is for the person who
+  wants neither. Three platforms, nine lines, no dependency — and failing to
+  open one is not a reason to refuse to serve, so the URL is printed either way.
+
+- **Every setting the command line takes is in the form.** It offered `url` and
+  `limit` while the engine took a dozen parameters, so somebody at a browser
+  reached a sixth of what somebody at a terminal did — and `/run` forwarded only
+  those two, which meant a control somebody set could quietly do nothing.
+
+  The controls are drawn from `src/options.mjs`, the one table that already
+  knows every flag and whether a window can reach it. Adding a flag with a
+  `field` now adds the control; a flag without one is simply not offered, which
+  is a decision written down beside the flag it is about. PageSpeed and Search
+  Console are drawn only where the deployment has said those credentials are
+  the visitor's own to spend, so a public Worker still offers neither.
+
+- **A Preview button beside Audit.** `/preview` has answered clients since it
+  shipped and no page ever reached it. A preview nobody can reach is a preview
+  nobody uses, and the whole point of one is being reachable before the minutes
+  are spent.
+
+- **Finished runs are kept, and the browser can compare two.** The macOS window
+  has kept every run since 1.23.0 and `--serve` kept none, so somebody on Linux
+  or Windows got one report and lost it the moment they audited something else.
+  A seven-minute crawl should only ever happen once, and that is not a
+  macOS-only claim.
+
+  `/reports` lists them, `/reports/<id>` reopens one as the same report every
+  other front end draws, and ticking two runs compares them through the same
+  `diff()` the CLI's `--baseline` uses — including the cross-site path matching,
+  so a rebuild can be compared with the site it replaces.
+
+  On macOS it writes **the folder the app already uses**, so a crawl started in
+  the window is in the browser's list a second later and the other way round:
+  nothing is synchronised, exported or copied, because there is one folder.
+  Elsewhere it is `%APPDATA%` and `$XDG_DATA_HOME`, which is where those systems
+  keep documents an application manages.
+
+  A deployed Worker has no library at all. `worker/index.mjs` must stay
+  web-standard — Cloudflare has no filesystem — so the local server hands it a
+  store and a Worker is handed nothing, which is also the right answer for a
+  shared host: keeping strangers' crawls is a thing nobody asked for.
+
+### Fixed
+- **A perfect score read as "0 points across 0 checks"**, which is arithmetic
+  rather than a sentence. It now says nothing took points off.
+
 ## [1.34.0] — 2026-08-29
 
 ### Added

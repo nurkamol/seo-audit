@@ -631,6 +631,22 @@ survivable in CI instead of being switched off in week two.
 
 ---
 
+## The window, on Linux and Windows
+
+The macOS app is a thin client over a local server, and that server runs anywhere Node does:
+
+```bash
+npx @nurkamol/seo-audit --serve
+```
+
+It opens a browser, and everything the command line takes is in the form — the same table that decides what the macOS window reaches decides what this draws, so neither can quietly fall behind the other. Finished runs are kept and listed at `/reports`, two of them can be compared, and on macOS it is **the same folder the app uses**: a crawl started in the window is in the browser's list a second later, because there is one folder rather than two.
+
+Nothing leaves the machine. It binds to the loopback address, which is the whole of its security model.
+
+`--no-open` if you would rather it did not open a browser. It opens one when a person ran the command and never when something else did, so the macOS window — which spawns this — is unaffected.
+
+---
+
 ## Hosting it, for people who will not open a terminal
 
 Optional, and off the main path. Everything above is free and runs on your own

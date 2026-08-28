@@ -23,21 +23,48 @@
  */
 export const OPTIONS = [
   // --- what a run does ----------------------------------------------------
-  { flag: '--limit', query: 'limit', app: true },
-  { flag: '--concurrency', query: 'concurrency', app: true },
-  { flag: '--check-external', query: 'external', app: true },
-  { flag: '--sitemap', query: 'sitemap', app: true },
-  { flag: '--browser', query: 'browser', app: true },
-  { flag: '--os', query: 'os', app: true },
-  { flag: '--user-agent', query: 'userAgent', app: true },
-  { flag: '--search-console', query: 'search-console', app: true },
+  { flag: '--limit', query: 'limit', app: true,
+    field: { type: 'number', label: 'Pages at most', min: 1,
+             help: 'A big site is minutes. Preview first if you are not sure this is the right one.' } },
+  { flag: '--concurrency', query: 'concurrency', app: true,
+    field: { type: 'select', label: 'Speed',
+             // The same three the macOS window offers, so "Gentle" means the
+             // same thing in both. The numbers live in one place.
+             choices: [['', 'Normal — 6 at a time'], ['1', 'Gentle — one at a time, for a server that rate limits'],
+                       ['12', 'Fast — 12 at a time, if you own the server']] } },
+  { flag: '--check-external', query: 'external', app: true,
+    field: { type: 'checkbox', label: 'Check outbound links too', value: '1',
+             help: 'Slower, and other people\'s servers decide how much slower.' } },
+  { flag: '--sitemap', query: 'sitemap', app: true,
+    field: { type: 'url', label: 'Sitemap', placeholder: 'Found automatically',
+             help: 'Only if robots.txt does not declare one and it is somewhere unusual.' } },
+  { flag: '--browser', query: 'browser', app: true,
+    field: { type: 'agent', label: 'Ask as', which: 'browser' } },
+  { flag: '--os', query: 'os', app: true,
+    field: { type: 'agent', label: 'On', which: 'os' } },
+  { flag: '--user-agent', query: 'userAgent', app: true,
+    field: { type: 'text', label: 'Or a user agent of your own', placeholder: 'Replaces the two menus above' } },
+  { flag: '--search-console', query: 'search-console', app: true,
+    // Reads somebody's Search Console, so it is only offered where the
+    // deployment has said those credentials are the visitor's own.
+    field: { type: 'text', label: 'Search Console property', placeholder: 'sc-domain:example.com',
+             needs: 'ALLOW_SEARCH_CONSOLE',
+             help: 'A domain property is named sc-domain:example.com, not by its URL.' } },
   { flag: '--write-sitemap', query: 'sitemap-out', app: true, via: 'the Export menu' },
   { flag: '--write-llms', query: 'llms-out', app: true, via: 'the Export menu' },
   { flag: '--write-schema', query: 'schema-out', app: true, via: 'the Export menu' },
-  { flag: '--ignore', query: 'ignore', app: true, via: 'right-clicking a finding, and the Settings list' },
-  { flag: '--psi', query: 'psi', app: true, via: 'Settings → Performance' },
-  { flag: '--psi-sample', query: 'psi-sample', app: true, via: 'Settings → Performance' },
-  { flag: '--psi-strategy', query: 'psi-strategy', app: true, via: 'Settings → Performance' },
+  { flag: '--ignore', query: 'ignore', app: true, via: 'right-clicking a finding, and the Settings list',
+    field: { type: 'text', label: 'Silence these checks', placeholder: 'og-webp, img-srcset',
+             help: 'Check ids, comma separated. They are still counted, and the report says how many.' } },
+  { flag: '--psi', query: 'psi', app: true, via: 'Settings → Performance',
+    field: { type: 'text', label: 'Measure performance', placeholder: '/ or /blog/**',
+             needs: 'ALLOW_PSI',
+             help: 'Asks Google. A URL, a path, or a glob — and it spends the quota of whoever runs this.' } },
+  { flag: '--psi-sample', query: 'psi-sample', app: true, via: 'Settings → Performance',
+    field: { type: 'number', label: 'Pages to measure', min: 1, needs: 'ALLOW_PSI' } },
+  { flag: '--psi-strategy', query: 'psi-strategy', app: true, via: 'Settings → Performance',
+    field: { type: 'select', label: 'Measured as', needs: 'ALLOW_PSI',
+             choices: [['', 'A phone — what Google indexes with'], ['desktop', 'A desktop']] } },
   { flag: '--since', query: null, app: 'not yet — it needs a date picker and a sense of when the last run was, which the window has in the library and does not offer yet' },
   { flag: '--exclude', query: null, app: 'not yet — a list of patterns needs somewhere to live in Settings, and one text field would be worse than nothing' },
 
@@ -48,6 +75,8 @@ export const OPTIONS = [
   { flag: '--csv', query: null, app: true, via: 'the Export menu' },
   { flag: '--md', query: null, app: true, via: 'the Export menu' },
   { flag: '--html', query: null, app: true, via: 'the Export menu' },
+
+  { flag: '--no-open', query: null, app: 'the window is the browser this would open — it spawns --serve itself and draws the report natively, and the pipe it hands over is what already stops a browser appearing' },
 
   // --- deliberately not in a window ---------------------------------------
   { flag: '--help', query: null, app: 'a window has no command line to explain' },
@@ -73,6 +102,21 @@ export const OPTIONS = [
  *  its own controls rather than hard-code this list. */
 export const runParameters = () =>
   OPTIONS.filter((o) => o.app === true && o.query).map(({ flag, query }) => ({ flag, query }));
+
+/** The controls a form should draw, in the order they are declared above.
+ *
+ *  Its own list rather than a second table: the hosted form used to hard-code
+ *  two inputs while the engine took a dozen parameters, so somebody at a
+ *  browser could reach a sixth of what somebody at a terminal could. Adding a
+ *  flag with a `field` now adds the control, and a flag without one is simply
+ *  not offered — which is a decision, written down beside the flag it is about.
+ *
+ *  `allow` answers the gates: PageSpeed spends somebody's quota and Search
+ *  Console reads somebody's account, so neither is drawn unless the deployment
+ *  has said those are the visitor's own to spend. */
+export const formFields = (allow = () => true) =>
+  OPTIONS.filter((o) => o.field && o.query && (!o.field.needs || allow(o.field.needs)))
+    .map(({ flag, query, field }) => ({ flag, query, ...field }));
 
 /** Everything the window does not reach, and why. Served so the answer is
  *  discoverable rather than only being in a source file. */

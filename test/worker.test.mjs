@@ -501,3 +501,128 @@ test('only a runtime that cannot read a certificate says so', () => {
   assert.equal(canReadCertificates({ CAN_READ_CERTIFICATES: 'true' }), false);
   assert.equal(canReadCertificates({ CAN_READ_CERTIFICATES: '0' }), false);
 });
+
+// --- the browser's half of the app ----------------------------------------
+
+test('the form is built from the table that knows every flag', async () => {
+  const res = await handle(get('/', { token: SECRET }), env());
+  const html = await read(res);
+
+  // It offered two inputs while the engine took a dozen parameters, so
+  // somebody at a browser reached a sixth of what somebody at a terminal did.
+  for (const name of ['limit', 'concurrency', 'external', 'sitemap', 'browser', 'os', 'userAgent', 'ignore']) {
+    assert.match(html, new RegExp(`name="${name}"`), `the form should offer ${name}`);
+  }
+  // The browser menu is the engine's own list, asked for rather than copied.
+  // The value stays the token the command line takes; only the label reads
+  // like a name, so the form is not a second vocabulary to keep in step.
+  assert.match(html, /<option value="googlebot">Googlebot<\/option>/);
+  assert.match(html, /<option value="macos">macOS<\/option>/);
+
+  // PageSpeed spends somebody's quota and Search Console reads somebody's
+  // account, so neither is drawn unless the deployment says they are the
+  // visitor's own to spend.
+  assert.doesNotMatch(html, /name="psi"/);
+  assert.doesNotMatch(html, /name="search-console"/);
+
+  const local = await read(await handle(get('/', { token: SECRET }),
+    env({ ALLOW_PSI: '1', ALLOW_SEARCH_CONSOLE: '1' })));
+  assert.match(local, /name="psi"/);
+  assert.match(local, /name="search-console"/);
+});
+
+test('every setting the form collects reaches the run', async () => {
+  const res = await handle(
+    get('/run?url=https://x.test&limit=9&concurrency=1&external=1&browser=Chrome&ignore=og-webp',
+      { token: SECRET }),
+    env({ ALLOWED_HOSTS: 'x.test' }),
+  );
+  const html = await read(res);
+  // A control somebody set and the engine never saw is worse than no control:
+  // it is a setting that quietly does nothing.
+  for (const pair of ['limit=9', 'concurrency=1', 'external=1', 'browser=Chrome', 'ignore=og-webp']) {
+    assert.ok(html.includes(pair), `the stream URL should carry ${pair}`);
+  }
+});
+
+test('a deployed Worker has no library, and a local server does', async () => {
+  // Cloudflare has no filesystem, and a shared host keeping strangers' crawls
+  // is a thing nobody asked for. No store, no pages.
+  assert.equal((await handle(get('/reports', { token: SECRET }), env())).status, 404);
+
+  const rows = [];
+  const store = {
+    list: () => rows,
+    read: (id) => rows.find((r) => r.id === id)?.payload ?? null,
+    keep: () => null,
+    where: () => '/tmp/reports',
+    bytes: () => 1024,
+  };
+
+  const empty = await read(await handle(get('/reports', { token: SECRET }), env({ STORE: store })));
+  assert.match(empty, /Nothing kept yet/);
+
+  rows.push({
+    id: '11111111-1111-4111-8111-111111111111',
+    host: 'x.test', finishedAt: '2026-01-01T10:00:00Z', pages: 3, causes: 2, score: 74,
+    payload: { meta: { origin: 'https://x.test', pages: 3, date: '2026-01-01' }, findings: [], causes: [] },
+  });
+  const listed = await read(await handle(get('/reports', { token: SECRET }), env({ STORE: store })));
+  assert.match(listed, /x\.test/);
+  assert.match(listed, /74\/100/);
+
+  // And one of them opens as the same report every other front end draws.
+  const one = await read(await handle(
+    get('/reports/11111111-1111-4111-8111-111111111111', { token: SECRET }), env({ STORE: store })));
+  assert.match(one, /^<!doctype html>/i);
+  assert.match(one, /x\.test/);
+});
+
+test('a comparison needs two, and says when it matched by path', async () => {
+  const run = (origin, date, findings) => ({
+    meta: { origin, pages: 2, date },
+    findings,
+    causes: [],
+  });
+  const rows = [
+    { id: '11111111-1111-4111-8111-111111111111', payload:
+      run('https://old.test', '2026-01-01', [
+        { level: 'warn', id: 'desc-missing', title: 'No description', detail: 'x', url: 'https://old.test/a' },
+      ]) },
+    { id: '22222222-2222-4222-8222-222222222222', payload:
+      run('https://new.test', '2026-02-01', [
+        { level: 'error', id: 'h1-missing', title: 'No h1', detail: 'x', url: 'https://new.test/a' },
+      ]) },
+  ];
+  const store = {
+    list: () => rows,
+    read: (id) => rows.find((r) => r.id === id)?.payload ?? null,
+    keep: () => null,
+    where: () => '/tmp',
+    bytes: () => 0,
+  };
+
+  const one = await handle(get('/compare?run=11111111-1111-4111-8111-111111111111', { token: SECRET }),
+    env({ STORE: store }));
+  assert.equal(one.status, 400);
+  assert.match(await read(one), /Pick two/);
+
+  const both = await read(await handle(
+    get('/compare?run=11111111-1111-4111-8111-111111111111&run=22222222-2222-4222-8222-222222222222',
+      { token: SECRET }),
+    env({ STORE: store }),
+  ));
+  // Different origins, so the engine matched by path — and the page says so
+  // rather than leaving somebody to wonder why nothing lines up.
+  assert.match(both, /matched by path/);
+  assert.match(both, /Appeared/);
+  assert.match(both, /Gone/);
+});
+
+test('a preview is a page as well as a payload', async () => {
+  // /preview answers a client; /plan answers a person, and it is the button
+  // beside Audit. A preview nobody can reach is a preview nobody uses.
+  const res = await handle(get('/plan?url=not-a-url', { token: SECRET }), env());
+  assert.equal(res.status, 400);
+  assert.match(await read(res), /Not previewed/);
+});

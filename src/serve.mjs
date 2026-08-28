@@ -13,6 +13,7 @@ import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 
 import { handle } from '../worker/index.mjs';
+import { library } from './library.mjs';
 
 /** Start the local UI. Returns `{ url, close }`.
  *
@@ -49,6 +50,16 @@ export async function serve({ port = 4321, host = '127.0.0.1', maxPages, allowed
     // runtime's limitation along with a note claiming to be the hosted version.
     CAN_READ_CERTIFICATES: '1',
   };
+
+  // Every finished run, kept — and kept in the folder the macOS window already
+  // uses, so a crawl started in one is in the other's list a second later.
+  //
+  // Handed over as an object rather than imported by the Worker, which must
+  // stay web-standard: this is `node:fs`, and Cloudflare has no filesystem. A
+  // deployed Worker is passed nothing and simply has no library, which is the
+  // right answer for a shared host — keeping strangers' crawls is a thing
+  // nobody asked for.
+  env.STORE = library();
 
   const server = createServer(async (incoming, outgoing) => {
     try {

@@ -79,6 +79,9 @@ const HELP = `
     --check-external   also check links pointing off the site. Off by default:
                        other people's servers rate-limit and bot-block, so only
                        a 404, a 410 or no answer at all is ever reported
+    --no-open          with --serve, do not open a browser. It opens one when
+                       a person ran the command and never when something else
+                       did, so this is only for the person who wants neither
     --serve [port]     open the same form the hosted version serves, on this
                        machine (default 4321). No account, no bill, and none of
                        the limits a Worker has — the crawl is only bounded by
@@ -155,6 +158,7 @@ function parseArgs(argv) {
     else if (arg === '--write-sitemap') opts.writeSitemap = value();
     else if (arg === '--write-llms') opts.writeLlms = value();
     else if (arg === '--write-schema') opts.writeSchema = value();
+    else if (arg === '--no-open') opts.noOpen = true;
     else if (arg === '--md') opts.md = value();
     else if (arg === '--html') opts.html = value();
     else if (arg === '--json') opts.json = value();
@@ -334,6 +338,19 @@ if (opts.serve !== undefined) {
     process.stdin.resume();
     process.stdin.on('end', () => process.exit(0));
     process.stdin.on('close', () => process.exit(0));
+  }
+
+  // Opened for a person, never for a parent. The same distinction the pipe
+  // check above already makes: somebody who typed `--serve` wants the page,
+  // and the macOS window — which spawns this and draws its own report — would
+  // get a browser it never asked for on every launch.
+  //
+  // This is the whole of "the desktop UI for Linux and Windows": a command that
+  // opens a window. Failing to open one is not a reason to refuse to serve, so
+  // the URL is printed either way and nothing here throws.
+  if (!stdinIsPipe && !opts.noOpen) {
+    const { openUrl } = await import('../src/open-url.mjs');
+    if (!openUrl(url)) console.log('  Open that address yourself — this system has no launcher I know.\n');
   }
 } else {
 
