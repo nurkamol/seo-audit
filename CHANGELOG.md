@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.38.0] — 2026-08-29
 
 ### Added
 - **The kept-runs list sorts by any of its columns, and remembers how you left
@@ -29,7 +29,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The score cell lost its `/100`. The column is headed Score; repeating the
   denominator on every row is the header said again, once per line.
 
-### Added
 - **The window takes its type and its accent from the machine it is on.** The
   font stack stopped at `"Segoe UI"`, which is Windows 10's face — Windows 11
   uses Segoe UI Variable Text — and offered Linux `Roboto`, an Android face few
@@ -3112,7 +3111,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.37.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.38.0...HEAD
+[1.38.0]: https://github.com/nurkamol/seo-audit/compare/v1.37.0...v1.38.0
 [1.37.0]: https://github.com/nurkamol/seo-audit/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/nurkamol/seo-audit/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/nurkamol/seo-audit/compare/v1.34.0...v1.35.0

@@ -1,6 +1,6 @@
 {
   "name": "@nurkamol/seo-audit",
-  "version": "1.37.0",
+  "version": "1.38.0",
   "description": "Crawl a site's sitemap and check every page for SEO, metadata and structured-data problems that single-page graders miss. Zero dependencies.",
   "type": "module",
   "bin": {
