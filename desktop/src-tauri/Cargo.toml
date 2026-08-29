@@ -1,6 +1,6 @@
 [package]
 name = "seo-audit"
-version = "1.38.0"
+version = "1.38.1"
 description = "Crawl a site's sitemap and check every page, from a window"
 authors = ["Nurkamol Vakhidov"]
 edition = "2021"

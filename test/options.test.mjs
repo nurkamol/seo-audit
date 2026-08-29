@@ -156,6 +156,29 @@ test('the winget identifier the workflow publishes is the one the shell looks fo
     'the identifier belongs in WINGET_ID, not written out again beside it');
 });
 
+test('a CHANGELOG version says Added or Fixed once, not twice', () => {
+  // Entries get inserted by anchoring on a neighbour, and when the anchor is in
+  // another section the result is a second heading of the same name. It has
+  // happened before three releases in a row and was caught by eye each time;
+  // the section becomes the release notes, so the fourth would have shipped.
+  const text = read('CHANGELOG.md');
+  const versions = [...text.matchAll(/^## \[[^\]]+\].*$/gm)];
+  const wrong = [];
+
+  for (const [i, heading] of versions.entries()) {
+    const body = text.slice(heading.index, versions[i + 1]?.index ?? text.length);
+    const seen = new Map();
+    for (const [, kind] of body.matchAll(/^### (\w+)$/gm)) {
+      seen.set(kind, (seen.get(kind) ?? 0) + 1);
+    }
+    for (const [kind, times] of seen) {
+      if (times > 1) wrong.push(`${heading[0].trim()} has ${times} "### ${kind}" sections`);
+    }
+  }
+
+  assert.deepEqual(wrong, [], wrong.join('; '));
+});
+
 test('every reason is a sentence somebody can act on', () => {
   for (const { flag, reason } of notInApp()) {
     assert.equal(typeof reason, 'string', `${flag} needs a reason, not ${reason}`);
