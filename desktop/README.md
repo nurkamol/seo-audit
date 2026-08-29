@@ -42,6 +42,22 @@ getting them wrong there:
 - **A failure is a window, not a stream.** An app that opens and does nothing
   is the worst version of this, and it is the one that shipped on macOS.
 
+## Why the identifier is not the app's
+
+`com.nurkamol.seo-audit.desktop`, where the macOS app is
+`com.nurkamol.seo-audit`. They are two programs, and on macOS one identifier is
+one `defaults` domain — sharing it would have this shell reading and writing the
+app's settings, its update-check timestamps and its dismissed-version list.
+Launch Services would also have two apps claiming to be the same one.
+
+macOS is deliberately not in `bundle.targets`: the Swift app is the macOS
+release and is better there. If a macOS build of this ever ships alongside it,
+it needs a distinct **name** too — both would want `/Applications/SEO Audit.app`.
+
+They do share one thing on purpose: the reports folder. A crawl run in either
+window appears in the other's sidebar, because there is one library rather than
+two copies of one.
+
 ## What it must never grow
 
 A control. Anything this is tempted to draw itself would exist on Windows and
