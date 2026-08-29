@@ -68,6 +68,29 @@ impl Engine {
     }
 }
 
+/// A path Node can actually read.
+///
+/// `resource_dir()` hands back a Windows *verbatim* path — the `\\?\` form that
+/// lifts the 260-character limit. Rust is happy with it and Node is not: the
+/// script runs, but `import.meta.url` comes out malformed, so anything
+/// resolving a sibling file fails. `--version` reads `../package.json`, so it
+/// answered nothing, and the shell refused to start an engine it had decided
+/// was broken.
+///
+/// Found by installing the Windows build in CI and reading the log it writes,
+/// which is the only reason any of this was visible.
+fn without_verbatim_prefix(text: &str) -> &str {
+    text.strip_prefix(r"\\?\").unwrap_or(text)
+}
+
+/// The same, for a path.
+fn plain(path: PathBuf) -> PathBuf {
+    match path.to_str() {
+        Some(text) => PathBuf::from(without_verbatim_prefix(text)),
+        None => path,
+    }
+}
+
 /// Where the engine is, and what to run it with.
 ///
 /// In a bundle these are beside the executable; in development they are the
@@ -85,7 +108,7 @@ fn engine_command(app: &tauri::AppHandle) -> Result<(Command, PathBuf), String> 
             .parent()
             .map(|beside| beside.join(if cfg!(windows) { "node.exe" } else { "node" }))
             .unwrap_or_default();
-        let cli = resources.join("engine/bin/seo-audit.mjs");
+        let cli = plain(resources.join("engine/bin/seo-audit.mjs"));
         note(&format!("node: {} ({})", node.display(), if node.is_file() { "there" } else { "missing" }));
         note(&format!("cli: {} ({})", cli.display(), if cli.is_file() { "there" } else { "missing" }));
         if node.is_file() && cli.is_file() {
@@ -106,7 +129,9 @@ fn engine_command(app: &tauri::AppHandle) -> Result<(Command, PathBuf), String> 
              Install Node 18 or later — `brew install node`, or your package manager."
                 .to_string()
         })?;
-        let cli = cli.canonicalize().map_err(|e| e.to_string())?;
+        // Canonicalising is what introduces the verbatim prefix on Windows, so
+        // it comes straight back off again.
+        let cli = plain(cli.canonicalize().map_err(|e| e.to_string())?);
         let mut command = Command::new(node);
         command.arg(&cli);
         // No version check in development: the checkout *is* the engine, and
@@ -513,7 +538,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{announced_url, disagrees, help_link, is_the_app};
+    use super::{announced_url, disagrees, help_link, is_the_app, without_verbatim_prefix};
     use std::path::Path;
 
     fn url(text: &str) -> tauri::Url {
@@ -578,6 +603,23 @@ mod tests {
     fn a_checkout_is_never_the_wrong_version() {
         assert!(disagrees(Path::new(""), Some("0.0.0-anything")).is_none());
         assert!(disagrees(Path::new(""), None).is_none());
+    }
+
+    // Windows hands back a verbatim path from `resource_dir()`. Rust is happy
+    // with it and Node is not — the script runs, but `import.meta.url` comes
+    // out malformed and anything resolving a sibling file fails. The installed
+    // app answered nothing to `--version`, decided its own engine was broken,
+    // and refused to start.
+    #[test]
+    fn a_verbatim_windows_path_is_made_readable() {
+        assert_eq!(
+            without_verbatim_prefix(r"\\?\C:\Users\a\AppData\Local\SEO Audit\engine\bin\seo-audit.mjs"),
+            r"C:\Users\a\AppData\Local\SEO Audit\engine\bin\seo-audit.mjs",
+        );
+        // Everything else is left exactly as it is.
+        assert_eq!(without_verbatim_prefix(r"C:\Users\a\app.exe"), r"C:\Users\a\app.exe");
+        assert_eq!(without_verbatim_prefix("/usr/lib/seo-audit/engine"), "/usr/lib/seo-audit/engine");
+        assert_eq!(without_verbatim_prefix(""), "");
     }
 
     #[test]
