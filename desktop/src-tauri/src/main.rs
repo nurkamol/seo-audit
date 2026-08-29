@@ -16,6 +16,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod updates;
+
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -472,6 +474,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 true,
                 &[
                     &PredefinedMenuItem::about(app, Some("About SEO Audit"), Some(about))?,
+                    &MenuItem::with_id(app, "update", "Check for Updates…", true, None::<&str>)?,
                     &PredefinedMenuItem::separator(app)?,
                     &PredefinedMenuItem::quit(app, None)?,
                 ],
@@ -481,6 +484,165 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &help,
         ],
     )
+}
+
+/// Look for a newer version, and offer the one thing that is safe.
+///
+/// Off the main thread and after the window is up: an update is never worth
+/// delaying a report for. `forced` is the menu item, which asks regardless of
+/// when it last looked.
+fn look_for_updates(app: &tauri::AppHandle, node: std::path::PathBuf, forced: bool) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let stamp = app
+            .path()
+            .app_config_dir()
+            .unwrap_or_else(|_| std::env::temp_dir())
+            .join("last-update-check");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        if !forced && !updates::due(&stamp, now) {
+            return;
+        }
+
+        let (tag, confirmed) = match updates::fetch_releases(&node) {
+            updates::Answer::Api(body) => (updates::newest_tag(&body), true),
+            // The API's anonymous quota is sixty an hour per address, shared
+            // with every other tool on the machine, so being refused is
+            // ordinary. The feed answers without one — it just cannot say
+            // which entries are prereleases.
+            updates::Answer::Feed(body) => (updates::newest_feed_tag(&body), false),
+            updates::Answer::Silence(why) => {
+                note(&format!("update check: no answer — {why}"));
+                if forced {
+                    app.dialog()
+                        .message(format!("GitHub said nothing about new versions.\n\n{why}"))
+                        .title("No answer")
+                        .kind(MessageDialogKind::Warning)
+                        .blocking_show();
+                }
+                return;
+            }
+        };
+        updates::mark_checked(&stamp, now);
+
+        let Some(tag) = tag else { return };
+        let newest = updates::Version::parse(&tag);
+        let mine = updates::Version::parse(env!("CARGO_PKG_VERSION"));
+        note(&format!(
+            "update check: newest {tag} ({}), this is {}",
+            if confirmed { "confirmed" } else { "from the feed" },
+            env!("CARGO_PKG_VERSION"),
+        ));
+
+        if !newest.is_newer_than(&mine) {
+            if forced {
+                app.dialog()
+                    .message(format!("Version {} is the newest there is.", env!("CARGO_PKG_VERSION")))
+                    .title("Up to date")
+                    .blocking_show();
+            }
+            return;
+        }
+
+        let kind = updates::install_kind();
+        let version = tag.trim_start_matches('v').to_string();
+        let go = app
+            .dialog()
+            .message(updates::describe_answer(kind, &version, confirmed))
+            .title("A new version")
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                match updates::move_for(kind) {
+                    updates::Move::Run { .. } => "Update".into(),
+                    updates::Move::Tell { .. } => "Show me".into(),
+                    updates::Move::Open => "Download".into(),
+                },
+                "Not now".into(),
+            ))
+            .blocking_show();
+        if !go {
+            return;
+        }
+
+        match updates::move_for(kind) {
+            updates::Move::Run { command, args } => {
+                let ran = Updates::stream(&command, &args);
+                match ran {
+                    Ok(()) => {
+                        if app
+                            .dialog()
+                            .message("Installed. The app has to restart to be the new version.")
+                            .title("Updated")
+                            .buttons(MessageDialogButtons::OkCancelCustom("Relaunch".into(), "Later".into()))
+                            .blocking_show()
+                        {
+                            app.restart();
+                        }
+                    }
+                    Err(why) => {
+                        app.dialog()
+                            .message(format!("The update did not run.\n\n{why}"))
+                            .title("Not updated")
+                            .kind(MessageDialogKind::Error)
+                            .blocking_show();
+                    }
+                }
+            }
+            updates::Move::Tell { command } => {
+                app.dialog()
+                    .message(format!(
+                        "Run this in a terminal:\n\n{command}\n\nIt needs a password, which is why \
+                         it is not run here."
+                    ))
+                    .title("Your package manager owns this copy")
+                    .blocking_show();
+            }
+            updates::Move::Open => {
+                let _ = app.opener().open_url(
+                    "https://github.com/nurkamol/seo-audit/releases/latest",
+                    None::<&str>,
+                );
+            }
+        }
+    });
+}
+
+/// A named holder for the one command an update ever runs.
+struct Updates;
+
+impl Updates {
+    /// Run it and wait. The output is not streamed anywhere because a native
+    /// dialog has nowhere to stream it to — what matters is whether it worked,
+    /// and if it did not, what it said.
+    fn stream(command: &str, args: &[String]) -> Result<(), String> {
+        let mut task = Command::new(command);
+        task.args(args);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            task.creation_flags(0x0800_0000);
+        }
+
+        let out = task.output().map_err(|e| format!("Could not start {command}: {e}"))?;
+        if out.status.success() {
+            return Ok(());
+        }
+        let said = String::from_utf8_lossy(&out.stderr);
+        // Collected first: a filtered iterator has no known length, so it
+        // cannot be reversed twice to take the last few.
+        let lines: Vec<&str> = said.lines().filter(|line| !line.trim().is_empty()).collect();
+        let tail: Vec<&str> = lines.iter().rev().take(4).rev().copied().collect();
+        Err(if tail.is_empty() {
+            format!("{command} exited {}.", out.status)
+        } else {
+            tail.join("\n")
+        })
+    }
 }
 
 /// What a Help item points at. One table, so a link that moves moves once.
@@ -498,6 +660,7 @@ fn help_link(id: &str) -> Option<&'static str> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Engine(Mutex::new(None)))
         .setup(|app| {
             let handle = app.handle().clone();
@@ -510,6 +673,11 @@ fn main() {
             match start_engine(&handle) {
                 Ok((url, child)) => {
                     handle.state::<Engine>().0.lock().unwrap().replace(child);
+                    // The same Node the engine runs on, borrowed for one HTTPS
+                    // request a day. After the window, never before it.
+                    if let Ok((command, _)) = engine_command(&handle) {
+                        look_for_updates(&handle, command.get_program().into(), false);
+                    }
                     let home = url.clone();
                     let opener = handle.clone();
                     WebviewWindowBuilder::new(
@@ -559,6 +727,12 @@ fn main() {
             // control in this app lives.
             let Some(window) = app.get_webview_window("main") else { return };
             let Ok(here) = window.url() else { return };
+            if id == "update" {
+                if let Ok((command, _)) = engine_command(app) {
+                    look_for_updates(app, command.get_program().into(), true);
+                }
+                return;
+            }
             let path = match id {
                 "new" => "/",
                 "reports" => "/reports",

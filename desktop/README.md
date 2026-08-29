@@ -147,10 +147,45 @@ So a bundled build asks the engine `--version` before starting it, and refuses
 with an explanation if it disagrees with the shell's. Development is exempt: the
 checkout is the engine, and whatever the working tree says is what was meant.
 
+## Updates
+
+The macOS app settled the principle: **the thing that installed it is the thing
+that replaces it.** That generalises, but not evenly — the platforms differ in
+what they let a program do without a password it has no way to ask for.
+
+So there is no single Update button that always works. The shell works out how
+this copy got here and offers the one action that is correct for it:
+
+| Installed by | What it offers |
+|---|---|
+| winget | Runs `winget upgrade` here, then offers to relaunch. A per-user install needs no elevation, which is the same property that makes Homebrew work on macOS |
+| apt | Shows the command. `apt` needs root, and a GUI app that shells out to `sudo` is one that hangs on a password prompt nobody can see |
+| AppImage · the installer · by hand | Opens the release page |
+
+It deliberately does not download a binary and put it in place itself. Doing
+that safely needs a signature to check or a checksum to compare, and an updater
+that overwrites an application on the strength of a plain HTTPS response is a
+supply-chain hole with a progress bar on it.
+
+The check is once a day, on a thread, after the window is up — an update is
+never worth delaying a report for. **Check for Updates…** in the app menu asks
+regardless.
+
+It asks GitHub's API and falls back to the Atom feed, because the anonymous API
+allows sixty calls an hour **per address**, shared with every other tool on the
+machine, and being refused is ordinary. The feed cannot tell a prerelease from a
+release, so a version learned there is announced with that said out loud rather
+than asserted — the same wording the macOS app uses, for the same reason.
+
+No HTTP client crate: the Node this app already ships has `fetch`, and adding a
+TLS stack so a 110 MB bundle can make one request a year is the larger thing,
+not the smaller one.
+
 ## Not done yet
 
-Phases 1, 2 and 3. Still to come: updates, and attaching the bundles to a
-release. `desktop/src-tauri/tauri.conf.json` already names the three
+Phases 1 to 4. Still to come: attaching the bundles to a release, and a winget
+manifest — until that exists, no Windows copy is a winget install and the first
+row of that table is unreachable. `desktop/src-tauri/tauri.conf.json` already names the three
 bundle targets; nothing has been built with them.
 
 ## A note on running it

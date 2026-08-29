@@ -31,6 +31,31 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   built, runs it, and waits for the engine to appear** — because building a
   bundle only proves it bundles, and four separate bugs survived to that step.
 
+- **The desktop shell knows when there is a new version, and offers the one
+  thing that is safe.** The macOS app settled the principle — the thing that
+  installed it is the thing that replaces it — and it generalises unevenly,
+  because the platforms differ in what a program may do without a password it
+  cannot ask for. A winget install runs `winget upgrade` in place and offers to
+  relaunch; an apt install is shown the command, because `apt` needs root and a
+  GUI app that shells out to `sudo` hangs on a prompt nobody can see; an
+  AppImage, an installer copy or a hand-placed one gets the release page.
+
+  It does not download a binary and put it in place itself. That needs a
+  signature to check or a checksum to compare, and an updater that overwrites an
+  application on the strength of a plain HTTPS response is a supply-chain hole
+  with a progress bar on it.
+
+  Once a day, on a thread, after the window is up, with **Check for Updates…**
+  in the menu for asking anyway. It uses GitHub's API and falls back to the Atom
+  feed, because the anonymous quota is sixty an hour per address and being
+  refused is ordinary — and a version learned from the feed is announced with
+  "whether it is a full release could not be checked" rather than asserted,
+  which is the wording the macOS app already uses.
+
+  Native dialogs, so the shell still owns no interface of its own. And no HTTP
+  client crate: the Node it already ships has `fetch`, and adding a TLS stack so
+  a 110 MB bundle can make one request a year is the larger thing.
+
 - **Every report can be saved, from any browser.**
   `/reports/<id>/export?as=…` returns the file with a name that sorts, in all
   seven formats. Links rather than a native dialog: a browser downloads them and
