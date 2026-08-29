@@ -19,11 +19,15 @@ serde_json = "1"
 # Windows only, and for one thing: tying the engine's lifetime to this
 # process's at the OS level. See `tie_to_our_lifetime` in main.rs.
 [target.'cfg(windows)'.dependencies]
-# `Win32_System_Threading` is not optional despite nothing here threading:
-# CreateJobObjectW and JOBOBJECT_EXTENDED_LIMIT_INFORMATION are both gated
-# behind it, which the compiler says plainly and only on Windows.
+# Three features for two symbols, none of them guessable from the names:
+# JOBOBJECT_EXTENDED_LIMIT_INFORMATION is behind Win32_System_Threading, and
+# CreateJobObjectW is behind Win32_Security because it takes a
+# SECURITY_ATTRIBUTES pointer. Both are only wrong on Windows, which is the one
+# platform the machine writing this cannot compile for — so they were found by
+# reading the crate's source rather than by another round trip through CI.
 windows-sys = { version = "0.60", features = [
   "Win32_Foundation",
+  "Win32_Security",
   "Win32_System_JobObjects",
   "Win32_System_Threading",
 ] }
