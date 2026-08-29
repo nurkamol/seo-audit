@@ -26,8 +26,145 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
+
+/// The file name a download URL is asking for.
+///
+/// The engine names its exports `<host>-<date>.<ext>` and serves them with a
+/// `content-disposition`, but a download handler is given the URL and not the
+/// headers, so the name is taken from the path. A URL that names nothing gets a
+/// plain fallback rather than an empty save dialog.
+fn download_name(url: &str) -> String {
+    let without_query = url.split(['?', '#']).next().unwrap_or(url);
+    // Past `scheme://authority` before looking for the last segment. Without
+    // this a URL carrying no path at all hands back the host, and the save
+    // dialog opens named `127.0.0.1:4321`.
+    let path = match without_query.find("://") {
+        Some(at) => {
+            let rest = &without_query[at + 3..];
+            match rest.find('/') {
+                Some(slash) => &rest[slash..],
+                None => "",
+            }
+        }
+        None => without_query,
+    };
+    let last = path.rsplit('/').next().unwrap_or("");
+    let cleaned = last.trim();
+    if cleaned.is_empty() {
+        "seo-audit-report".to_string()
+    } else {
+        // Percent-decoding only what a generated filename can actually contain.
+        cleaned.replace("%20", " ")
+    }
+}
+
+/// A JS string literal, safe to paste into an `eval`.
+///
+/// Windows paths are full of backslashes and a report title can contain
+/// anything the audited site put in its `<title>`, so neither may be dropped
+/// into a script unescaped. Single quotes, because the toast call below uses
+/// them.
+fn as_js_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('\'');
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '<' => out.push_str("\\x3c"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// Ask where a finished download should live, put it there, and say so.
+///
+/// On its own thread, for the reason written at the call site: the download
+/// handler runs on the main thread and a blocking dialog there freezes the
+/// window. Everything below — the dialog, the move, the toast — happens after
+/// the bytes have already arrived somewhere temporary.
+///
+/// Cancelling deletes the temporary file. A "Save as" that quietly leaves a
+/// copy in the temp directory after being cancelled is the same class of
+/// surprise as the one this whole function exists to fix.
+fn keep_the_download(app: &tauri::AppHandle, landed: std::path::PathBuf) {
+    use tauri_plugin_dialog::DialogExt;
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let name = landed
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "seo-audit-report".to_string());
+
+        let chosen = app
+            .dialog()
+            .file()
+            .set_file_name(&name)
+            .blocking_save_file();
+
+        let Some(chosen) = chosen else {
+            let _ = std::fs::remove_file(&landed);
+            return;
+        };
+        let Ok(target) = chosen.into_path() else {
+            let _ = std::fs::remove_file(&landed);
+            note("a save dialog returned somewhere that is not a path");
+            return;
+        };
+
+        // Rename first: it is atomic and instant when both sides are on one
+        // volume. The temp directory often is not, and rename across volumes
+        // fails, so a copy is the fallback rather than the default.
+        let moved = std::fs::rename(&landed, &target).or_else(|_| {
+            std::fs::copy(&landed, &target).map(|_| {
+                let _ = std::fs::remove_file(&landed);
+            })
+        });
+
+        match moved {
+            Ok(()) => announce_saved(&app, &target),
+            Err(why) => {
+                note(&format!("could not put the download where it was asked to go: {why}"));
+                app.dialog()
+                    .message(format!("The file could not be saved there.\n\n{why}"))
+                    .title("Not saved")
+                    .blocking_show();
+            }
+        }
+    });
+}
+
+/// Tell the window a file was saved, in the page's own words.
+///
+/// The toast lives in the served HTML rather than here, so it is the same one
+/// on every platform that shows it, and so this file draws no interface — the
+/// rule the rest of the shell already follows. A shell that cannot reach the
+/// toast says nothing rather than falling back to a modal: the save worked, and
+/// a dialog demanding to be dismissed after every export is worse than silence.
+fn announce_saved(app: &tauri::AppHandle, target: &std::path::Path) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let folder = target
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let _ = window.eval(format!(
+        "window.seoAuditSaved && window.seoAuditSaved({}, {})",
+        as_js_string(&name),
+        as_js_string(&folder),
+    ));
+}
 
 /// How long to wait for the engine to say where it is listening.
 ///
@@ -680,6 +817,8 @@ fn main() {
                     }
                     let home = url.clone();
                     let opener = handle.clone();
+                    let for_new_windows = handle.clone();
+                    let for_downloads = handle.clone();
                     WebviewWindowBuilder::new(
                         &handle,
                         "main",
@@ -697,6 +836,49 @@ fn main() {
                         }
                         let _ = opener.opener().open_url(target.to_string(), None::<&str>);
                         false
+                    })
+                    // "Open link in new window" in the webview's own context
+                    // menu did nothing at all: a new-window request is not a
+                    // navigation, so the handler above never saw it, and
+                    // nothing else was listening. Reported by somebody using
+                    // the Windows build.
+                    //
+                    // A second window of our own would be a report with no
+                    // sidebar and no way back, so this does what following an
+                    // external link already does — hands it to the browser,
+                    // which has an address bar.
+                    .on_new_window(move |target, _features| {
+                        let _ = for_new_windows
+                            .opener()
+                            .open_url(target.to_string(), None::<&str>);
+                        NewWindowResponse::Deny
+                    })
+                    // Save as … was writing straight to Downloads with no
+                    // dialog, and saying nothing afterwards. Also reported from
+                    // the Windows build.
+                    //
+                    // The file lands in a temporary directory first and the
+                    // person is asked where to put it once it has arrived. The
+                    // obvious version — a save dialog inside `Requested`, so
+                    // the destination is chosen before the bytes move — cannot
+                    // be written: this handler runs on the main thread, and the
+                    // dialog plugin says in as many words that a blocking
+                    // dialog there freezes the application.
+                    .on_download(move |_webview, event| match event {
+                        DownloadEvent::Requested { url, destination } => {
+                            let name = download_name(url.as_str());
+                            *destination = std::env::temp_dir().join(&name);
+                            true
+                        }
+                        DownloadEvent::Finished { path, success, .. } => {
+                            if success {
+                                if let Some(landed) = path {
+                                    keep_the_download(&for_downloads, landed);
+                                }
+                            }
+                            true
+                        }
+                        _ => true,
                     })
                     .build()?;
                 }
@@ -763,7 +945,37 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{announced_url, disagrees, help_link, is_the_app, without_verbatim_prefix};
+
+    #[test]
+    fn a_download_url_names_the_file_it_wants() {
+        // The handler is given a URL and not the response headers, so the name
+        // comes off the path. `?as=` is a query and never part of it.
+        assert_eq!(download_name("http://127.0.0.1:4321/x/site-2026-08-29.html"),
+                   "site-2026-08-29.html");
+        assert_eq!(download_name("http://127.0.0.1:4321/a/b.csv?as=csv#top"), "b.csv");
+        assert_eq!(download_name("http://127.0.0.1:4321/a/my%20report.md"), "my report.md");
+        // Never empty: an empty save dialog is worse than a dull name.
+        assert_eq!(download_name("http://127.0.0.1:4321/"), "seo-audit-report");
+        assert_eq!(download_name("http://127.0.0.1:4321"), "seo-audit-report");
+    }
+
+    #[test]
+    fn a_saved_name_cannot_carry_script_into_the_toast() {
+        // The file name comes from a report title, which came from somebody
+        // else's <title>. It reaches the page through eval, so it is a string
+        // literal and nothing else.
+        assert_eq!(as_js_string("plain.csv"), "'plain.csv'");
+        assert_eq!(as_js_string(r"C:\Users\a\b.csv"), r"'C:\\Users\\a\\b.csv'");
+        assert_eq!(as_js_string("it's.csv"), r"'it\'s.csv'");
+        // A closing tag would end the surrounding <script> whatever the quoting
+        // says, so the angle bracket is escaped rather than the tag matched.
+        assert!(!as_js_string("</script><img onerror=x>").contains('<'));
+        assert!(!as_js_string("a\nb").contains('\n'));
+    }
+    use super::{
+        announced_url, as_js_string, disagrees, download_name, help_link, is_the_app,
+        without_verbatim_prefix,
+    };
     use std::path::Path;
 
     fn url(text: &str) -> tauri::Url {

@@ -3,6 +3,35 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Save as … wrote straight to Downloads without asking, and said nothing
+  afterwards.** Reported by somebody using the Windows build, which is where the
+  export links have always been plain downloads — the macOS app has its own save
+  panel and never had this. The file now lands in a temporary directory, a
+  native dialog asks where it should go, and a line in the bottom-left corner
+  says where it went. Cancelling deletes the temporary copy, because a "Save
+  as" that leaves a file behind after being cancelled is the same surprise
+  wearing a different coat.
+
+  The obvious implementation cannot be written: a dialog inside the download
+  request, so the destination is chosen before any bytes move. That handler runs
+  on the main thread, and the dialog plugin says in as many words that a
+  blocking dialog there freezes the application.
+
+- **"Open link in new window" did nothing.** From the same report. A new-window
+  request is not a navigation, so the handler that sends external links to the
+  browser never saw it and nothing else was listening. It now goes the same way
+  every other external link goes — to the browser, which has an address bar.
+
+- **The kept-since filter shipped in 1.37.0 with no styling.** Its CSS went into
+  the stylesheet `page()` serves; `/reports` is drawn by `shell()`, which serves
+  a different one. The markup was right, the class was right, and the rule
+  simply never applied. That is twice now — the export links did it one release
+  earlier — so a test now reads CHROME and fails when a class the served pages
+  use is styled somewhere the served pages do not read.
+
 ## [1.37.0] — 2026-08-29
 
 ### Added

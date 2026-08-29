@@ -470,6 +470,34 @@ const CHROME = `
     .app { grid-template-columns: 1fr; }
     .side { display: none; }
   }
+
+  /* The kept-since filter. A row, so it reads as one control rather than three
+     things that happen to be near each other. */
+  form.since {
+    display: flex; align-items: center; flex-wrap: wrap; gap: .6rem;
+    margin: 0 0 1.4rem;
+  }
+  form.since label { color: var(--muted); font-size: .9rem; }
+  form.since input[type="date"] { width: auto; margin: 0; }
+  form.since button { width: auto; margin: 0; }
+  form.since .warn { color: var(--warn); font-size: .88rem; }
+
+  /* The saved-a-file line. Bottom left rather than bottom right: the report is
+     a long scroll and the scrollbar lives on the right. Off-screen until it has
+     something to say, so it never covers a finding. */
+  .toast {
+    position: fixed; left: 1.25rem; bottom: 1.25rem; z-index: 40;
+    max-width: min(32rem, calc(100vw - 2.5rem));
+    padding: .7rem .95rem; border-radius: 10px;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--fg);
+    font-size: .9rem; box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+    opacity: 0; transform: translateY(.5rem); pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .toast.up { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .toast { transition: none; }
+  }
 `;
 
 /** A run's score, as a chip class. The same thresholds `gradeOf()` uses, so a
@@ -512,6 +540,31 @@ function exportBar(id) {
 }
 
 /** A page inside the window. `main` is already the stage's content. */
+/** A line that says a file was saved, and then goes away.
+ *
+ *  Called by the desktop shell after it has asked where to put a download and
+ *  put it there — the shell draws no interface of its own, so the confirmation
+ *  it needed had to live here. A browser is not the caller: it already shows a
+ *  download of its own, and a second notice about the same file is noise.
+ *
+ *  Defined on `window` rather than listening for an event so the shell can ask
+ *  whether it is there before calling it, and say nothing when it is not. A
+ *  save that worked is not worth a modal.
+ *
+ *  `textContent`, never markup: the file name comes from a page title that came
+ *  from somebody else's website. */
+const TOAST = `<div id="saved" class="toast" role="status" aria-live="polite"></div>
+<script>
+  window.seoAuditSaved = (name, folder) => {
+    const el = document.getElementById('saved');
+    if (!el) return;
+    el.textContent = folder ? \`Saved \${name} to \${folder}\` : \`Saved \${name}\`;
+    el.classList.add('up');
+    clearTimeout(window.__savedTimer);
+    window.__savedTimer = setTimeout(() => el.classList.remove('up'), 4000);
+  };
+</script>`;
+
 function shell(title, main, env, { currentId, css = '' } = {}) {
   // The report's stylesheet, from the report itself. Rendering an empty one is
   // the cheapest way to ask for it and costs nothing worth measuring.
@@ -527,6 +580,7 @@ function shell(title, main, env, { currentId, css = '' } = {}) {
   ${sidebar(env, currentId)}
   <div class="stage">${main}</div>
 </div>
+${TOAST}
 </body></html>`;
 }
 
@@ -560,16 +614,6 @@ const page = (title, body) => `<!doctype html>
   td.pick input { width: auto; }
   td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-  /* The kept-since filter. A row, so it reads as one control rather than three
-     things that happen to be near each other. */
-  form.since {
-    display: flex; align-items: center; flex-wrap: wrap; gap: .6rem;
-    margin: 0 0 1.4rem;
-  }
-  form.since label { color: var(--muted); font-size: .9rem; }
-  form.since input[type="date"] { width: auto; margin: 0; }
-  form.since button { width: auto; margin: 0; }
-  form.since .warn { color: var(--warn); font-size: .88rem; }
 
   /* Save as … — a row of links, so a browser downloads them and the desktop
      shell inherits the whole thing without owning a control. */

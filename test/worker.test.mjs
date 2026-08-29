@@ -8,6 +8,7 @@
 // deployment is not allowed to reach must not crawl.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   handle, authorized, sameSecret, targetFor, pageLimit, progressText,
@@ -542,6 +543,23 @@ test('every setting the form collects reaches the run', async () => {
   // it is a setting that quietly does nothing.
   for (const pair of ['limit=9', 'concurrency=1', 'external=1', 'browser=Chrome', 'ignore=og-webp']) {
     assert.ok(html.includes(pair), `the stream URL should carry ${pair}`);
+  }
+});
+
+test('a class the served pages use is a class the served pages style', () => {
+  // There are two stylesheets in this file: CHROME, which `shell()` serves on
+  // every page with a sidebar, and a second one inside `page()`. Adding a rule
+  // to the wrong one is invisible — the markup is right, the class is right,
+  // and the page renders unstyled. It has happened twice: the export links in
+  // one release and the kept-since filter in the next, which shipped with no
+  // styling at all because its CSS went into `page()`.
+  const home = readFileSync(new URL('../worker/index.mjs', import.meta.url), 'utf8');
+  const chrome = home.slice(home.indexOf('const CHROME = `'));
+  const chromeCss = chrome.slice(0, chrome.indexOf('`;'));
+
+  for (const cls of ['toast', 'since']) {
+    assert.match(chromeCss, new RegExp(`\\.${cls}\\b|form\\.${cls}\\b`),
+      `.${cls} is used by a page shell() renders, so its rule belongs in CHROME`);
   }
 });
 
