@@ -3,6 +3,27 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **A PDF's section headings could be left alone at the foot of a page**, with
+  the findings they introduce overleaf. A cause block listing every affected
+  page can be most of a page tall, so a heading placed just before one had
+  nowhere to go — the packer was greedy and had no keep-with-next rule. Three
+  of the 53 pages in a gohugo.io export ended that way: `Content 79`,
+  `Indexability 26`, `Images 52`.
+
+  A heading now travels with the block it introduces. `PDF.paginate` came out
+  of `write` to make it testable without a renderer, because the bug is
+  arithmetic rather than drawing — including the cases that must *not* move a
+  heading, and the one where a page holds nothing but headings and must not be
+  emitted blank.
+
+  It does not make the document shorter, and the page count is unchanged at 53.
+  The white space above a page break comes from cause blocks being atomic and
+  nearly page-tall; only splitting them would reclaim it, and a finding split
+  across a page break is worse than a short page.
+
 ## [1.36.0] — 2026-08-29
 
 ### Added

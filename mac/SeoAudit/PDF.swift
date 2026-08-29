@@ -34,28 +34,18 @@ enum PDF {
         // emitted one page as tall as the whole report — fine for the two-
         // finding site it was tried on, a single unreadable strip for anything
         // real.
-        let measured = blocks(report: report, host: host).map { block -> (AnyView, CGFloat) in
-            (block, height(of: block, width: content))
+        let measured = blocks(report: report, host: host).map { block -> (Block, CGFloat) in
+            (block, height(of: block.view, width: content))
         }
 
-        var pages: [[AnyView]] = []
-        var current: [AnyView] = []
-        var used: CGFloat = 0
-        for (block, blockHeight) in measured {
-            // A block taller than a page goes on one of its own and is allowed
-            // to overflow rather than being dropped.
-            if !current.isEmpty, used + blockHeight > usable {
-                pages.append(current)
-                current = []
-                used = 0
-            }
-            current.append(block)
-            used += blockHeight
-        }
-        if !current.isEmpty { pages.append(current) }
+        let pages = paginate(
+            measured.map { (keepWithNext: $0.0.keepWithNext, height: $0.1) },
+            usable: usable
+        )
 
-        for (number, page) in pages.enumerated() {
-            let sheet = Page(blocks: page, number: number + 1, of: pages.count)
+        for (number, indices) in pages.enumerated() {
+            let sheet = Page(blocks: indices.map { measured[$0].0.view },
+                             number: number + 1, of: pages.count)
                 .frame(width: pageWidth, height: pageHeight)
             let renderer = ImageRenderer(content: sheet)
             renderer.render { _, draw in
@@ -65,6 +55,60 @@ enum PDF {
             }
         }
         context.closePDF()
+    }
+
+    /// One thing that must not be split across a page break.
+    struct Block {
+        let view: AnyView
+        /// A heading introduces what follows it, so it must not be the last
+        /// thing on a page. Standard keep-with-next.
+        let keepWithNext: Bool
+
+        init(_ view: AnyView, keepWithNext: Bool = false) {
+            self.view = view
+            self.keepWithNext = keepWithNext
+        }
+    }
+
+    /// Pack blocks onto pages, in order, keeping each heading with the block it
+    /// introduces.
+    ///
+    /// Indices rather than views so this can be tested without a renderer. The
+    /// bug it exists to prevent is arithmetic, not drawing: a cause block can be
+    /// most of a page tall, so a heading placed just before one would be left
+    /// alone at the foot of the page with its content overleaf. A 53-page export
+    /// of gohugo.io had a near-empty page for every section that way.
+    static func paginate(_ blocks: [(keepWithNext: Bool, height: CGFloat)],
+                         usable: CGFloat) -> [[Int]] {
+        var pages: [[Int]] = []
+        var current: [Int] = []
+        var used: CGFloat = 0
+
+        for (i, block) in blocks.enumerated() {
+            // A block taller than a page goes on one of its own and is allowed
+            // to overflow rather than being dropped.
+            if !current.isEmpty, used + block.height > usable {
+                var carried: [Int] = []
+                while let last = current.last, blocks[last].keepWithNext {
+                    carried.insert(current.removeLast(), at: 0)
+                }
+                if current.isEmpty {
+                    // Nothing but headings on this page, so there is no page to
+                    // end — putting one out would be the blank page this is
+                    // meant to remove. Let the oversized block overflow beneath
+                    // them, which is what an oversized block does anyway.
+                    current = carried
+                } else {
+                    pages.append(current)
+                    current = carried
+                }
+                used = current.reduce(0) { $0 + blocks[$1].height }
+            }
+            current.append(i)
+            used += block.height
+        }
+        if !current.isEmpty { pages.append(current) }
+        return pages
     }
 
     @MainActor
@@ -79,16 +123,17 @@ enum PDF {
     /// break: the header, then each area's heading, then each piece of work with
     /// its pages.
     @MainActor
-    private static func blocks(report: Report, host: String) -> [AnyView] {
-        var out: [AnyView] = [AnyView(Header(report: report, host: host))]
+    private static func blocks(report: Report, host: String) -> [Block] {
+        var out: [Block] = [Block(AnyView(Header(report: report, host: host)))]
         for area in report.byArea {
-            out.append(AnyView(AreaHeading(name: area.name, count: area.causes.count)))
+            out.append(Block(AnyView(AreaHeading(name: area.name, count: area.causes.count)),
+                             keepWithNext: true))
             for cause in area.causes {
-                out.append(AnyView(CauseBlock(
+                out.append(Block(AnyView(CauseBlock(
                     cause: cause,
                     findings: report.findings(for: cause),
                     gain: gain(for: cause, in: report)
-                )))
+                ))))
             }
         }
         // What passed, and what never came up. An export that shows less than
@@ -96,15 +141,17 @@ enum PDF {
         // was here a PDF sent to a client listed only faults — with no way to
         // tell a check that passed from one that was never run.
         if let score = report.score, score.checks?.passed ?? 0 > 0 {
-            out.append(AnyView(AreaHeading(name: "Passing", count: score.checks?.passed ?? 0)))
+            out.append(Block(AnyView(AreaHeading(name: "Passing", count: score.checks?.passed ?? 0)),
+                             keepWithNext: true))
             for (area, checks) in score.passedByArea {
-                out.append(AnyView(PassBlock(area: area, lines: checks.map(\.pass))))
+                out.append(Block(AnyView(PassBlock(area: area, lines: checks.map(\.pass)))))
             }
         }
         if let score = report.score, score.checks?.skipped ?? 0 > 0 {
-            out.append(AnyView(AreaHeading(name: "Not checked", count: score.checks?.skipped ?? 0)))
+            out.append(Block(AnyView(AreaHeading(name: "Not checked", count: score.checks?.skipped ?? 0)),
+                             keepWithNext: true))
             for (why, ids) in score.skippedByReason {
-                out.append(AnyView(PassBlock(area: why, lines: [ids.joined(separator: ", ")], muted: true)))
+                out.append(Block(AnyView(PassBlock(area: why, lines: [ids.joined(separator: ", ")], muted: true))))
             }
         }
         return out

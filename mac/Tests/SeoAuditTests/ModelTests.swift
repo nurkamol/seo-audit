@@ -335,6 +335,70 @@ struct PDFTests {
     }
 }
 
+@Suite("Packing a PDF's pages")
+struct PaginationTests {
+    /// `(keepWithNext, height)` in the shape `PDF.paginate` takes.
+    private func heading(_ h: CGFloat = 40) -> (keepWithNext: Bool, height: CGFloat) {
+        (keepWithNext: true, height: h)
+    }
+    private func body(_ h: CGFloat) -> (keepWithNext: Bool, height: CGFloat) {
+        (keepWithNext: false, height: h)
+    }
+
+    @Test("a heading is never the last thing on a page")
+    func headingTravelsWithItsContent() {
+        // The real shape of the bug: a heading fits, and then a cause block
+        // that is most of a page tall does not. gohugo.io had a near-empty page
+        // for every section this way.
+        let pages = PDF.paginate([body(300), heading(), body(700)], usable: 754)
+
+        #expect(pages.count == 2)
+        #expect(pages[0] == [0])          // the heading left with its content
+        #expect(pages[1] == [1, 2])
+    }
+
+    @Test("a heading that is not stranded stays where it is")
+    func headingStaysWhenItsContentFits() {
+        // The half that matters: keep-with-next must not push headings onto new
+        // pages when there was never a problem. Everything here fits on one.
+        let pages = PDF.paginate([body(100), heading(), body(200)], usable: 754)
+
+        #expect(pages.count == 1)
+        #expect(pages[0] == [0, 1, 2])
+    }
+
+    @Test("a page is never emitted empty")
+    func headingsAloneDoNotMakeABlankPage() {
+        // A block taller than a whole page still overflows by design. The
+        // heading goes with it rather than the packer producing a page holding
+        // nothing but the heading — or worse, an empty one.
+        let pages = PDF.paginate([body(700), heading(), body(900)], usable: 754)
+
+        #expect(!pages.contains { $0.isEmpty })
+        #expect(pages.count == 2)
+        #expect(pages[1] == [1, 2])
+    }
+
+    @Test("consecutive headings travel together")
+    func stackedHeadingsAllMove() {
+        let pages = PDF.paginate([body(300), heading(), heading(), body(700)], usable: 754)
+
+        #expect(pages.count == 2)
+        #expect(pages[0] == [0])
+        #expect(pages[1] == [1, 2, 3])
+    }
+
+    @Test("every block is placed exactly once, in order")
+    func nothingIsLostOrRepeated() {
+        let blocks = [body(300), heading(), body(700), body(120), heading(), body(600)]
+        let pages = PDF.paginate(blocks, usable: 754)
+
+        // The failure this guards against is silent: a packer that drops a
+        // block produces a shorter, plausible-looking PDF.
+        #expect(pages.flatMap { $0 } == Array(blocks.indices))
+    }
+}
+
 /// Enough of PDFKit to check the export, kept here so the app itself does not
 /// link a framework it has no other use for.
 import PDFKit
