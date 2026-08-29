@@ -10,13 +10,30 @@
     "windows": [],
     "security": {
       "csp": null,
-      "capabilities": ["default"]
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "appimage", "deb"],
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.icns", "icons/icon.ico"],
+    "targets": [
+      "nsis",
+      "appimage",
+      "deb"
+    ],
+    "externalBin": [
+      "binaries/node"
+    ],
+    "resources": {
+      "engine": "engine"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "category": "DeveloperTool",
     "shortDescription": "Crawl a site's sitemap and check every page",
     "longDescription": "Crawls every page a sitemap lists, not just the homepage, and reports the SEO, metadata and structured-data problems single-page graders miss. Nothing leaves the machine."

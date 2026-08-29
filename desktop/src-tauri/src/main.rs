@@ -17,6 +17,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::sync::Mutex;
@@ -54,15 +55,21 @@ impl Engine {
 /// In a bundle these are beside the executable; in development they are the
 /// repository itself, so `tauri dev` runs the working tree rather than a copy
 /// of it. Packaging replaces the first arm and nothing else — that is phase 3.
-fn engine_command(app: &tauri::AppHandle) -> Result<Command, String> {
-    // A bundled runtime, once there is one.
-    if let Ok(resources) = app.path().resource_dir() {
-        let node = resources.join(if cfg!(windows) { "engine/node.exe" } else { "engine/node" });
+fn engine_command(app: &tauri::AppHandle) -> Result<(Command, PathBuf), String> {
+    // A bundled runtime. Tauri puts an `externalBin` beside the executable and
+    // a `resources` entry in the platform's resource directory, which are two
+    // different places — the runtime next to the binary, the JavaScript with
+    // the icons.
+    if let (Ok(exe), Ok(resources)) = (std::env::current_exe(), app.path().resource_dir()) {
+        let node = exe
+            .parent()
+            .map(|beside| beside.join(if cfg!(windows) { "node.exe" } else { "node" }))
+            .unwrap_or_default();
         let cli = resources.join("engine/bin/seo-audit.mjs");
         if node.is_file() && cli.is_file() {
-            let mut command = Command::new(node);
-            command.arg(cli);
-            return Ok(command);
+            let mut command = Command::new(&node);
+            command.arg(&cli);
+            return Ok((command, cli));
         }
     }
 
@@ -77,9 +84,12 @@ fn engine_command(app: &tauri::AppHandle) -> Result<Command, String> {
              Install Node 18 or later — `brew install node`, or your package manager."
                 .to_string()
         })?;
+        let cli = cli.canonicalize().map_err(|e| e.to_string())?;
         let mut command = Command::new(node);
-        command.arg(cli.canonicalize().map_err(|e| e.to_string())?);
-        return Ok(command);
+        command.arg(&cli);
+        // No version check in development: the checkout *is* the engine, and
+        // whatever the working tree says is by definition what is meant.
+        return Ok((command, PathBuf::new()));
     }
 
     Err("This build has no engine to run, and there is no checkout beside it.".into())
@@ -116,8 +126,61 @@ fn which_node() -> Option<std::path::PathBuf> {
 ///
 /// Port zero: the operating system picks one that is free and the server prints
 /// where it landed. Guessing a port is how two copies of an app fight over one.
+/// What the engine beside this shell says its version is.
+///
+/// The reason this exists is narrow and specific. Tauri's NSIS installer has a
+/// reported bug where a Windows upgrade replaces the main binary and leaves the
+/// sidecar behind — and here the sidecar *is* the engine, so the app would come
+/// back looking new and run the old checks, with nothing on screen to say so.
+/// A missing finding reads exactly like a passing one, and a stale engine is a
+/// whole report of them.
+///
+/// See https://github.com/tauri-apps/tauri/issues/15134
+fn engine_version(command: &mut Command) -> Option<String> {
+    let shown = command.arg("--version").output().ok()?;
+    shown
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&shown.stdout).trim().to_string())
+        .filter(|version| !version.is_empty())
+}
+
+/// Whether a bundled engine is the one this shell was built against.
+///
+/// Only asked of a bundle: in development the checkout is the engine, and
+/// whatever the working tree says is by definition what was meant.
+fn disagrees(bundled: &std::path::Path, found: Option<&str>) -> Option<String> {
+    if bundled.as_os_str().is_empty() {
+        return None;
+    }
+    let mine = env!("CARGO_PKG_VERSION");
+    match found {
+        Some(theirs) if theirs == mine => None,
+        Some(theirs) => Some(format!(
+            "This window is version {mine} and the engine inside it is {theirs}.\n\n\
+             An update replaced one and not the other, so the checks that would run are \
+             not the ones this version ships. Reinstalling puts them back together."
+        )),
+        None => Some(format!(
+            "The engine inside this build would not say which version it is.\n\n\
+             That usually means an update left a broken copy behind. Reinstalling \
+             replaces it."
+        )),
+    }
+}
+
 fn start_engine(app: &tauri::AppHandle) -> Result<(String, Child), String> {
-    let mut command = engine_command(app)?;
+    let (mut command, bundled) = engine_command(app)?;
+
+    // Asked before the crawl server starts, because a shell and an engine that
+    // disagree is not a thing to find out about halfway through a report.
+    if !bundled.as_os_str().is_empty() {
+        let (mut probe, _) = engine_command(app)?;
+        if let Some(why) = disagrees(&bundled, engine_version(&mut probe).as_deref()) {
+            return Err(why);
+        }
+    }
+
     command
         .arg("--serve")
         .arg("0")
@@ -150,13 +213,61 @@ fn start_engine(app: &tauri::AppHandle) -> Result<(String, Child), String> {
         }
     });
 
+    // Read rather than merely piped. It was piped and never read, so when the
+    // engine died on a missing module the window said "never said where it was
+    // listening" — true, and useless, while the reason sat unread in a pipe.
+    // The same failure this project refuses in its reports: an answer that does
+    // not say what actually happened.
+    let complaints = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+    if let Some(stderr) = child.stderr.take() {
+        let kept = complaints.clone();
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                if let Ok(mut held) = kept.lock() {
+                    held.push(line);
+                    // Enough for a stack trace's first few frames, and bounded
+                    // so a chatty engine cannot fill memory.
+                    if held.len() > 40 {
+                        held.remove(0);
+                    }
+                }
+            }
+        });
+    }
+
     match rx.recv_timeout(ANNOUNCE_TIMEOUT) {
         Ok(url) => Ok((url, child)),
         Err(_) => {
             let _ = child.kill();
-            Err("The engine started but never said where it was listening.".into())
+            let said = complaints.lock().map(|held| held.clone()).unwrap_or_default();
+            Err(refusal(&said))
         }
     }
+}
+
+/// What to say when the engine started and then did not answer.
+///
+/// Its own words where it had any. "The engine started but never said where it
+/// was listening" is a description of the symptom, and the cause was in the
+/// pipe the whole time.
+fn refusal(said: &[String]) -> String {
+    let complaint: Vec<&String> = said.iter().filter(|line| !line.trim().is_empty()).collect();
+    if complaint.is_empty() {
+        return "The engine started but never said where it was listening, and said nothing \
+                about why."
+            .into();
+    }
+    let tail: Vec<&str> = complaint
+        .iter()
+        .rev()
+        .take(6)
+        .rev()
+        .map(|line| line.as_str())
+        .collect();
+    format!(
+        "The engine started but never said where it was listening. It said:\n\n{}",
+        tail.join("\n")
+    )
 }
 
 /// The address out of the line the server prints.
@@ -361,7 +472,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{announced_url, help_link, is_the_app};
+    use super::{announced_url, disagrees, help_link, is_the_app};
+    use std::path::Path;
 
     fn url(text: &str) -> tauri::Url {
         text.parse().expect("a test URL")
@@ -395,6 +507,36 @@ mod tests {
         assert!(!is_the_app(engine, &url("http://localhost:53017/")));
         // And a scheme that is not the web at all.
         assert!(!is_the_app(engine, &url("file:///etc/passwd")));
+    }
+
+    // Tauri's NSIS installer has a reported bug where a Windows upgrade
+    // replaces the main binary and leaves the sidecar behind — and here the
+    // sidecar is the engine, so the app would come back looking new and run the
+    // old checks with nothing on screen to say so.
+    #[test]
+    fn a_bundled_engine_of_the_wrong_version_is_refused() {
+        let bundled = Path::new("/Applications/x.app/Contents/Resources/engine/bin/seo-audit.mjs");
+        let mine = env!("CARGO_PKG_VERSION");
+
+        // The ordinary case: they were installed together.
+        assert!(disagrees(bundled, Some(mine)).is_none());
+
+        // The bug: the shell moved and the engine did not.
+        let stale = disagrees(bundled, Some("1.2.3")).expect("a mismatch is worth refusing");
+        assert!(stale.contains("1.2.3"), "the message names the version that is there");
+        assert!(stale.contains(mine), "and the one that should be");
+        assert!(stale.contains("Reinstalling"), "and what to do about it");
+
+        // A copy too broken to answer is the same class of problem.
+        assert!(disagrees(bundled, None).is_some());
+    }
+
+    // Development is exempt: the checkout is the engine, and whatever the
+    // working tree says is by definition what was meant.
+    #[test]
+    fn a_checkout_is_never_the_wrong_version() {
+        assert!(disagrees(Path::new(""), Some("0.0.0-anything")).is_none());
+        assert!(disagrees(Path::new(""), None).is_none());
     }
 
     #[test]

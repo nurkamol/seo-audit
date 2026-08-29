@@ -1,0 +1,104 @@
+# The Tauri shell, built for the platforms the macOS app does not ship to.
+#
+# Each runner builds with its own Node, because `desktop/scripts/prepare.mjs`
+# bundles `process.execPath`. That is deliberate: cross-compiling a runtime is a
+# way to ship a binary nobody ran, and `setup-node` already pins the version.
+#
+# Not attached to a release yet — this proves the bundles build and leaves them
+# as artifacts. Wiring them to a tag is the last phase.
+name: Desktop shell
+
+on:
+  push:
+    branches: [main]
+    # The shell wraps the engine, so a change to either can break a bundle.
+    paths:
+      - 'desktop/**'
+      - 'bin/**'
+      - 'src/**'
+      - 'worker/**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'bin/**'
+      - 'src/**'
+      - 'worker/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      # One platform failing should not hide whether the others work — the
+      # whole point of this job is finding out which ones do.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: appimage,deb
+          - os: windows-latest
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Cargo's registry and the build directory, which is most of the minutes.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # Tauri draws with the system webview, which on Linux is one that has to
+      # be installed. 22.04 for webkit2gtk-4.1, which is what Tauri v2 wants.
+      - name: What Tauri needs on Linux
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install the Tauri CLI
+        working-directory: desktop
+        run: npm ci
+
+      - name: The shell's own tests
+        working-directory: desktop/src-tauri
+        run: cargo test
+
+      # Stages a Node and the engine, then starts the staged copy and waits for
+      # it to announce a port. The first bundle shipped without `worker/` and
+      # produced an app that opened, started nothing and waited; a list of
+      # directories is exactly the kind of thing that looks right and is not.
+      - name: Stage the engine, and prove it runs
+        working-directory: desktop
+        run: node scripts/prepare.mjs
+
+      - name: Bundle
+        working-directory: desktop
+        run: npx tauri build --bundles ${{ matrix.bundles }}
+
+      - name: What came out
+        shell: bash
+        run: |
+          find desktop/src-tauri/target/release/bundle -maxdepth 2 -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*-setup.exe' \) \
+            -exec ls -lh {} \; || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seo-audit-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            desktop/src-tauri/target/release/bundle/deb/*.deb
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe

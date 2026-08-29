@@ -83,10 +83,57 @@ served HTML — `/reports/<id>/export?as=…` — so a plain browser downloads t
 and this window inherits the lot without a native dialog or a menu item. That is
 the rule working: the feature landed once and every platform got it.
 
+## Packaging
+
+```bash
+npm run stage     # stage a Node and the engine, and prove the staged copy runs
+npm run build     # bundle for this platform
+```
+
+Named `stage` rather than `prepare`, because npm runs a script called
+`prepare` on every `npm install` — which would copy 110 MB and shell out to
+`rustc` before anything had asked it to, including during `npm ci` in CI where
+the toolchain may not be on the path yet.
+
+`scripts/prepare.mjs` copies `process.execPath` to
+`src-tauri/binaries/node-<target-triple>` — the name Tauri looks for, asked of
+`rustc` rather than worked out, because a name one character off does not fail
+loudly, it bundles nothing. The engine itself goes to `src-tauri/engine/`.
+
+Then it **starts the staged copy and waits for it to announce a port.** The
+first bundle staged `bin` and `src` and not `worker`, which `--serve` imports,
+so it built, installed, launched, spawned its engine and waited fifteen seconds
+for an address that was never coming. A list of directories is exactly the kind
+of thing that looks right and is not.
+
+What comes out, on macOS, for reference:
+
+```
+115 MB  SEO Audit.app
+  ├─ Contents/MacOS/node        110 MB   the sidecar, triple stripped by Tauri
+  ├─ Contents/MacOS/seo-audit     3 MB   this shell
+  └─ Contents/Resources/engine  0.5 MB   bin, src, worker, package.json
+```
+
+macOS is not in `bundle.targets`; that build is only for checking the mechanism
+on the machine most likely to be doing the checking.
+
+### The version check
+
+Tauri's NSIS installer has [a reported bug](https://github.com/tauri-apps/tauri/issues/15134)
+where a Windows upgrade replaces the main binary and leaves the sidecar behind.
+Here the sidecar *is* the engine, so the app would come back looking new and run
+the old checks, with nothing on screen to say so — a missing finding reads
+exactly like a passing one, and a stale engine is a whole report of them.
+
+So a bundled build asks the engine `--version` before starting it, and refuses
+with an explanation if it disagrees with the shell's. Development is exempt: the
+checkout is the engine, and whatever the working tree says is what was meant.
+
 ## Not done yet
 
-Phases 1 and 2. Still to come: packaging with a bundled Node, updates, and the
-release wiring. `desktop/src-tauri/tauri.conf.json` already names the three
+Phases 1, 2 and 3. Still to come: updates, and attaching the bundles to a
+release. `desktop/src-tauri/tauri.conf.json` already names the three
 bundle targets; nothing has been built with them.
 
 ## A note on running it

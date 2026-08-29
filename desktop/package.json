@@ -5,6 +5,7 @@
   "description": "The window, on Windows and Linux. A Tauri shell over the same local server the macOS app talks to.",
   "scripts": {
     "dev": "tauri dev",
+    "stage": "node scripts/prepare.mjs",
     "build": "tauri build",
     "icons": "tauri icon ../docs/icon.png"
   },
