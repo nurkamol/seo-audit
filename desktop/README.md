@@ -106,7 +106,16 @@ so it built, installed, launched, spawned its engine and waited fifteen seconds
 for an address that was never coming. A list of directories is exactly the kind
 of thing that looks right and is not.
 
-What comes out, on macOS, for reference:
+What comes out:
+
+| | |
+|---|---|
+| `SEO Audit_1.34.0_x64-setup.exe` | **23 MB** — NSIS compresses the runtime hard |
+| `SEO Audit_1.34.0_amd64.deb` | **45 MB** |
+| `SEO Audit_1.34.0_amd64.AppImage` | **115 MB** — uncompressed, which is what a single file costs |
+
+Inside a macOS build, for reference — the layout is the same everywhere and this
+is the one that can be inspected on a Mac:
 
 ```
 115 MB  SEO Audit.app
@@ -116,7 +125,12 @@ What comes out, on macOS, for reference:
 ```
 
 macOS is not in `bundle.targets`; that build is only for checking the mechanism
-on the machine most likely to be doing the checking.
+on the machine most likely to be doing the checking — which is how the missing
+`worker/` was found.
+
+**What has not been proven:** the Windows and Linux bundles build and their
+contents are the right size, and nobody has run one. Neither has the upgrade
+path, which is where the sidecar-staleness bug lives.
 
 ### The version check
 
