@@ -13,9 +13,16 @@ on:
     branches: [main]
     # A tag builds the same bundles and attaches them to the release. The
     # macOS job creates that release from the tag's annotation and the
-    # CHANGELOG; whichever of the two arrives first makes it, and the other
-    # finds it already there.
-    tags: ['v*']
+    # CHANGELOG, and this one waits for it rather than racing to make an empty
+    # one that would lose both the title and the notes.
+    #
+    # Version tags only — the same shape mac-release.yml and npm-publish.yml
+    # use, and for the reason written down there: `v1` floats forward with
+    # every compatible release and matches `v*`, so a bare `v*` starts a second
+    # build that spends fifteen minutes to fail attaching bundles to a release
+    # named v1, which does not exist. Written here once already and reproduced
+    # anyway.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
     # The shell wraps the engine, so a change to either can break a bundle.
     paths:
       - 'desktop/**'
@@ -31,6 +38,18 @@ on:
       - 'worker/**'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: A release tag to attach the bundles to. Leave empty to just build.
+        required: false
+        default: ''
+
+# Read by default; the build job asks for write because it uploads release
+# assets. Its absence is what made the first tagged run fail — the bundles
+# built, installed and ran, and then `gh release upload` came back with
+# "HTTP 403: Resource not accessible by integration".
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -45,6 +64,8 @@ jobs:
           - os: windows-latest
             bundles: nsis
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -218,11 +239,28 @@ jobs:
 
       # --- On a tag, this is a release ----------------------------------------
 
-      - name: Make sure the release exists
-        if: startsWith(github.ref, 'refs/tags/v')
+      # A tag push attaches to its own tag. A manual run attaches to whatever
+      # tag it was given, which is how a release whose upload failed gets its
+      # bundles without force-moving a tag people may already have fetched.
+      - name: What release are we attaching to, if any
+        id: release
         shell: bash
         run: |
-          tag="${GITHUB_REF_NAME}"
+          if [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag=""
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -n "$tag" ]; then echo "attaching to $tag"; else echo "not a release build"; fi
+
+      - name: Make sure the release exists
+        if: steps.release.outputs.tag != ''
+        shell: bash
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
           # The macOS job writes the notes from the CHANGELOG and the title from
           # the tag's annotation. Racing it to create an empty one would replace
           # both with nothing, so this only ever waits.
@@ -236,7 +274,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Attach the bundles
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.release.outputs.tag != ''
         shell: bash
         run: |
           shopt -s nullglob
@@ -248,7 +286,7 @@ jobs:
           test ${#files[@]} -gt 0 || { echo "::error::nothing was built to attach"; exit 1; }
           # --clobber so re-running a release job replaces the asset rather than
           # failing on a name that is already there.
-          gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
+          gh release upload "${{ steps.release.outputs.tag }}" "${files[@]}" --clobber
           printf '  attached %s\n' "${files[@]##*/}"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -274,27 +312,31 @@ jobs:
   # quietly did not publish looks exactly like one that did.
   winget:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref_type == 'tag' || inputs.tag != ''
     runs-on: ubuntu-latest
     steps:
       - name: Submit the manifest
+        id: check
         env:
           TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           if [ -z "$TOKEN" ]; then
             echo "::warning::WINGET_TOKEN is not set, so no winget manifest was submitted for \
-              ${GITHUB_REF_NAME}. Windows users will be sent to the release page instead of \
-              being offered an in-app update. Create a classic PAT with public_repo scope and \
-              add it as WINGET_TOKEN."
+              $tag. Windows users will be sent to the release page instead of being offered an \
+              in-app update. Create a classic PAT with public_repo scope and add it as \
+              WINGET_TOKEN."
             exit 0
           fi
-          echo "submitting ${GITHUB_REF_NAME} to winget"
+          echo "submitting $tag to winget"
           echo "run=yes" >> "$GITHUB_ENV"
 
       - uses: vedantmgoyal9/winget-releaser@main
         if: env.run == 'yes'
         with:
           identifier: Nurkamol.SeoAudit
+          release-tag: ${{ steps.check.outputs.tag }}
           # The bundle's own name, so a release with the macOS zip attached
           # beside it does not confuse the two.
           installers-regex: '-setup\.exe$'

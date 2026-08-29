@@ -3,6 +3,30 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The first tagged release built its Windows and Linux bundles and then could
+  not attach them.** `gh release upload` came back with "HTTP 403: Resource not
+  accessible by integration" — the workflow never asked for `contents: write`,
+  so its token was read-only. Twenty minutes of building, installing and running
+  the bundles, all of it correct, and then a refusal on the last step.
+
+  The same commit also matched tags with a bare `v*`, which matches the floating
+  `v1` tag, so force-pushing `v1` started a second full build that would have
+  spent fifteen minutes failing to attach bundles to a release named `v1`.
+
+  Both mistakes were already solved elsewhere in this repository, and
+  `mac-release.yml` carries a comment describing the second one exactly. So both
+  are now checked by `test/workflows.test.mjs` rather than written down a third
+  time: a tag trigger may not be a bare `v*`, and a workflow that writes to a
+  release must ask for permission to.
+
+### Added
+- **The desktop workflow can attach bundles to a tag it is given.** A release
+  whose upload failed can be completed by running the workflow manually, rather
+  than by force-moving a tag that people may already have fetched.
+
 ## [1.35.0] — 2026-08-29
 
 ### Added
