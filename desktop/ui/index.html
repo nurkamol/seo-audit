@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO Audit</title>
+<style>
+  /* The one page this shell owns, and it only ever says why there is no
+     report. Everything else in this app is served by the engine, so this
+     borrows nothing from it — a stylesheet shared with a server that is not
+     running would be a stylesheet that does not load. */
+  :root { color-scheme: light dark; --fg: #101418; --muted: #5a6472; --bg: #f7f8fa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #e6e9ee; --muted: #98a2b1; --bg: #0b0d11; }
+  }
+  body {
+    margin: 0; min-height: 100vh;
+    display: grid; place-items: center; padding: 2rem;
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+  }
+  h1 { font-size: 1.1rem; margin: 0 0 .5rem; }
+  p { margin: 0; color: var(--muted); max-width: 42ch; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <div>
+    <h1>The audit engine did not start</h1>
+    <p id="why">Nothing else in this window works without it.</p>
+  </div>
+  <script>
+    // The reason is set from Rust, which is the only thing that knows it.
+    const shown = document.getElementById('why');
+    const paint = () => {
+      const problem = document.body.dataset.problem;
+      if (problem) shown.textContent = problem;
+    };
+    new MutationObserver(paint).observe(document.body, { attributes: true });
+    paint();
+  </script>
+</body>
+</html>

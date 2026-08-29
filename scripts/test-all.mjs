@@ -1,9 +1,9 @@
 // Both suites, from one command.
 //
-// There are two, and only one of them runs by default: `node --test` over
-// `test/`, which is portable and needs nothing installed, and `swift test`
-// over `mac/Tests/`, which needs a toolchain most machines touching this repo
-// do not have. Keeping the first cross-platform is deliberate — the whole
+// There are three, and only one of them runs by default: `node --test` over
+// `test/`, which is portable and needs nothing installed; `swift test` over
+// `mac/Tests/`; and `cargo test` over `desktop/`. The last two need toolchains
+// most machines touching this repo do not have. Keeping the first cross-platform is deliberate — the whole
 // premise is that this works on a machine with nothing on it.
 //
 // The cost of that split showed up in 1.34.0: everything here was green, the
@@ -35,6 +35,18 @@ const files = readdirSync('test')
 console.log('\n── The engine, the Worker and the extension ─────────────────\n');
 const node = run(process.execPath, ['--test', ...files]);
 
+console.log('\n── The desktop shell ───────────────────────────────────────\n');
+// Rust, which most machines touching this repo do not have either. Same rule:
+// a suite that did not run says so rather than being absent from the tally.
+const canRunCargo = has('cargo');
+let cargo = 0;
+if (!canRunCargo) {
+  console.log('  Not run: no Rust toolchain here. `brew install rustup` adds one.');
+  console.log('  CI runs them on every push.\n');
+} else {
+  cargo = run('cargo', ['test', '--manifest-path', 'desktop/src-tauri/Cargo.toml', '--quiet']);
+}
+
 console.log('\n── The macOS app ───────────────────────────────────────────\n');
 // Asked once. Two calls could disagree, and the summary at the bottom must
 // describe the run that actually happened.
@@ -58,7 +70,8 @@ const verdict = (name, code, skipped) =>
 
 console.log('\n────────────────────────────────────────────────────────────');
 console.log(verdict('engine, Worker, extension', node, false));
+console.log(verdict('desktop shell', cargo, !canRunCargo));
 console.log(verdict('macOS app', swift, !canRunSwift));
 console.log('');
 
-process.exit(node || swift);
+process.exit(node || cargo || swift);

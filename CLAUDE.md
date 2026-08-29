@@ -65,6 +65,7 @@ read as its `src`.
 | `src/baseline.mjs` | Serialise and diff runs |
 | `src/report.mjs` | Terminal, Markdown, HTML, the baseline diff view, and the portfolio table |
 | `raycast/` | The Raycast extension. Imports the engine as `@nurkamol/seo-audit`, never `../../src` — a Store submission is that folder and nothing above it. `npm test` symlinks the package so a checkout still builds. After touching anything in there run `npm run lint` **in that folder**: `npm test` does not, and `ray publish` refuses on a Prettier complaint the build is happy with |
+| `desktop/` | The Tauri shell for Windows and Linux. It draws nothing: it starts `bin/seo-audit.mjs --serve 0`, reads the port off stdout and points a webview at it — the same thing `mac/SeoAudit/Engine.swift` does, in Rust. Needs a Rust toolchain; `npm run test:all` runs its tests and says so when it cannot. A control added here instead of to the served HTML is a control Windows has and macOS does not |
 | `worker/index.mjs` | The optional hosted front end. Imports `audit` and `html`; re-implements nothing. Web-standard APIs only, so `node --test` can run it |
 
 ## Adding a check
@@ -120,7 +121,7 @@ Optional, and not on the main path — the CLI is. Two rules keep it honest:
    passing one. Anything else that turns out not to work there gets the same
    treatment, never a silent omission.
 
-`worker/` and `raycast/` are deliberately absent from `files` in
+`worker/`, `raycast/` and `desktop/` are deliberately absent from `files` in
 `package.json`: the npx payload stays the CLI, and the deploy flow clones the
 repository anyway. `@raycast/api` is the same arrangement as Wrangler — a front
 end's dependency, installed only by somebody working on that front end, never

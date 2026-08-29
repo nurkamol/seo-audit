@@ -644,6 +644,10 @@ It opens a browser onto the same window the macOS app draws: a sidebar of kept r
 
 Nothing leaves the machine. It binds to the loopback address, which is the whole of its security model.
 
+A native window for Windows and Linux is being built on top of exactly this — a
+Tauri shell that starts the same server and shows the same report, in
+[`desktop/`](desktop/README.md). Phase 1 works; it is not packaged yet.
+
 `--no-open` if you would rather it did not open a browser. It opens one when a person ran the command and never when something else did, so the macOS window — which spawns this — is unaffected.
 
 ---

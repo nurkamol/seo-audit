@@ -1,0 +1,14 @@
+{
+  "name": "seo-audit-desktop",
+  "private": true,
+  "version": "1.34.0",
+  "description": "The window, on Windows and Linux. A Tauri shell over the same local server the macOS app talks to.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon ../docs/icon.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
