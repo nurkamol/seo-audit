@@ -6,6 +6,46 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A desktop app for Windows and Linux.** `desktop/` is a Tauri shell that
+  starts `bin/seo-audit.mjs --serve 0`, reads the port off stdout and points a
+  webview at it — exactly what `mac/SeoAudit/Engine.swift` has always done. It
+  draws nothing: the report is the HTML the server already produces, so both
+  platforms get the same sidebar, score ring and library, from the same folder
+  on a machine that has both. The Swift app stays the macOS release.
+
+  It carries the lessons of the window next door. Port zero, because guessing is
+  how two copies fight over one. Node found by path rather than by `PATH`,
+  because a window launched from a dock inherits almost none. And a failure that
+  opens a window saying why, because an app that opens and does nothing is the
+  worst version of that.
+
+  A menu of File, Edit and Help — Edit predefined, because on Linux and Windows
+  a webview without one is a text field where Ctrl-C does nothing. Every other
+  item is navigation or a link. **External links leave the app:** a report is
+  full of the audited site's own URLs, and following one used to replace the
+  report with somebody else's website, in a window with no address bar to get
+  out of.
+
+  Packaged with a Node inside it: a 23 MB `setup.exe`, a 45 MB `.deb`, a 115 MB
+  AppImage. Each platform builds on its own runner, then **installs what it
+  built, runs it, and waits for the engine to appear** — because building a
+  bundle only proves it bundles, and four separate bugs survived to that step.
+
+- **Every report can be saved, from any browser.**
+  `/reports/<id>/export?as=…` returns the file with a name that sorts, in all
+  seven formats. Links rather than a native dialog: a browser downloads them and
+  the desktop shell inherits the lot, so the feature landed once and every
+  platform got it. The macOS app has had an Export menu since it shipped and the
+  browser had none — somebody on Linux could read a report and not save one.
+
+  The format list moved to `src/exports.mjs`. It was written out twice already,
+  and a third copy would have been where they started disagreeing about whether
+  "Structured data" is called that.
+
+- **`npm run test:all` runs three suites**, adding `cargo test` over `desktop/`.
+  Same rule as the others: a toolchain that is not there, or an engine not yet
+  staged beside the shell, is reported as not run and never silently skipped.
+
 - **`--serve` is the desktop UI for Linux and Windows.** It always was, in the
   sense that the macOS window is a thin client over exactly this server — but
   it printed a URL and offered a form with two inputs, so nobody read it that
@@ -74,6 +114,47 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Verified by downgrading a real install to 1.33.1 and pressing the button.
 
 ### Fixed
+- **The first desktop bundle opened, started nothing, and waited.** It staged
+  `bin` and `src` and not `worker`, which `--serve` imports, so it spawned its
+  engine and waited fifteen seconds for an address that was never coming. The
+  staging script now **starts what it staged and waits for it to announce a
+  port** — a list of directories is exactly the kind of thing that looks right
+  and is not. Verified by removing `worker` again and watching it fail.
+
+- **The Windows build installed, started, and refused its own engine.**
+  `resource_dir()` returns a Windows *verbatim* path — the `\\?\` form that
+  lifts the 260-character limit. Rust is happy with it and Node is not: the
+  script runs, but `import.meta.url` comes out malformed and anything resolving
+  a sibling file fails. `--version` reads `../package.json`, so it answered
+  nothing, and the shell concluded its engine was broken. On that evidence it
+  was right to.
+
+- **The engine outlived the app when the app was killed rather than closed.**
+  Closing fires `Destroyed` and quitting fires `Exit`; nothing fires when a
+  process is terminated outright, and a 110 MB engine then sat holding its port.
+  A job object with `KILL_ON_JOB_CLOSE` moves that promise from this code to the
+  kernel. Linux passed the same test only because SIGTERM lets Tauri run `Exit`
+  — the guarantee was missing on both and visible on one.
+
+- **A windowed app had nowhere to say what went wrong.** Built with
+  `windows_subsystem = "windows"` it has no console and no stdout, so a failure
+  is a sentence in a window and nothing else — fine for a person, useless for
+  the job that just installed it. `SEO_AUDIT_SHELL_LOG` now names a file the
+  startup path narrates itself into, and both Windows bugs above were found by
+  reading it.
+
+- **A run started from the browser could not save three of its seven formats.**
+  The sitemap, the `llms.txt` and the structured data are built during the crawl
+  from data that is gone by the time the report arrives, and the served form
+  never asked for them — so those links were permanently refused for every Linux
+  and Windows user, while the macOS window has always asked. Found by clicking
+  them.
+
+- **The category guard read the export list as seven checks** needing categories,
+  because it matched every `id:` in `src/`. It now asks
+  `scripts/check-levels.mjs`, which only counts an id carrying a level — a
+  scanner that can tell a finding from a file format.
+
 - **The update banner never appeared on a machine whose GitHub quota was
   spent.** The anonymous API allows sixty calls an hour **per address**, shared
   with every other tool on the machine, so exhausting it is ordinary — this one
