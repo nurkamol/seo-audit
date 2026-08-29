@@ -5,6 +5,30 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The window takes its type and its accent from the machine it is on.** The
+  font stack stopped at `"Segoe UI"`, which is Windows 10's face — Windows 11
+  uses Segoe UI Variable Text — and offered Linux `Roboto`, an Android face few
+  desktops have, ahead of Cantarell or Noto. And `--accent` was a hardcoded
+  blue while every one of those systems lets a person pick their own; where the
+  engine drawing this knows the answer, `AccentColor` is now that person's
+  choice, `AccentColorText` is the colour guaranteed to be readable on it, and
+  checkboxes and the date field take it too.
+
+  The chrome only. A report is a document that gets sent to other people and
+  keeps its own palette, so it looks the same on their machine as it did on
+  yours.
+
+  Keyboard focus is now one visible high-contrast ring rather than whatever the
+  webview drew for each control type, and scrollbars take the page's colours
+  instead of the light ones a dark window makes obvious.
+
+  Not attempted: a design per operating system. "Native on Linux" is not one
+  target — GNOME and KDE disagree — and a webview half-imitating WinUI lands in
+  the uncanny valley, which reads as less finished rather than more. It would
+  also split the browser and the app, which is the one thing this project
+  refuses everywhere else.
+
 ### Fixed
 - **Save as … wrote straight to Downloads without asking, and said nothing
   afterwards.** Reported by somebody using the Windows build, which is where the
@@ -24,6 +48,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   request is not a navigation, so the handler that sends external links to the
   browser never saw it and nothing else was listening. It now goes the same way
   every other external link goes — to the browser, which has an address bar.
+
+- **The kept runs were drawn with the webview's default table styling** —
+  edge-to-edge columns and no separators, which is what a spreadsheet looks
+  like and not what that page is. `CHROME` had no table rules at all: they were
+  in the stylesheet `page()` serves, and `/reports` is drawn by `shell()`. The
+  date now leads the row at full contrast because it is the link you aim at,
+  the detail sits beside it muted, the score is right-aligned and tabular, and
+  the filter is a secondary control so the one primary button on the page is
+  the one that does something irreversible.
 
 - **The kept-since filter shipped in 1.37.0 with no styling.** Its CSS went into
   the stylesheet `page()` serves; `/reports` is drawn by `shell()`, which serves

@@ -336,6 +336,37 @@ const CHROME = `
   @media (prefers-color-scheme: dark) {
     :root { --accent: #2f6fe4; }
   }
+
+  /* The accent the person actually chose, where the engine drawing this knows
+     it. AccentColor and AccentColorText are a CSS pair — the second is the
+     colour guaranteed to be readable on the first — so both are taken or
+     neither is, and a system that offers no answer keeps the blue above.
+     This is the chrome only. The report keeps its own palette: it is a
+     document that gets sent to other people, and it should look the same on
+     their machine as it did on yours. */
+  @supports (color: AccentColor) {
+    :root { --accent: AccentColor; --on-accent: AccentColorText; }
+  }
+
+  /* Checkboxes, radios and the date picker, in that same colour rather than
+     Chromium's default blue. One line, and it is the difference between
+     controls that belong to the system and controls that belong to a browser. */
+  :root { accent-color: var(--accent); }
+
+  /* Keyboard focus, visible and consistent. A webview's default ring differs
+     from the platform's and from itself between control types. */
+  :where(a, button, input, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+  /* Thin scrollbars that take the page's colours instead of the webview's
+     default light ones, which are the loudest non-native thing in a dark
+     window. */
+  .side .runs, .stage { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
   html, body { height: 100%; }
   body { margin: 0; padding: 0; overflow: hidden; }
 
@@ -478,8 +509,20 @@ const CHROME = `
     margin: 0 0 1.4rem;
   }
   form.since label { color: var(--muted); font-size: .9rem; }
-  form.since input[type="date"] { width: auto; margin: 0; }
+  form.since input[type="date"] {
+    width: auto; margin: 0;
+    padding: .42rem .55rem;
+    border: 1px solid var(--line-strong); border-radius: 8px;
+    background: var(--bg); color: var(--fg);
+    font: inherit; font-size: .9rem; font-variant-numeric: tabular-nums;
+    /* Without this the webview draws its own calendar and spinner in light
+       colours whatever the page is — the loudest foreign thing on the page,
+       and the one a person notices first. */
+    color-scheme: dark light;
+  }
+  form.since input[type="date"]:hover { border-color: var(--muted); }
   form.since button { width: auto; margin: 0; }
+  form.since a { color: var(--muted); font-size: .88rem; }
   form.since .warn { color: var(--warn); font-size: .88rem; }
 
   /* The saved-a-file line. Bottom left rather than bottom right: the report is
@@ -494,6 +537,37 @@ const CHROME = `
     opacity: 0; transform: translateY(.5rem); pointer-events: none;
     transition: opacity .18s ease, transform .18s ease;
   }
+  /* --- The kept runs ---------------------------------------------------
+     Styled here because this page is drawn by shell(), which serves CHROME.
+     There were no table rules in it at all, so the list had been rendering
+     with the webview's defaults — edge-to-edge columns and no separators,
+     which is what a spreadsheet looks like and not what this is. */
+  .kept { margin: .35rem 0 1.6rem; }
+  .kept h2 {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--faint); font-weight: 600; margin: 1.35rem 0 .35rem; border: 0;
+  }
+  .kept h2:first-child { margin-top: 0; }
+  .kept table { width: 100%; border-collapse: collapse; margin: 0; }
+  .kept tr { border-top: 1px solid var(--line); }
+  .kept tr:first-child { border-top: 0; }
+  .kept tr:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+  .kept td { padding: .6rem .5rem; vertical-align: middle; border: 0; }
+  .kept td.pick { width: 2.25rem; }
+  .kept td.pick input { width: auto; margin: 0; }
+  /* The date is the link and the thing you aim at, so it leads and it is the
+     only cell at full contrast. */
+  .kept td a {
+    color: var(--fg); text-decoration: none; font-weight: 500;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .kept td a:hover { text-decoration: underline; }
+  .kept td:nth-child(3) { color: var(--muted); font-size: .92rem; width: 100%; }
+  .kept td.n {
+    text-align: right; white-space: nowrap;
+    font-variant-numeric: tabular-nums; color: var(--muted);
+  }
+
   .toast.up { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) {
     .toast { transition: none; }
@@ -922,7 +996,7 @@ export async function handle(request, env, ctx, deps = {}) {
     const filter = `<form class="since" method="get" action="/reports">
       <label for="since">Kept since</label>
       <input type="date" id="since" name="since" value="${since}">
-      <button type="submit">Filter</button>
+      <button class="secondary" type="submit">Filter</button>
       ${since ? '<a href="/reports">Show all</a>' : ''}
       ${asked.error ? `<span class="warn">Wanted ${esc(asked.error)}, so nothing was filtered.</span>` : ''}
     </form>`;
@@ -960,12 +1034,12 @@ export async function handle(request, env, ctx, deps = {}) {
           <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
         </div>
         <h1>Reports</h1>
-        ${filter}
         <p class="sub">${rows.length === all.length ? all.length : `${rows.length} of ${all.length}`} kept on this machine,
           ${env.STORE.bytes ? `${Math.max(1, Math.round(env.STORE.bytes() / 1024))} KB in ` : 'in '}
           <code>${esc(env.STORE.where())}</code>.</p>
+        ${filter}
         <form action="/compare">
-          ${body}
+          <div class="kept">${body}</div>
           <p class="actions"><button type="submit">Compare the two you ticked</button>
             <a class="cta secondary" href="/">Audit another site</a></p>
           <p class="fine">Two runs of one site answer "did my fix work". Two runs of different

@@ -557,7 +557,7 @@ test('a class the served pages use is a class the served pages style', () => {
   const chrome = home.slice(home.indexOf('const CHROME = `'));
   const chromeCss = chrome.slice(0, chrome.indexOf('`;'));
 
-  for (const cls of ['toast', 'since']) {
+  for (const cls of ['toast', 'since', 'kept']) {
     assert.match(chromeCss, new RegExp(`\\.${cls}\\b|form\\.${cls}\\b`),
       `.${cls} is used by a page shell() renders, so its rule belongs in CHROME`);
   }

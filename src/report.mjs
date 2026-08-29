@@ -920,7 +920,17 @@ export function reportParts(findings, meta, { backHref, backLabel = 'New audit',
     padding: 0 1.25rem 6rem;
     background: var(--bg);
     color: var(--fg);
-    font: 400 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* The interface face each system actually uses, in the order a system is
+       likely to have one. Windows 11's UI face is Segoe UI Variable Text, not
+       Segoe UI, and desktop Linux has Cantarell or Noto long before it has
+       Roboto, which is an Android face. system-ui catches what the list does
+       not name. This is most of what makes a window feel like it belongs to
+       the machine it is on — more than any border radius does. */
+    font: 400 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text",
+      "Segoe UI", system-ui, Cantarell, "Noto Sans", Ubuntu, Roboto, Helvetica, Arial, sans-serif;
+    /* A variable face has real weights; letting the renderer fake them is the
+       blurry bold that reads as "web page in a window". */
+    font-synthesis: none;
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 62rem; margin-inline: auto; }
