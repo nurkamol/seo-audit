@@ -139,16 +139,21 @@ test('the winget identifier the workflow publishes is the one the shell looks fo
   const published = workflow.match(/^\s*identifier:\s*(\S+)\s*$/m)?.[1];
   assert.ok(published, 'the desktop workflow should submit a winget manifest under some identifier');
 
+  // One constant in the Rust, because the query, the upgrade command and this
+  // check all have to mean the same package.
   const rust = read('desktop/src-tauri/src/updates.rs');
-  const asked = [...rust.matchAll(/"--id",\s*"([^"]+)"/g)].map((m) => m[1]);
-  assert.ok(asked.length, 'updates.rs should ask winget about some identifier');
+  const declared = rust.match(/pub const WINGET_ID: &str = "([^"]+)";/)?.[1];
+  assert.ok(declared, 'updates.rs should declare WINGET_ID');
 
-  for (const id of new Set(asked)) {
-    assert.equal(id, published,
-      `updates.rs asks winget about ${id}, but the workflow publishes ${published}. ` +
-      'winget answers a name it does not know with silence, so this drift would ship as ' +
-      'a Windows build that simply never finds an update.');
-  }
+  assert.equal(declared, published,
+    `updates.rs asks winget about ${declared}, but the workflow publishes ${published}. ` +
+    'winget answers a name it does not know with silence, so this drift would ship as ' +
+    'a Windows build that simply never finds an update.');
+
+  // And nothing may go back to spelling it out by hand.
+  const literals = [...rust.matchAll(/"--id",\s*"([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(literals, [],
+    'the identifier belongs in WINGET_ID, not written out again beside it');
 });
 
 test('every reason is a sentence somebody can act on', () => {

@@ -59,6 +59,28 @@ impl Version {
     }
 }
 
+/// The identifier the winget manifest publishes under.
+///
+/// One constant because three things have to agree about it: the query that
+/// asks whether winget installed this copy, the command that asks winget to
+/// replace it, and the workflow that submits the manifest. A test in
+/// `test/options.test.mjs` reads this line and the workflow and fails when they
+/// drift, because winget answers a name it has never heard of with silence.
+pub const WINGET_ID: &str = "Nurkamol.SeoAudit";
+
+/// Whether `winget list` found this package.
+///
+/// The Id column is the reliable answer: `Name` is "SEO Audit" and the binary
+/// is `seo-audit.exe`, so the previous test — does the output contain
+/// "seo-audit" — was false for every real winget install. It would have stayed
+/// false after the manifest shipped, and the winget branch would have gone on
+/// being unreachable for a reason nobody was looking at any more.
+///
+/// Case-insensitive because winget is, about identifiers.
+pub fn winget_knows_it(output: &str) -> bool {
+    output.to_lowercase().contains(&WINGET_ID.to_lowercase())
+}
+
 /// How this copy got onto this machine.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Install {
@@ -113,7 +135,7 @@ pub fn move_for(install: Install) -> Move {
             args: vec![
                 "upgrade".into(),
                 "--id".into(),
-                "Nurkamol.SeoAudit".into(),
+                WINGET_ID.into(),
                 "--silent".into(),
                 "--accept-source-agreements".into(),
                 "--accept-package-agreements".into(),
@@ -208,9 +230,9 @@ pub fn install_kind() -> Install {
     #[cfg(windows)]
     {
         let known = Command::new("winget")
-            .args(["list", "--id", "Nurkamol.SeoAudit", "--exact"])
+            .args(["list", "--id", WINGET_ID, "--exact"])
             .output()
-            .map(|out| out.status.success() && String::from_utf8_lossy(&out.stdout).contains("seo-audit"))
+            .map(|out| winget_knows_it(&String::from_utf8_lossy(&out.stdout)))
             .unwrap_or(false);
         if known {
             return Install::Winget;
@@ -257,6 +279,29 @@ pub fn newest_tag(body: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn winget_is_recognised_by_its_identifier_not_by_a_file_name() {
+        // Real `winget list --id Nurkamol.SeoAudit --exact` output. The Name is
+        // "SEO Audit" and the executable is seo-audit.exe, so the old test —
+        // does this contain "seo-audit" — was false for every winget install
+        // there could ever be, and would have stayed false after the manifest
+        // shipped.
+        let listed = "\
+Name        Id                  Version   Available   Source
+-------------------------------------------------------------
+SEO Audit   Nurkamol.SeoAudit   1.38.0    1.39.0      winget
+";
+        assert!(winget_knows_it(listed));
+        assert!(!listed.contains("seo-audit"), "which is what used to be looked for");
+
+        // winget is not case-sensitive about identifiers, so neither is this.
+        assert!(winget_knows_it("nurkamol.seoaudit"));
+
+        // And what it says when it installed nothing of the sort.
+        assert!(!winget_knows_it("No installed package found matching input criteria."));
+        assert!(!winget_knows_it(""));
+    }
 
     #[test]
     fn versions_order_the_way_releases_do() {
@@ -307,7 +352,7 @@ mod tests {
                 // test/options.test.mjs asserts these two agree; naming a
                 // package winget has never heard of finds nothing and says
                 // nothing, which is the quietest possible failure.
-                assert!(args.contains(&"Nurkamol.SeoAudit".to_string()));
+                assert!(args.contains(&WINGET_ID.to_string()));
                 assert!(args.contains(&"--silent".to_string()));
             }
             other => panic!("winget should run its own upgrade, got {other:?}"),

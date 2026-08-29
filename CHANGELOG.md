@@ -6,6 +6,24 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The winget path could never have worked, token or no token.** Detection ran
+  `winget list --id Nurkamol.SeoAudit --exact` and then asked whether the output
+  contained `seo-audit`. It never does: winget prints an Id column reading
+  `Nurkamol.SeoAudit`, the Name is `SEO Audit`, and the lowercase hyphenated
+  spelling appears nowhere. So the check was false for every winget install
+  there could ever be — and would have stayed false after a manifest shipped,
+  with the branch dead for a reason nobody was looking at any more. It matches
+  on the identifier now, case-insensitively, which is what winget is.
+
+  The identifier is one constant rather than three copies, and the guard that
+  keeps it in step with the workflow reads that constant and also fails if
+  anybody writes it out by hand again.
+
+- **The bundle declared no publisher, licence or description**, all of which a
+  winget manifest requires and all of which Windows shows in Add/Remove
+  Programs. Set, so the first submission has something true to carry.
+
+### Fixed
 - **Update said a new version had appeared and then did nothing.** The banner
   reads GitHub's releases; `brew upgrade` reads Homebrew's own clone of the tap,
   and that clone is refreshed by an auto-update which runs at most once a day.

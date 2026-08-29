@@ -36,6 +36,10 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Crawl a site's sitemap and check every page",
-    "longDescription": "Crawls every page a sitemap lists, not just the homepage, and reports the SEO, metadata and structured-data problems single-page graders miss. Nothing leaves the machine."
+    "longDescription": "Audits every page a sitemap lists, not just the homepage, and groups what it finds by the thing that has to change. Nothing leaves the machine.",
+    "publisher": "Nurkamol Vakhidov",
+    "homepage": "https://github.com/nurkamol/seo-audit",
+    "license": "MIT",
+    "copyright": "MIT licensed"
   }
 }
