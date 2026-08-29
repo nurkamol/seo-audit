@@ -3,30 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Fixed
-- **Three enum variants warned on every build that they were never
-  constructed.** Each is built under a `#[cfg]` — two on Windows, one on Linux —
-  while every platform matches on all of them, because matching is not
-  constructing. Silenced per variant and only where the claim is true, so a
-  variant that stops being reachable on the platform that owns it still warns.
-
-- **The first tagged release built its Windows and Linux bundles and then could
-  not attach them.** `gh release upload` came back with "HTTP 403: Resource not
-  accessible by integration" — the workflow never asked for `contents: write`,
-  so its token was read-only. Twenty minutes of building, installing and running
-  the bundles, all of it correct, and then a refusal on the last step.
-
-  The same commit also matched tags with a bare `v*`, which matches the floating
-  `v1` tag, so force-pushing `v1` started a second full build that would have
-  spent fifteen minutes failing to attach bundles to a release named `v1`.
-
-  Both mistakes were already solved elsewhere in this repository, and
-  `mac-release.yml` carries a comment describing the second one exactly. So both
-  are now checked by `test/workflows.test.mjs` rather than written down a third
-  time: a tag trigger may not be a bare `v*`, and a workflow that writes to a
-  release must ask for permission to.
+## [1.36.0] — 2026-08-29
 
 ### Added
 - **Every release now says how to install it, on the page where it is
@@ -44,26 +21,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   Windows gets the same treatment for SmartScreen, and the AppImage's `chmod +x`
   is written down rather than assumed.
-
-- **Refreshing a release's checksums no longer rebuilds it first.** The
-  checksums job needs `needs: build` on a tag, where the bundles have to be
-  attached before anything can hash them. On a manual re-run they are already
-  attached, and it was spending fifteen minutes compiling two Tauri bundles to
-  hash four files it downloads from the release anyway.
-
-  `needs:` cannot be conditional. A skipped job completes instantly, though, so
-  the build is what became conditional — `only_checksums` skips it, and
-  `always()` on the checksums job stops a skipped dependency from skipping it
-  too. It still refuses to run behind a build that actually failed: hashing
-  half-attached assets publishes a checksum for a release nobody should trust
-  yet.
-
-- **The checksums job had no repository to talk to.** It needs a release's
-  assets rather than the source, so it had no `actions/checkout` — and `gh`
-  works the repository out from the git remote, so it failed with "fatal: not a
-  git repository", which names a problem that was not the problem. `GH_REPO`
-  says it directly. Checked now, like the other two: a job running `gh` with
-  neither a checkout nor `GH_REPO` fails the suite.
 
 - **Every file on a release has a published checksum.** The macOS zip always had
   one, because the Homebrew cask needs it. The `.deb`, the `.AppImage` and the
@@ -105,6 +62,49 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The desktop workflow can attach bundles to a tag it is given.** A release
   whose upload failed can be completed by running the workflow manually, rather
   than by force-moving a tag that people may already have fetched.
+
+### Fixed
+- **Three enum variants warned on every build that they were never
+  constructed.** Each is built under a `#[cfg]` — two on Windows, one on Linux —
+  while every platform matches on all of them, because matching is not
+  constructing. Silenced per variant and only where the claim is true, so a
+  variant that stops being reachable on the platform that owns it still warns.
+
+- **The first tagged release built its Windows and Linux bundles and then could
+  not attach them.** `gh release upload` came back with "HTTP 403: Resource not
+  accessible by integration" — the workflow never asked for `contents: write`,
+  so its token was read-only. Twenty minutes of building, installing and running
+  the bundles, all of it correct, and then a refusal on the last step.
+
+  The same commit also matched tags with a bare `v*`, which matches the floating
+  `v1` tag, so force-pushing `v1` started a second full build that would have
+  spent fifteen minutes failing to attach bundles to a release named `v1`.
+
+  Both mistakes were already solved elsewhere in this repository, and
+  `mac-release.yml` carries a comment describing the second one exactly. So both
+  are now checked by `test/workflows.test.mjs` rather than written down a third
+  time: a tag trigger may not be a bare `v*`, and a workflow that writes to a
+  release must ask for permission to.
+
+- **Refreshing a release's checksums no longer rebuilds it first.** The
+  checksums job needs `needs: build` on a tag, where the bundles have to be
+  attached before anything can hash them. On a manual re-run they are already
+  attached, and it was spending fifteen minutes compiling two Tauri bundles to
+  hash four files it downloads from the release anyway.
+
+  `needs:` cannot be conditional. A skipped job completes instantly, though, so
+  the build is what became conditional — `only_checksums` skips it, and
+  `always()` on the checksums job stops a skipped dependency from skipping it
+  too. It still refuses to run behind a build that actually failed: hashing
+  half-attached assets publishes a checksum for a release nobody should trust
+  yet.
+
+- **The checksums job had no repository to talk to.** It needs a release's
+  assets rather than the source, so it had no `actions/checkout` — and `gh`
+  works the repository out from the git remote, so it failed with "fatal: not a
+  git repository", which names a problem that was not the problem. `GH_REPO`
+  says it directly. Checked now, like the other two: a job running `gh` with
+  neither a checkout nor `GH_REPO` fails the suite.
 
 ## [1.35.0] — 2026-08-29
 
@@ -2945,7 +2945,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.35.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.36.0...HEAD
+[1.36.0]: https://github.com/nurkamol/seo-audit/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/nurkamol/seo-audit/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/nurkamol/seo-audit/compare/v1.33.1...v1.34.0
 [1.0.1]: https://github.com/nurkamol/seo-audit/compare/v1.0.0...v1.0.1

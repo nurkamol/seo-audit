@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "SEO Audit",
-  "version": "1.35.0",
+  "version": "1.36.0",
   "identifier": "com.nurkamol.seo-audit.desktop",
   "build": {
     "frontendDist": "../ui"
