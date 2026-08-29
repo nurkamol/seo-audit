@@ -6,6 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The Windows update dialog did not say to close the app first.** It said
+  running the new installer over this one was the whole update, which is true
+  only once this one is closed: the installer offers to remove the old version
+  before writing the new one, and an uninstaller cannot delete files that are
+  open. It stops with *"Unable to uninstall!"*.
+
+  Reported by somebody updating 1.38.0, who had pressed **Download** in that
+  very dialog and so still had the app running when the installer ran. The
+  dialog had walked them into it.
+
+### Fixed
 - **The winget job failed a release it had no business failing.**
   `winget-releaser` only ever *updates* a package: with nothing yet in
   `microsoft/winget-pkgs` it exits 1 with "Package Nurkamol.SeoAudit does not

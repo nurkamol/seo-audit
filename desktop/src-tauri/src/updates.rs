@@ -189,9 +189,17 @@ pub fn describe(install: Install, version: &str) -> String {
              Download the new one and replace it; nothing here overwrites an application on your \
              behalf."
         ),
+        // "Close this app first" is not politeness. The installer offers to
+        // remove the old version before writing the new one, and an uninstaller
+        // cannot delete files that are open — it reports "Unable to uninstall!"
+        // and stops. Reported by somebody updating 1.38.0 on Windows, who had
+        // pressed Download in this very dialog and so still had the app running
+        // when the installer ran.
         Install::Installer => format!(
-            "Version {version} is available.\n\nRunning the new installer over this one is the whole \
-             update. Nothing here downloads and runs an installer on your behalf."
+            "Version {version} is available.\n\nClose this app before running the installer: it \
+             cannot replace files that are still open. After that, running the new installer over \
+             this one is the whole update. Nothing here downloads and runs an installer on your \
+             behalf."
         ),
         Install::Elsewhere => format!(
             "Version {version} is available.\n\nThis copy was placed by hand, so replacing it is a \
@@ -427,6 +435,26 @@ SEO Audit   Nurkamol.SeoAudit   1.38.0    1.39.0      winget
             let said = describe(kind, "1.35.0");
             assert!(said.contains("1.35.0"), "{kind:?} should name the version");
             assert!(said.len() > 80, "{kind:?} should explain, not announce");
+        }
+    }
+
+    #[test]
+    fn the_installer_is_told_to_close_the_app_first() {
+        // A Windows tester pressed Download in this dialog, kept the app open,
+        // ran the installer, and got "Unable to uninstall!" — an uninstaller
+        // cannot delete files that are still open. The dialog had told them
+        // running the installer over the top was the whole update, which is
+        // true only once this app is closed.
+        let said = describe(Install::Installer, "1.38.1");
+        assert!(said.contains("Close this app"), "it has to say so before they start");
+
+        // Nothing else is asked to close anything: winget replaces a copy it
+        // owns, and the rest only ever open a page.
+        for kind in [Install::Winget, Install::Apt, Install::AppImage, Install::Elsewhere] {
+            assert!(
+                !describe(kind, "1.38.1").contains("Close this app"),
+                "{kind:?} does not run an installer over itself",
+            );
         }
     }
 }
