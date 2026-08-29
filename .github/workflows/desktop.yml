@@ -414,6 +414,9 @@ jobs:
         id: check
         env:
           TOKEN: ${{ secrets.WINGET_TOKEN }}
+          # Reading a public repository, but authenticated: the anonymous quota
+          # is sixty an hour per address and a runner shares its address.
+          GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -422,6 +425,24 @@ jobs:
               $tag. Windows users will be sent to the release page instead of being offered an \
               in-app update. Create a classic PAT with public_repo scope and add it as \
               WINGET_TOKEN."
+            exit 0
+          fi
+          # winget-releaser only ever *updates* a package. The first version has
+          # to reach microsoft/winget-pkgs another way, and until it has, this
+          # action exits 1 — turning an otherwise-finished release red for a
+          # step that cannot succeed yet. A red tick people learn to ignore is
+          # worse than no tick.
+          #
+          # Asked precisely rather than swallowed with continue-on-error: once
+          # the package is there, a real failure still fails.
+          found=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/n/Nurkamol/SeoAudit")
+          if [ "$found" = "404" ]; then
+            echo "::warning::Nurkamol.SeoAudit is not in microsoft/winget-pkgs yet, so there is \
+              nothing for this to update. The first version has to be submitted once by hand — \
+              see 'Bootstrapping winget' in desktop/README.md. Every release after that is \
+              automatic."
             exit 0
           fi
           echo "submitting $tag to winget"

@@ -181,6 +181,52 @@ No HTTP client crate: the Node this app already ships has `fetch`, and adding a
 TLS stack so a 110 MB bundle can make one request a year is the larger thing,
 not the smaller one.
 
+## Bootstrapping winget
+
+Every release after the first is automatic: the `winget` job in
+`.github/workflows/desktop.yml` submits the new version with
+[winget-releaser][wr]. That action only ever **updates** a package, though —
+it exits with *"Package Nurkamol.SeoAudit does not exist in the winget-pkgs
+repository"* until one version is already there. So the first one goes by hand,
+once, and never again.
+
+It needs a classic GitHub token with the `public_repo` scope — the same one the
+`WINGET_TOKEN` secret holds. It has to fork `microsoft/winget-pkgs` into your
+account and open a pull request from it.
+
+```bash
+brew install komac        # cross-platform; wingetcreate is Windows-only
+
+GITHUB_TOKEN=<the token> komac new Nurkamol.SeoAudit \
+  --version 1.38.1 \
+  --urls https://github.com/nurkamol/seo-audit/releases/download/v1.38.1/SEO.Audit_1.38.1_x64-setup.exe \
+  --publisher "Nurkamol Vakhidov" \
+  --publisher-url https://github.com/nurkamol \
+  --package-name "SEO Audit" \
+  --package-url https://github.com/nurkamol/seo-audit \
+  --license MIT \
+  --license-url https://github.com/nurkamol/seo-audit/blob/main/LICENSE \
+  --moniker seo-audit \
+  --short-description "Crawl a site's sitemap and check every page" \
+  --submit
+```
+
+Drop `--submit` to see the manifests without opening anything. Use the newest
+release's version and installer URL rather than the ones above if time has
+passed — the URL is on the release page, and `SHA256SUMS.txt` beside it is the
+hash komac will compute for itself.
+
+A maintainer reviews the pull request. First submissions take a few days and
+can come back with questions; the installer being unsigned is allowed and is
+not on its own a reason for refusal.
+
+**Until that merges, no Windows copy is a winget install**, so `winget upgrade`
+has nothing to move and the shell sends those copies to the release page. That
+is the correct behaviour, not a fallback — see [Updates](#updates) — but it
+means the winget row of that table is unreachable rather than untested.
+
+[wr]: https://github.com/vedantmgoyal9/winget-releaser
+
 ## Not done yet
 
 All five phases. A version tag builds the three bundles, installs and runs each

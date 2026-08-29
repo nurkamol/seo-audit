@@ -19,6 +19,22 @@ test('there are workflows to check', () => {
   assert.ok(workflows.length >= 3, `only found ${workflows.length} workflow files`);
 });
 
+test('a warning that points somewhere points somewhere real', () => {
+  // The winget job tells whoever reads its warning to go and read a named
+  // section of a named file. A pointer to a heading that does not exist is
+  // worse than no pointer: it reads as an answer and ends the search.
+  const desktop = workflows.find((w) => w.name === 'desktop.yml');
+  assert.ok(desktop, 'desktop.yml should be there');
+
+  for (const [, quoted, file] of desktop.text.matchAll(
+    /see '([^']+)' in ([\w./-]+\.md)/g
+  )) {
+    const doc = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.match(doc, new RegExp(`^#+ ${quoted}\\s*$`, 'm'),
+      `${file} has no "${quoted}" heading, and a workflow warning sends people to it`);
+  }
+});
+
 test('a tag trigger names version tags, never a bare v*', () => {
   // `v1` floats forward with every backwards-compatible release, so `v*` matches
   // it. Force-pushing v1 then starts a second, full build of a release that does

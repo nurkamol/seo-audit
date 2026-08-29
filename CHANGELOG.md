@@ -3,6 +3,22 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The winget job failed a release it had no business failing.**
+  `winget-releaser` only ever *updates* a package: with nothing yet in
+  `microsoft/winget-pkgs` it exits 1 with "Package Nurkamol.SeoAudit does not
+  exist", which turned an otherwise-finished 1.38.1 red for a step that
+  structurally could not succeed. It now asks that repository whether the
+  package is there and warns instead — precisely, rather than with
+  `continue-on-error`, so a real failure still fails once the package exists.
+
+  The first version has to be submitted by hand, once. `desktop/README.md` has
+  the komac command; a test checks that the section the warning names actually
+  exists, because a pointer to a missing heading reads as an answer and ends
+  the search.
+
 ## [1.38.1] — 2026-08-29
 
 ### Fixed
