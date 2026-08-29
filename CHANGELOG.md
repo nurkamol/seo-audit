@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.35.0] — 2026-08-29
 
 ### Added
 - **A desktop app for Windows and Linux.** `desktop/` is a Tauri shell that
@@ -2842,7 +2842,9 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.35.0...HEAD
+[1.35.0]: https://github.com/nurkamol/seo-audit/compare/v1.34.0...v1.35.0
+[1.34.0]: https://github.com/nurkamol/seo-audit/compare/v1.33.1...v1.34.0
 [1.0.1]: https://github.com/nurkamol/seo-audit/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nurkamol/seo-audit/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/nurkamol/seo-audit/compare/v0.2.0...v0.3.0
