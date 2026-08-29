@@ -45,6 +45,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Windows gets the same treatment for SmartScreen, and the AppImage's `chmod +x`
   is written down rather than assumed.
 
+- **The site says there are three apps now, and what to do when one will not
+  open.** nurkamol.github.io/seo-audit offered a single "Download for macOS"
+  button and described the app as macOS-only, which had been true for about a
+  day. It now has a card per platform, the Homebrew route marked as the easier
+  one, and a section for the warnings an unsigned build produces on macOS and
+  Windows.
+
+  The verify step and the quarantine command are two blocks with two copy
+  buttons rather than one block with one, because a single paste that runs the
+  checksum and then immediately clears the flag has verified nothing.
+
 - **The desktop workflow can attach bundles to a tag it is given.** A release
   whose upload failed can be completed by running the workflow manually, rather
   than by force-moving a tag that people may already have fetched.

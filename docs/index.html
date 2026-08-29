@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>seo-audit — every page, not just the homepage</title>
-<meta name="description" content="A zero-dependency CLI, GitHub Action and macOS app that crawls a site's sitemap and checks every page for the SEO, metadata and structured-data problems single-page graders miss.">
+<meta name="description" content="A zero-dependency CLI, GitHub Action and desktop app for macOS, Windows and Linux that crawls a site's sitemap and checks every page for the SEO, metadata and structured-data problems single-page graders miss.">
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <meta property="og:title" content="seo-audit">
@@ -76,9 +76,17 @@
   .card {
     border: 1px solid var(--line); border-radius: 12px;
     padding: 1.2rem 1.3rem; background: var(--panel);
+    /* So a download button can sit on the card's floor rather than wherever
+       its neighbour's sentence happened to stop. */
+    display: flex; flex-direction: column;
   }
-  .card h3 { margin: 0 0 .35rem; font-size: 1rem; }
+  .card h3, .card h4 { margin: 0 0 .35rem; font-size: 1rem; }
   .card p { margin: 0; color: var(--muted); font-size: .92rem; }
+  /* A card that offers a download needs air between the sentence and the
+     button. `.row` was defined only inside `.callout`, so without this the
+     button sits flush against the text it belongs to. */
+  .card .row { display: flex; flex-wrap: wrap; gap: .6rem; margin: auto 0 0; padding-top: .9rem; }
+  .card p + p { margin-top: .6rem; }
 
   /* Screenshots. A border rather than a shadow, because the app's own window
      already has one and two would look like a sticker. */
@@ -179,13 +187,13 @@
   <aside class="callout">
     <h2>Not a terminal person? There is a window.</h2>
     <p>
-      <b>SEO Audit</b> for macOS is the same tool with a window instead of a prompt: type a
-      domain, press return, and read the report as cards you can expand, filter and search.
-      No flags to learn, and nothing leaves your machine.
+      <b>SEO Audit</b> is the same tool with a window instead of a prompt: type a domain,
+      press return, and read the report as cards you can expand, filter and search. No flags
+      to learn, and nothing leaves your machine. macOS, Windows and Linux.
     </p>
     <p class="row">
-      <a class="button" href="https://github.com/nurkamol/seo-audit/releases/latest">Download for macOS</a>
-      <a class="button quiet-button" href="#mac">or install with Homebrew</a>
+      <a class="button" href="#app">Download the app</a>
+      <a class="button quiet-button" href="https://github.com/nurkamol/seo-audit/releases/latest">All releases</a>
     </p>
   </aside>
 </header>
@@ -299,21 +307,84 @@
   </div>
 </section>
 
-<section class="wrap" id="mac">
-  <h2>The macOS app</h2>
+<section class="wrap" id="app">
+  <!-- #mac was this section's id when it was macOS-only; links to it still exist. -->
+  <a id="mac" aria-hidden="true"></a>
+  <h2>The desktop app</h2>
   <p class="lede">
-    For anyone who would rather not open a terminal. SwiftUI and Liquid Glass, with the
-    report drawn natively — cause cards that expand into the pages they affect, filtering,
-    search, and export as PDF, HTML, Markdown, CSV or JSON. Every finished run is kept, so a
-    seven-minute crawl survives closing the window. It is a window over the same engine,
-    never a second one.
+    For anyone who would rather not open a terminal. Type a domain, press return, and read
+    the report as cause cards that expand into the pages they affect — filtering, search,
+    and export as PDF, HTML, Markdown, CSV or JSON. Every finished run is kept, so a
+    seven-minute crawl survives closing the window. A window over the same engine, never a
+    second one: the checks are the ones the command line runs, so the reports match.
   </p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>macOS</h3>
+      <p>Native SwiftUI and Liquid Glass, with the report drawn by the app itself.
+      Apple Silicon, macOS 26 or later.</p>
+      <p class="row"><a class="button" href="https://github.com/nurkamol/seo-audit/releases/latest">Download .zip</a></p>
+    </div>
+    <div class="card">
+      <h3>Windows</h3>
+      <p>A Tauri window over the same report the browser and the Mac app show.
+      Ships a Node inside it, so there is nothing to install first.</p>
+      <p class="row"><a class="button" href="https://github.com/nurkamol/seo-audit/releases/latest">Download setup.exe</a></p>
+    </div>
+    <div class="card">
+      <h3>Linux</h3>
+      <p>The same window, as a <code>.deb</code> for Debian and Ubuntu or an
+      <code>.AppImage</code> that runs anywhere.</p>
+      <p class="row"><a class="button" href="https://github.com/nurkamol/seo-audit/releases/latest">Download .deb or AppImage</a></p>
+    </div>
+  </div>
+
+  <h3>On macOS, Homebrew is the easier route</h3>
   <pre class="command"><code>brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
 brew trust nurkamol/seo-audit
 brew install --cask seo-audit</code></pre>
   <p class="quiet">
-    macOS 26 or later, Apple Silicon. Or build it yourself — <code>./mac/build.sh</code>,
-    which needs swiftc and the command line tools and nothing else.
+    It checks the download against a checksum written by the build that produced it, clears
+    the quarantine flag, and the app opens the first time. Or build it yourself —
+    <code>./mac/build.sh</code>, which needs swiftc and the command line tools and nothing
+    else.
+  </p>
+
+  <h3 id="wont-open">If it will not open</h3>
+  <p>
+    Neither build is signed with a paid certificate — an Apple Developer account and a
+    Windows code-signing certificate are per-year costs this project does not carry — so
+    both systems will warn about a downloaded copy. Nothing is wrong with the file, but
+    <b>check it before you wave the warning away</b>: every release prints the macOS
+    checksum in its notes.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <h4>macOS says "damaged and can't be opened"</h4>
+      <p>
+        It is not damaged — macOS refuses quarantined apps that carry no notarisation
+        ticket. Verify the download against the checksum in the release notes, then clear
+        the flag. No <code>sudo</code>: the app is yours, in a directory you can write to.
+      </p>
+    </div>
+    <div class="card">
+      <h4>Windows says "Windows protected your PC"</h4>
+      <p>
+        SmartScreen, on an unsigned installer. <b>More info → Run anyway</b>. The
+        <code>.AppImage</code> on Linux needs <code>chmod +x</code> before it will run.
+      </p>
+    </div>
+  </div>
+  <p>First, check what you downloaded against the checksum in that release's notes:</p>
+  <pre class="command"><code>shasum -a 256 ~/Downloads/seo-audit-*-macos.zip</code></pre>
+  <p>Then, <b>once it matches</b>, clear the flag:</p>
+  <pre class="command"><code>xattr -dr com.apple.quarantine "/Applications/SEO Audit.app"</code></pre>
+  <p class="quiet">
+    Clearing the flag is exactly what right-click → <b>Open</b> does in the Finder, without
+    the dialog. Do it because the checksum matched — the same command on a file you have not
+    checked is how people get hurt. Homebrew does the checking for you, which is why it is
+    the route above.
   </p>
 </section>
 
