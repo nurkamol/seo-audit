@@ -99,6 +99,99 @@ jobs:
             \( -name '*.AppImage' -o -name '*.deb' -o -name '*-setup.exe' \) \
             -exec ls -lh {} \; || true
 
+      # --- Does the thing we just built actually run? ----------------------
+      # Building a bundle proves it bundles. The macOS build proved something
+      # else entirely — it opened, started nothing and waited, because a
+      # directory the engine imports had not been copied. These two platforms
+      # cannot be run on the machine this was written on, so they are run here.
+
+      - name: What went into the Linux packages
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          echo "── deb ──"
+          dpkg --contents desktop/src-tauri/target/release/bundle/deb/*.deb \
+            | grep -E 'usr/(bin|lib)' | head -20
+
+      - name: Install it, run it, and watch for the engine
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get install -y xvfb
+          sudo dpkg -i desktop/src-tauri/target/release/bundle/deb/*.deb \
+            || sudo apt-get -f install -y
+
+          app="$(command -v seo-audit || true)"
+          test -n "$app" || { echo "::error::the package installed no runnable binary"; exit 1; }
+          echo "installed at $app"
+
+          xvfb-run -a "$app" &
+          shell_pid=$!
+
+          # The engine is a child process announcing a port. Waiting for it is
+          # the only proof that the whole chain works: bundle, sidecar,
+          # resources, spawn.
+          started=""
+          for _ in $(seq 1 40); do
+            if pgrep -f 'seo-audit.mjs --serve' >/dev/null; then started=1; break; fi
+            sleep 1
+          done
+          if [ -z "$started" ]; then
+            echo "::error::the app started and its engine never did"
+            kill "$shell_pid" 2>/dev/null || true
+            exit 1
+          fi
+          echo "the engine came up"
+
+          # And it goes away again. A server that outlives the window holding
+          # its port is a bug this project has already shipped once.
+          kill "$shell_pid" 2>/dev/null || true
+          for _ in $(seq 1 15); do
+            pgrep -f 'seo-audit.mjs --serve' >/dev/null || { echo "and it stopped with the window"; exit 0; }
+            sleep 1
+          done
+          echo "::error::the engine outlived the window that started it"
+          pkill -f 'seo-audit.mjs --serve' || true
+          exit 1
+
+      - name: Install it, run it, and watch for the engine
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          # /S is NSIS's silent switch. Tauri's installer defaults to per-user.
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 5
+
+          $app = Get-ChildItem -Path "$env:LOCALAPPDATA","$env:ProgramFiles","${env:ProgramFiles(x86)}" `
+            -Filter 'seo-audit.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $app) { Write-Error 'the installer put no runnable binary anywhere I looked'; exit 1 }
+          Write-Host "installed at $($app.FullName)"
+          Write-Host '── what came with it ──'
+          Get-ChildItem $app.DirectoryName | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table
+
+          $shell = Start-Process -FilePath $app.FullName -PassThru
+          $started = $false
+          foreach ($_ in 1..40) {
+            if (Get-Process node -ErrorAction SilentlyContinue) { $started = $true; break }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $started) {
+            Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue
+            Write-Error 'the app started and its engine never did'
+            exit 1
+          }
+          Write-Host 'the engine came up'
+
+          Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue
+          foreach ($_ in 1..15) {
+            if (-not (Get-Process node -ErrorAction SilentlyContinue)) {
+              Write-Host 'and it stopped with the window'; exit 0
+            }
+            Start-Sleep -Seconds 1
+          }
+          Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+          Write-Error 'the engine outlived the window that started it'
+          exit 1
+
       - uses: actions/upload-artifact@v4
         with:
           name: seo-audit-${{ matrix.os }}
