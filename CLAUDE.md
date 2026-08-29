@@ -154,7 +154,7 @@ the engine's disagree, so a half-finished bump ships bundles that cannot run.
 `npm test` fails on the disagreement, which is the only reason that is a note
 rather than an outage.
 
-That is the whole procedure. Pushing the version tag runs four workflows and
+That is the whole procedure. Pushing the version tag runs three workflows and
 none of them needs a hand:
 
 - **`macOS app`** builds and signs the app, **creates the GitHub release** if it
@@ -172,7 +172,12 @@ none of them needs a hand:
   submits the winget manifest, or says in a warning that it did not: that needs a
   `WINGET_TOKEN` secret with `public_repo` scope, and without it Windows copies
   are never winget installs and are sent to the release page instead.
-- **`test`** runs the suite against the tag.
+
+`test` is deliberately not among them: it runs on the push to `main`, and the
+release commit is on `main`, so the suite has already gone green against that
+exact SHA by the time the tag lands. The gap is tagging a commit that is not on
+`main` — nothing would stop that publishing untested, because none of the three
+waits on the suite either way. Don't do that.
 
 `v1` floats forward with every backwards-compatible release, because projects
 reference `uses: nurkamol/seo-audit@v1`. A breaking change — a renamed flag, a
