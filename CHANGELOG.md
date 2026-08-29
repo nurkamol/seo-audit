@@ -45,6 +45,19 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Windows gets the same treatment for SmartScreen, and the AppImage's `chmod +x`
   is written down rather than assumed.
 
+- **Refreshing a release's checksums no longer rebuilds it first.** The
+  checksums job needs `needs: build` on a tag, where the bundles have to be
+  attached before anything can hash them. On a manual re-run they are already
+  attached, and it was spending fifteen minutes compiling two Tauri bundles to
+  hash four files it downloads from the release anyway.
+
+  `needs:` cannot be conditional. A skipped job completes instantly, though, so
+  the build is what became conditional — `only_checksums` skips it, and
+  `always()` on the checksums job stops a skipped dependency from skipping it
+  too. It still refuses to run behind a build that actually failed: hashing
+  half-attached assets publishes a checksum for a release nobody should trust
+  yet.
+
 - **The checksums job had no repository to talk to.** It needs a release's
   assets rather than the source, so it had no `actions/checkout` — and `gh`
   works the repository out from the git remote, so it failed with "fatal: not a

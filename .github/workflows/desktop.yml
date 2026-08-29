@@ -43,6 +43,11 @@ on:
         description: A release tag to attach the bundles to. Leave empty to just build.
         required: false
         default: ''
+      only_checksums:
+        description: Skip the build and just refresh SHA256SUMS for that tag. The bundles must already be attached.
+        type: boolean
+        required: false
+        default: false
 
 # Read by default; the build job asks for write because it uploads release
 # assets. Its absence is what made the first tagged run fail — the bundles
@@ -53,6 +58,12 @@ permissions:
 
 jobs:
   build:
+    # Skipped when a run is only refreshing checksums for a release whose
+    # bundles are already attached. `needs:` cannot be conditional, but a
+    # skipped job completes instantly, so skipping this is how the checksums
+    # job stops waiting a quarter of an hour to hash four files it downloads
+    # anyway.
+    if: ${{ !inputs.only_checksums }}
     strategy:
       # One platform failing should not hide whether the others work — the
       # whole point of this job is finding out which ones do.
@@ -313,7 +324,15 @@ jobs:
   # proves the upload arrived intact.
   checksums:
     needs: build
-    if: github.ref_type == 'tag' || inputs.tag != ''
+    # `always()` so a skipped build does not skip this too — that is the whole
+    # mechanism above. Still refuses to run behind a build that actually failed,
+    # because hashing half-attached assets publishes a checksum for a release
+    # nobody should be trusting yet.
+    if: |
+      always()
+      && (github.ref_type == 'tag' || inputs.tag != '')
+      && needs.build.result != 'failure'
+      && needs.build.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       contents: write
