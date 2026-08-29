@@ -45,6 +45,24 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Windows gets the same treatment for SmartScreen, and the AppImage's `chmod +x`
   is written down rather than assumed.
 
+- **Every file on a release has a published checksum.** The macOS zip always had
+  one, because the Homebrew cask needs it. The `.deb`, the `.AppImage` and the
+  `setup.exe` had none — so "check it before you wave the warning away" was
+  advice you could not actually follow on the two platforms whose warning
+  dialogs are the reason to say it. On Windows it reduced to "run it anyway".
+
+  A `SHA256SUMS.txt` is attached to each release and the same lines are printed
+  in its notes, so one command covers all four:
+
+  ```bash
+  shasum -a 256 --ignore-missing -c SHA256SUMS.txt
+  ```
+
+  Hashed from what is actually attached rather than from what each runner built,
+  which also proves the upload arrived intact. One job rather than a step in each
+  build: two matrix jobs editing the same release notes race, and the loser's
+  edit is gone with nothing to show it.
+
 - **The site says there are three apps now, and what to do when one will not
   open.** nurkamol.github.io/seo-audit offered a single "Download for macOS"
   button and described the app as macOS-only, which had been true for about a

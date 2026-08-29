@@ -371,14 +371,21 @@ brew install --cask seo-audit</code></pre>
     <div class="card">
       <h4>Windows says "Windows protected your PC"</h4>
       <p>
-        SmartScreen, on an unsigned installer. <b>More info → Run anyway</b>. The
+        SmartScreen, on an unsigned installer. Check the file against
+        <code>SHA256SUMS.txt</code> below, then <b>More info → Run anyway</b>. The
         <code>.AppImage</code> on Linux needs <code>chmod +x</code> before it will run.
       </p>
     </div>
   </div>
-  <p>First, check what you downloaded against the checksum in that release's notes:</p>
-  <pre class="command"><code>shasum -a 256 ~/Downloads/seo-audit-*-macos.zip</code></pre>
-  <p>Then, <b>once it matches</b>, clear the flag:</p>
+  <p>
+    First, check what you downloaded. Every release attaches a <code>SHA256SUMS.txt</code>
+    covering all four files — save it into the same folder and run this. It works for the
+    <code>.deb</code>, the <code>.AppImage</code> and the <code>setup.exe</code> too;
+    <code>--ignore-missing</code> is there because you downloaded one of the four, not all
+    of them.
+  </p>
+  <pre class="command"><code>shasum -a 256 --ignore-missing -c SHA256SUMS.txt</code></pre>
+  <p>Then, on macOS and <b>once it matches</b>, clear the flag:</p>
   <pre class="command"><code>xattr -dr com.apple.quarantine "/Applications/SEO Audit.app"</code></pre>
   <p class="quiet">
     Clearing the flag is exactly what right-click → <b>Open</b> does in the Finder, without

@@ -300,6 +300,76 @@ jobs:
             desktop/src-tauri/target/release/bundle/deb/*.deb
             desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
 
+  # --- checksums --------------------------------------------------------------
+  # Every release tells people to check a download before trusting it, which is
+  # only honest advice if there is something to check it against. The macOS zip
+  # had a checksum because the cask needs one; the three desktop bundles had
+  # none, so "verify it first" was advice you could not follow on Windows or
+  # Linux — the two platforms whose warning dialogs are the reason to say it.
+  #
+  # One job rather than a step in each build, because two matrix jobs editing
+  # the same release notes race, and the loser's edit is silently gone. It hashes
+  # what is actually attached rather than what each runner built, so it also
+  # proves the upload arrived intact.
+  checksums:
+    needs: build
+    if: github.ref_type == 'tag' || inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Hash every file on the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          mkdir -p dl && cd dl
+          gh release download "$tag" --clobber
+          # A SHA256SUMS.txt from an earlier run would otherwise be hashed into
+          # its own replacement.
+          rm -f SHA256SUMS.txt
+          shasum -a 256 -- * | sort -k2 > SHA256SUMS.txt
+          echo "── what is on $tag ──"
+          cat SHA256SUMS.txt
+          gh release upload "$tag" SHA256SUMS.txt --clobber
+
+      - name: Put them in the notes as well
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          gh release view "$tag" --json body -q .body > body.md
+          # Drop a Checksums section from an earlier run. It is always appended
+          # last, so everything from that heading on is the previous version.
+          awk '/^### Checksums$/ { exit } { print }' body.md > stripped.md
+          # Command substitution eats trailing newlines, so a re-run does not
+          # leave behind the blank line the previous append put there — which
+          # would otherwise grow by one every time this ran.
+          printf '%s\n' "$(cat stripped.md)" > notes.md
+          {
+            echo
+            echo '### Checksums'
+            echo
+            echo 'Verify a download before you wave a warning away. With `SHA256SUMS.txt`'
+            echo 'saved beside the file, in the same folder:'
+            echo
+            echo '```bash'
+            echo 'shasum -a 256 --ignore-missing -c SHA256SUMS.txt'
+            echo '```'
+            echo
+            echo '```'
+            cat dl/SHA256SUMS.txt
+            echo '```'
+            echo
+            echo 'The macOS line appears twice in these notes on purpose: once above, computed'
+            echo 'when the app was built, and once here, computed from what is actually attached.'
+            echo 'They should agree.'
+          } >> notes.md
+          gh release edit "$tag" --notes-file notes.md
+          echo "notes updated for $tag"
+
   # --- winget -----------------------------------------------------------------
   # Windows' equivalent of the Homebrew cask, and the reason the shell's update
   # path has a `winget upgrade` branch at all. Until a manifest exists in

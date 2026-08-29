@@ -161,6 +161,14 @@ jobs:
           your PC"* — **More info → Run anyway**. Same reason as macOS: a code-signing
           certificate is a paid, per-year thing this project does not have. The
           \`.AppImage\` needs \`chmod +x\` before it will run.
+
+          Check any of them first. A \`SHA256SUMS.txt\` covering every file here is
+          attached alongside them, and the same checksums are listed at the end of
+          these notes:
+
+          \`\`\`bash
+          shasum -a 256 --ignore-missing -c SHA256SUMS.txt
+          \`\`\`
           FOOTER
 
           if [ -s notes.md ]; then

@@ -221,12 +221,18 @@ the download against a checksum written by the build that produced it, then
 clears the flag for you. That is the recommended route, and the rest of this
 section is for people who would rather not use Homebrew.
 
-If you downloaded the zip by hand, verify it first — the checksum is printed in
-every release's notes:
+If you downloaded the zip by hand, verify it first. Every release attaches a
+`SHA256SUMS.txt` covering all four downloads, and lists the same checksums in
+its notes — save it next to the file and:
 
 ```bash
-shasum -a 256 ~/Downloads/seo-audit-*-macos.zip
+shasum -a 256 --ignore-missing -c SHA256SUMS.txt
 ```
+
+`--ignore-missing` because you almost certainly downloaded one of the four, not
+all of them. The same command verifies the `.deb`, the `.AppImage` and the
+`setup.exe`, which matters most on Windows, where the advice for SmartScreen is
+otherwise just "run it anyway".
 
 Then, once it matches, clear the flag:
 
