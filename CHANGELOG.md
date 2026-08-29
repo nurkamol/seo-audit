@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.37.0] — 2026-08-29
 
 ### Added
 - **The Raycast extension can ask Search Console.** The engine has had
@@ -22,6 +22,23 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Checked in both directions, because both failures are silent: a preference
   the code reads and the manifest never declares is a control nobody can reach,
   and one declared but never read is a control that does nothing.
+
+- **`--reports` lists the runs kept on this machine**, and `--reports
+  2026-08-01` lists what was kept since. The library was reachable from the
+  macOS window and the served list and from nowhere on the command line, which
+  is the one place the rest of this tool lives. `/reports` gains the same filter
+  as a date control, and both call one function so the browser and the terminal
+  cannot disagree about what "since" means.
+
+  That function is not in `src/library.mjs`. That module opens files, so it
+  imports `node:fs`, and the Worker showing the same list has no filesystem and
+  would not have survived the import — `src/kept.mjs` is the pure half both
+  sides need.
+
+  A date it cannot read is refused rather than ignored, because listing every
+  run when somebody asked for one week looks like an answer. A date that hides
+  everything says how many it hid, since an empty list and an empty library read
+  identically and only one of them means "widen the date".
 
 - **A check that fires on every page is one thing to change, not one per
   section.** Grouping by URL prefix is right when a check hits part of a site —
@@ -49,7 +66,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exactly one inbound link. Found by running the tool against a real site and
   reading the output, which is the only way anything here has ever been found.
 
-### Fixed
 - **A PDF's section headings could be left alone at the foot of a page**, with
   the findings they introduce overleaf. A cause block listing every affected
   page can be most of a page tall, so a heading placed just before one had
@@ -3010,7 +3026,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.36.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.37.0...HEAD
+[1.37.0]: https://github.com/nurkamol/seo-audit/compare/v1.36.0...v1.37.0
 [1.36.0]: https://github.com/nurkamol/seo-audit/compare/v1.35.0...v1.36.0
 [1.35.0]: https://github.com/nurkamol/seo-audit/compare/v1.34.0...v1.35.0
 [1.34.0]: https://github.com/nurkamol/seo-audit/compare/v1.33.1...v1.34.0
