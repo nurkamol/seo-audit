@@ -324,7 +324,27 @@ final class Updates: ObservableObject {
     /// `swift test` `Bundle.main` is the test bundle and `current` is whatever
     /// that parses to, which is not a version anybody chose.
     nonisolated static func brewCommand(from current: Version, to target: Version) -> String? {
-        current < target ? "brew upgrade --cask seo-audit" : nil
+        let steps = brewSteps(from: current, to: target)
+        guard !steps.isEmpty else { return nil }
+        return steps.map { "brew " + $0.joined(separator: " ") }.joined(separator: " && ")
+    }
+
+    /// The steps that actually run, in order.
+    ///
+    /// `brew update` first, and it is not optional. This app learns about a new
+    /// version from GitHub's releases; Homebrew learns about it from its own
+    /// clone of the tap, and that clone is only refreshed by an auto-update
+    /// that runs at most once a day. So for up to twenty-four hours after a
+    /// release the banner says a version appeared and `brew upgrade` answers
+    /// "the latest version is already installed" — the app and Homebrew asking
+    /// two different sources and disagreeing.
+    ///
+    /// That is what happened: 1.36.0 offered 1.38.0, the upgrade ran, and
+    /// nothing moved, with a warning nobody was shown because the process
+    /// exited 0.
+    nonisolated static func brewSteps(from current: Version, to target: Version) -> [[String]] {
+        guard current < target else { return [] }
+        return [["update"], ["upgrade", "--cask", "seo-audit"]]
     }
 
     /// Run it in Terminal rather than silently: replacing an application while
@@ -440,7 +460,8 @@ extension Updates {
     /// clears the quarantine flag without one, so nothing here can sit waiting
     /// for a password nobody can type.
     func upgrade(_ release: Release) async {
-        guard let words = command(for: release).map(Updates.brewArguments) else {
+        let steps = Updates.brewSteps(from: current, to: release.version)
+        guard !steps.isEmpty else {
             upgradeState = .failed("Homebrew has one cask and it tracks the latest version, so it can "
                                    + "move forward but not back. Download this release instead.")
             return
@@ -452,14 +473,24 @@ extension Updates {
         }
         let prefix = brew.hasPrefix("/opt/homebrew") ? "/opt/homebrew" : "/usr/local"
 
-        upgradeState = .running("Starting \(words.joined(separator: " "))…")
+        let environment = Updates.brewEnvironment(
+            prefix: prefix, base: ProcessInfo.processInfo.environment)
 
-        let result = await Updates.stream(
-            executable: brew,
-            arguments: words,
-            environment: Updates.brewEnvironment(prefix: prefix, base: ProcessInfo.processInfo.environment),
-            onLine: { line in Task { @MainActor in self.upgradeState = .running(line) } },
-        )
+        // Each step in turn, stopping at the first that fails. `brew update`
+        // failing is worth stopping for: the upgrade after it would run against
+        // the stale tap that made this necessary, and succeed at doing nothing.
+        var result = Ran.finished(status: 0, transcript: [])
+        for step in steps {
+            upgradeState = .running("Starting brew \(step.joined(separator: " "))…")
+            result = await Updates.stream(
+                executable: brew,
+                arguments: step,
+                environment: environment,
+                onLine: { line in Task { @MainActor in self.upgradeState = .running(line) } },
+            )
+            if case .finished(0, _) = result { continue }
+            break
+        }
 
         switch result {
         case .neverStarted(let why):

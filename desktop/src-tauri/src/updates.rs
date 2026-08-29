@@ -91,10 +91,6 @@ pub enum Install {
 pub enum Move {
     /// Run this, here, and show what it says. The command replaces the app.
     Run { command: String, args: Vec<String> },
-    /// This machine's package manager owns the file, and updating it needs a
-    /// password this app has no way to ask for. Say which command, and let a
-    /// terminal do it.
-    Tell { command: String },
     /// Nothing here can replace it safely. Open the page that can.
     Open,
 }
@@ -123,10 +119,19 @@ pub fn move_for(install: Install) -> Move {
                 "--accept-package-agreements".into(),
             ],
         },
-        Install::Apt => Move::Tell {
-            command: "sudo apt-get install --only-upgrade seo-audit".into(),
-        },
-        Install::AppImage | Install::Installer | Install::Elsewhere => Move::Open,
+        // A .deb from this project's releases is installed by hand, and there is
+        // no apt repository anywhere that carries it. `apt-get install
+        // --only-upgrade seo-audit` therefore asks a source that has never
+        // heard of the package and answers that it cannot locate it — an
+        // instruction that reads like an answer and is not one, which is the
+        // same failure the macOS updater had against a stale Homebrew tap.
+        //
+        // dpkg still owns the file, so this must not replace the binary in
+        // place; the release page is where the next .deb actually is.
+        Install::Apt
+        | Install::AppImage
+        | Install::Installer
+        | Install::Elsewhere => Move::Open,
     }
 }
 
@@ -309,14 +314,11 @@ mod tests {
         }
 
         // apt needs root, and a GUI app that shells out to sudo hangs on a
-        // password prompt nobody can see.
-        match move_for(Install::Apt) {
-            Move::Tell { command } => assert!(command.starts_with("sudo apt-get")),
-            other => panic!("apt should be told, not run: {other:?}"),
-        }
-
-        // Replacing these needs a signature to check, and there is not one.
-        for kind in [Install::AppImage, Install::Installer, Install::Elsewhere] {
+        // password prompt nobody can see — and, since no apt repository carries
+        // this package, no command it could be given would find a newer one.
+        // Verified against the repository rather than guessed: nothing here
+        // publishes a repo, a PPA or a sources.list entry.
+        for kind in [Install::Apt, Install::AppImage, Install::Installer, Install::Elsewhere] {
             assert_eq!(move_for(kind), Move::Open, "{kind:?} must not self-replace");
         }
     }

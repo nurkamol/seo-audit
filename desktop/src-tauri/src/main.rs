@@ -695,7 +695,6 @@ fn look_for_updates(app: &tauri::AppHandle, node: std::path::PathBuf, forced: bo
             .buttons(MessageDialogButtons::OkCancelCustom(
                 match updates::move_for(kind) {
                     updates::Move::Run { .. } => "Update".into(),
-                    updates::Move::Tell { .. } => "Show me".into(),
                     updates::Move::Open => "Download".into(),
                 },
                 "Not now".into(),
@@ -728,15 +727,6 @@ fn look_for_updates(app: &tauri::AppHandle, node: std::path::PathBuf, forced: bo
                             .blocking_show();
                     }
                 }
-            }
-            updates::Move::Tell { command } => {
-                app.dialog()
-                    .message(format!(
-                        "Run this in a terminal:\n\n{command}\n\nIt needs a password, which is why \
-                         it is not run here."
-                    ))
-                    .title("Your package manager owns this copy")
-                    .blocking_show();
             }
             updates::Move::Open => {
                 let _ = app.opener().open_url(

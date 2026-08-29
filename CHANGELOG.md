@@ -3,6 +3,33 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Update said a new version had appeared and then did nothing.** The banner
+  reads GitHub's releases; `brew upgrade` reads Homebrew's own clone of the tap,
+  and that clone is refreshed by an auto-update which runs at most once a day.
+  So for up to twenty-four hours after a release the two disagree: the window
+  offers 1.38.0, Homebrew answers *"Not upgrading seo-audit, the latest version
+  is already installed"*, and the process exits 0 — so nothing reported a
+  failure and nothing moved.
+
+  `brew update` now runs first, as a step rather than a hope, and the command
+  shown on screen says both so that running it by hand does the same thing.
+  Found by pressing Update on a real 1.36.0 with 1.38.0 published, watching it
+  do nothing, and going after the reason.
+
+- **Linux was told to run a command that could not work.** An apt-installed
+  copy was offered `sudo apt-get install --only-upgrade seo-audit`, and no apt
+  repository anywhere carries this package — the `.deb` is downloaded from a
+  release and installed by hand. apt would answer that it cannot locate it. The
+  same failure as above in a different package manager: an instruction that
+  reads like an answer and is not one. That copy now goes to the release page,
+  where the next `.deb` actually is.
+
+  With nothing left that could produce it, the "Show me" path and its dialog are
+  gone. An option nothing can reach is an option that does not exist.
+
 ## [1.38.0] — 2026-08-29
 
 ### Added

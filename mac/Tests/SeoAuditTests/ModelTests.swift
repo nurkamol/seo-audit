@@ -900,7 +900,29 @@ struct UpgradeTests {
         #expect(Updates.brewCommand(from: Version("1.34.0"), to: Version("1.34.0")) == nil,
                 "and nothing to do when it is the one already installed")
         #expect(Updates.brewCommand(from: Version("1.33.1"), to: Version("1.34.0"))
-                == "brew upgrade --cask seo-audit")
+                == "brew update && brew upgrade --cask seo-audit")
+    }
+
+    @Test("the tap is refreshed before it is asked to upgrade")
+    func refreshesFirst() {
+        // This app hears about a release from GitHub. Homebrew hears about it
+        // from its own clone of the tap, refreshed by an auto-update that runs
+        // at most once a day — so for up to twenty-four hours the two disagree,
+        // and `brew upgrade` answers "the latest version is already installed".
+        //
+        // Found by pressing Update on a real 1.36.0 with 1.38.0 published: the
+        // banner was right, Homebrew was stale, nothing moved, and the process
+        // exited 0 so nothing reported a failure.
+        let steps = Updates.brewSteps(from: Version("1.36.0"), to: Version("1.38.0"))
+
+        #expect(steps.count == 2)
+        #expect(steps.first == ["update"], "the tap is refreshed first, or the upgrade is a no-op")
+        #expect(steps.last == ["upgrade", "--cask", "seo-audit"])
+
+        // And nothing to do is still nothing to do — an update step alone would
+        // be a command that runs and changes nothing.
+        #expect(Updates.brewSteps(from: Version("1.38.0"), to: Version("1.38.0")).isEmpty)
+        #expect(Updates.brewSteps(from: Version("1.38.0"), to: Version("1.36.0")).isEmpty)
     }
 
     @Test("what runs is what the screen says runs")
