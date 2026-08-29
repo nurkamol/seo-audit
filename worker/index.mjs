@@ -15,7 +15,9 @@ import { html as htmlReport, markdown as markdownReport, csv as csvReport, repor
 import { causePayload } from '../src/causes.mjs';
 import { scoreRun, checklist, WEIGHT } from '../src/score.mjs';
 import { diff } from '../src/baseline.mjs';
-import { sinceWhen, keptSince } from '../src/kept.mjs';
+import {
+  sinceWhen, keptSince, sortKept, sortAsked, SORTS, rememberedView, rememberView,
+} from '../src/kept.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 import { runParameters, notInApp, formFields } from '../src/options.mjs';
 import { FORMATS, formatById, filenameFor, renderExport } from '../src/exports.mjs';
@@ -543,29 +545,43 @@ const CHROME = `
      with the webview's defaults — edge-to-edge columns and no separators,
      which is what a spreadsheet looks like and not what this is. */
   .kept { margin: .35rem 0 1.6rem; }
-  .kept h2 {
-    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
-    color: var(--faint); font-weight: 600; margin: 1.35rem 0 .35rem; border: 0;
-  }
-  .kept h2:first-child { margin-top: 0; }
   .kept table { width: 100%; border-collapse: collapse; margin: 0; }
-  .kept tr { border-top: 1px solid var(--line); }
-  .kept tr:first-child { border-top: 0; }
-  .kept tr:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
-  .kept td { padding: .6rem .5rem; vertical-align: middle; border: 0; }
-  .kept td.pick { width: 2.25rem; }
-  .kept td.pick input { width: auto; margin: 0; }
-  /* The date is the link and the thing you aim at, so it leads and it is the
-     only cell at full contrast. */
-  .kept td a {
-    color: var(--fg); text-decoration: none; font-weight: 500;
-    font-variant-numeric: tabular-nums; white-space: nowrap;
+
+  .kept thead th {
+    padding: .35rem .5rem .45rem; border: 0; border-bottom: 1px solid var(--line-strong);
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--faint); font-weight: 600; white-space: nowrap; width: auto;
   }
+  .kept thead th a { color: inherit; text-decoration: none; }
+  .kept thead th a:hover { color: var(--fg); }
+  /* The column being sorted by is the one fact the header row carries, so it
+     is the only one at full contrast. The arrow says which way. */
+  .kept thead th.on a { color: var(--fg); }
+
+  .kept tbody tr { border-top: 1px solid var(--line); }
+  .kept tbody tr:first-child { border-top: 0; }
+  .kept tbody tr:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+  .kept td { padding: .6rem .5rem; vertical-align: middle; border: 0; }
+
+  .kept td.pick, .kept th.pick { width: 2.25rem; }
+  .kept td.pick input { width: auto; margin: 0; }
+
+  /* The site is what you are looking for and the link you aim at, so it leads,
+     takes the room left over, and is the only cell at full contrast. */
+  .kept td a { color: var(--fg); text-decoration: none; font-weight: 500; }
   .kept td a:hover { text-decoration: underline; }
-  .kept td:nth-child(3) { color: var(--muted); font-size: .92rem; width: 100%; }
-  .kept td.n {
-    text-align: right; white-space: nowrap;
-    font-variant-numeric: tabular-nums; color: var(--muted);
+  .kept td:nth-child(2) { width: 100%; }
+
+  /* Numbers and dates line up under each other or they are not worth reading
+     down a column. */
+  .kept td.n, .kept th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .kept td.n { color: var(--muted); }
+  .kept td.when { font-size: .9rem; }
+
+  /* Named for the people who cannot see the column it heads. */
+  .sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
   }
 
   .toast.up { opacity: 1; transform: none; }
@@ -976,10 +992,23 @@ export async function handle(request, env, ctx, deps = {}) {
   // three things the macOS window has had since 1.23.0 and the browser has not.
   if (url.pathname === '/reports' && env.STORE) {
     const all = env.STORE.list();
+    // What this browser last asked for, used only where this request did not
+    // say. An explicit `?since=` — the "Show all" link — is an answer, so
+    // `has` rather than truthiness: empty means everything, absent means
+    // "whatever I said last time".
+    const last = rememberedView(request.headers.get('cookie'));
+    const sinceParam = url.searchParams.has('since')
+      ? url.searchParams.get('since')
+      : (last.since ?? '');
+    const view = sortAsked(
+      url.searchParams.get('sort') ?? last.sort,
+      url.searchParams.get('dir') ?? last.dir,
+    );
+
     // The same filter the CLI's `--reports <date>` uses, imported rather than
     // written again, so the two cannot disagree about what "since" means.
-    const asked = sinceWhen(url.searchParams.get('since'));
-    const rows = asked.error ? all : keptSince(all, asked.at);
+    const asked = sinceWhen(sinceParam);
+    const rows = sortKept(asked.error ? all : keptSince(all, asked.at), view.sort, view.dir);
     if (!all.length) {
       return htmlResponse(shell('Reports', `
         <div class="hero"><div class="inner">
@@ -992,12 +1021,14 @@ export async function handle(request, env, ctx, deps = {}) {
     // A date control, and a sentence when it hides everything — an empty list
     // and an empty library read identically, and only one of them means "widen
     // the date".
-    const since = esc(url.searchParams.get('since') ?? '');
+    const since = esc(sinceParam);
     const filter = `<form class="since" method="get" action="/reports">
       <label for="since">Kept since</label>
       <input type="date" id="since" name="since" value="${since}">
+      <input type="hidden" name="sort" value="${esc(view.sort)}">
+      <input type="hidden" name="dir" value="${esc(view.dir)}">
       <button class="secondary" type="submit">Filter</button>
-      ${since ? '<a href="/reports">Show all</a>' : ''}
+      ${since ? '<a href="/reports?since=">Show all</a>' : ''}
       ${asked.error ? `<span class="warn">Wanted ${esc(asked.error)}, so nothing was filtered.</span>` : ''}
     </form>`;
 
@@ -1010,23 +1041,52 @@ export async function handle(request, env, ctx, deps = {}) {
           <h1>Reports</h1>
           ${filter}
           <p class="sub">None of the ${all.length} kept runs finished on or after that date.</p>
-        </main>`, env));
+        </main>`, env), 200, { 'set-cookie': rememberView({ since: sinceParam, ...view }) });
     }
 
-    // A comparison needs two, so the list is a form: tick two, press Compare.
-    const grouped = new Map();
-    for (const row of rows) grouped.set(row.host, [...(grouped.get(row.host) ?? []), row]);
+    // One table with a header rather than a heading per host: a column can only
+    // be sorted against the others if they are all in it. Sorting by Site is
+    // the grouping this used to have, and now it is one of five orders rather
+    // than the only one.
+    //
+    // Links, not script. Sorting is a different view of the same list, so it is
+    // a different URL — which means it can be bookmarked, and it works before
+    // any JavaScript has run.
+    const header = Object.entries(SORTS)
+      .map(([key, column]) => {
+        const active = view.sort === key;
+        // Clicking the column you are already on turns it around; a new column
+        // starts the way that column is most useful.
+        const dir = active ? (view.dir === 'asc' ? 'desc' : 'asc') : column.descFirst ? 'desc' : 'asc';
+        const href = `/reports?${new URLSearchParams({
+          ...(sinceParam ? { since: sinceParam } : {}),
+          sort: key,
+          dir,
+        })}`;
+        const arrow = active ? (view.dir === 'asc' ? ' ↑' : ' ↓') : '';
+        const classes = [key === 'site' ? '' : 'n', active ? 'on' : ''].filter(Boolean).join(' ');
+        const sorted = active ? ` aria-sort="${view.dir === 'asc' ? 'ascending' : 'descending'}"` : '';
+        return `<th${classes ? ` class="${classes}"` : ''}${sorted}><a href="${esc(href)}">${esc(column.label)}${arrow}</a></th>`;
+      })
+      .join('');
 
-    const body = [...grouped]
-      .map(([host, runs]) => `<h2>${esc(host)}</h2><table>${runs
+    const body = `<table>
+      <thead><tr><th class="pick"><span class="sr">Pick</span></th>${header}</tr></thead>
+      <tbody>${rows
         .map((row) => `<tr>
           <td class="pick"><input type="checkbox" name="run" value="${esc(row.id)}"></td>
-          <td><a href="/reports/${esc(row.id)}">${esc(String(row.finishedAt).replace('T', ' ').slice(0, 16))}</a></td>
-          <td>${row.pages} pages · ${row.causes} thing${row.causes === 1 ? '' : 's'} to change</td>
-          <td class="n">${typeof row.score === 'number' ? `${row.score}/100` : '—'}</td>
+          <td><a href="/reports/${esc(row.id)}">${esc(row.host ?? '')}</a></td>
+          <td class="n when">${esc(String(row.finishedAt).replace('T', ' ').slice(0, 16))}</td>
+          <td class="n">${row.pages ?? 0}</td>
+          <td class="n">${row.causes ?? 0}</td>
+          <td class="n">${typeof row.score === 'number' ? row.score : '—'}</td>
         </tr>`)
-        .join('')}</table>`)
-      .join('');
+        .join('')}</tbody>
+    </table>`;
+
+    // Remembered on the way out, so the next visit with no query opens on the
+    // view this one ended with.
+    const remember = { 'set-cookie': rememberView({ since: sinceParam, ...view }) };
 
     return htmlResponse(shell('Reports', `
       <main>
@@ -1046,7 +1106,7 @@ export async function handle(request, env, ctx, deps = {}) {
             sites are matched by path instead, which is how a rebuild is compared with the site
             it replaces.</p>
         </form>
-      </main>`, env));
+      </main>`, env), 200, remember);
   }
 
   // A kept report, as a file. The macOS window has had an Export menu since it

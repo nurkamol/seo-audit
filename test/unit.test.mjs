@@ -19,7 +19,9 @@ import { Fetcher } from '../src/http.mjs';
 import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 import { plural } from '../src/text.mjs';
-import { sinceWhen, keptSince } from '../src/kept.mjs';
+import {
+  sinceWhen, keptSince, sortKept, sortAsked, rememberView, rememberedView,
+} from '../src/kept.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -2652,6 +2654,50 @@ test('a baseline round-trips through serialize and parse', () => {
   const findings = [{ level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/' }];
   const restored = parseBaseline(serialize(findings, { date: '2026-01-01' }), 'test');
   assert.deepEqual(restored.findings, findings);
+});
+
+test('a kept-runs list can be ordered by any of its columns', () => {
+  const rows = [
+    { id: 'a', host: 'b.test', finishedAt: '2026-01-01T00:00:00Z', pages: 5, causes: 2, score: 90 },
+    { id: 'b', host: 'a.test', finishedAt: '2026-06-01T00:00:00Z', pages: 50, causes: 9, score: 70 },
+    { id: 'c', host: 'c.test', finishedAt: '2026-03-01T00:00:00Z', pages: 1, causes: 1 },
+  ];
+  const ids = (sort, dir) => sortKept(rows, sort, dir).map((r) => r.id).join('');
+
+  assert.equal(ids('score', 'desc'), 'abc', 'a run with no score sorts below one with any score');
+  assert.equal(ids('site', 'asc'), 'bac');
+  assert.equal(ids('pages', 'desc'), 'bac');
+  assert.equal(ids('when', 'desc'), 'bca');
+  assert.equal(ids('nonsense', 'desc'), 'bca', 'an unknown column falls back to newest first');
+
+  // The array handed in is the store's own list. Sorting it in place would
+  // reorder a list somebody else is holding.
+  assert.deepEqual(rows.map((r) => r.id), ['a', 'b', 'c']);
+});
+
+test('a column name from a URL or a cookie is one that exists, or it is refused', () => {
+  assert.deepEqual(sortAsked('score', 'asc'), { sort: 'score', dir: 'asc' });
+  assert.deepEqual(sortAsked('nope', 'sideways'), { sort: 'when', dir: 'desc' });
+  // Each column opens the way it is most useful: dates and numbers largest
+  // first, a name from the top.
+  assert.equal(sortAsked('site', undefined).dir, 'asc');
+  assert.equal(sortAsked('pages', undefined).dir, 'desc');
+});
+
+test('a remembered view survives a round trip, and junk in the cookie does not', () => {
+  const cookie = rememberView({ since: '2026-08-01', sort: 'score', dir: 'asc' }).split(';')[0];
+  assert.deepEqual(rememberedView(cookie), { since: '2026-08-01', sort: 'score', dir: 'asc' });
+
+  // A cookie is a URL somebody kept, and it may have been edited since.
+  assert.deepEqual(
+    rememberedView('seo_audit_view=' + encodeURIComponent('sort=../../etc&since=nonsense')),
+    { sort: 'when', dir: 'desc' },
+    'an unreadable date and an unknown column are both dropped',
+  );
+  assert.deepEqual(rememberedView(''), {}, 'no cookie is not a view');
+  assert.deepEqual(rememberedView('other=1; seo_audit_view=' +
+    encodeURIComponent('sort=pages&dir=asc')), { sort: 'pages', dir: 'asc' },
+    'and it is found among other cookies');
 });
 
 test('a date the library filter cannot read is refused, not ignored', () => {

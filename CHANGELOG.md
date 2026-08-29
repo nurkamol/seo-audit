@@ -6,6 +6,30 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The kept-runs list sorts by any of its columns, and remembers how you left
+  it.** There were no column headers at all: the list was a heading per site
+  with its own small table under it, so the only order was newest-first and the
+  only grouping was by host. It is one table now — Site, When, Pages, To
+  change, Score — and sorting by Site is the grouping it used to have, as one
+  of five orders rather than the only one.
+
+  Links, not script: an order is a different view of the same list, so it is a
+  different URL. It can be bookmarked, and it works before any JavaScript has
+  run. Clicking the column you are already on turns it around; a new column
+  opens the way that column is most useful, which is largest-first for dates
+  and numbers and A-to-Z for a name.
+
+  The filter and the order are kept in a cookie rather than in `localStorage`,
+  for the same reason: a preference that only works once a script has run would
+  be the one control on the page that does not. It comes back through the same
+  validators the query string goes through — a cookie is a URL somebody kept,
+  and it may have been edited since, so it names a column that exists or it is
+  ignored.
+
+  The score cell lost its `/100`. The column is headed Score; repeating the
+  denominator on every row is the header said again, once per line.
+
+### Added
 - **The window takes its type and its accent from the machine it is on.** The
   font stack stopped at `"Segoe UI"`, which is Windows 10's face — Windows 11
   uses Segoe UI Variable Text — and offered Linux `Roboto`, an Android face few

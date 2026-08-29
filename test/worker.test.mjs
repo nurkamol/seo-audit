@@ -587,7 +587,10 @@ test('a deployed Worker has no library, and a local server does', async () => {
   });
   const listed = await read(await handle(get('/reports', { token: SECRET }), env({ STORE: store })));
   assert.match(listed, /x\.test/);
-  assert.match(listed, /74\/100/);
+  // The column is headed SCORE, so the cell is the number. Repeating "/100" on
+  // every row is the header said again, once per line.
+  assert.match(listed, /<td class="n">74<\/td>/);
+  assert.match(listed, /<th class="n[^"]*">\s*<a[^>]*>Score/i, 'and the column can be sorted by');
 
   // The date filter, which is the same function the CLI's --reports uses.
   rows.push({
@@ -602,9 +605,31 @@ test('a deployed Worker has no library, and a local server does', async () => {
   // moves. Asserted on the headings rather than on the page: the sidebar lists
   // every run whatever the filter says, deliberately — it is navigation, and a
   // filter that hides the way back out is a worse page than an unfiltered one.
-  assert.match(since, /<h2>y\.test<\/h2>/, 'the newer run is listed');
-  assert.doesNotMatch(since, /<h2>x\.test<\/h2>/, 'the older one is filtered out');
+  const sitesIn = (page) => [...page.matchAll(/\/reports\/[\w-]{36}">([\w.]+)</g)].map((m) => m[1]);
+  assert.deepEqual(sitesIn(since), ['y.test'], 'only the newer run is in the table');
   assert.match(since, /1 of 2 kept/, 'and it says how many it is not showing');
+
+  // Sorting is a different URL, so it works before any script has run and can
+  // be bookmarked. The header of the column in use says which way it is going.
+  const byScore = await handle(
+    get('/reports?sort=score&dir=asc', { token: SECRET }), env({ STORE: store }));
+  const scored = await read(byScore);
+  const order = [...scored.matchAll(/\/reports\/\w{8}-[\w-]+">([xy])\.test</g)].map((m) => m[1]);
+  assert.deepEqual(order, ['x', 'y'], 'lowest score first when asked for ascending');
+  assert.match(scored, /aria-sort="ascending"/);
+
+  // And it is remembered, so the next visit with no query opens where this one
+  // left off rather than back at the default.
+  const remembered = byScore.headers.get('set-cookie');
+  assert.ok(remembered, 'the view asked for is remembered');
+  const returning = await read(await handle(
+    get('/reports', { token: SECRET, headers: { cookie: remembered.split(';')[0] } }),
+    env({ STORE: store })));
+  assert.deepEqual(
+    [...returning.matchAll(/\/reports\/\w{8}-[\w-]+">([xy])\.test</g)].map((m) => m[1]),
+    ['x', 'y'],
+    'a bare /reports honours the cookie',
+  );
 
   // A date that hides everything must not look like an empty library: one of
   // those means "widen the date" and the other means "go and run something".
@@ -617,8 +642,7 @@ test('a deployed Worker has no library, and a local server does', async () => {
   // silently filtering to everything or to nothing.
   const bad = await read(await handle(
     get('/reports?since=nonsense', { token: SECRET }), env({ STORE: store })));
-  assert.match(bad, /<h2>x\.test<\/h2>/);
-  assert.match(bad, /<h2>y\.test<\/h2>/);
+  assert.deepEqual(sitesIn(bad).sort(), ['x.test', 'y.test'], 'nothing was filtered out');
   assert.match(bad, /nothing was filtered/);
 
   // And one of them opens as the same report every other front end draws.
