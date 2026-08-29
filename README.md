@@ -207,6 +207,49 @@ brew install --cask seo-audit
 
 <p align="center"><img src="docs/shots/app.png" alt="The macOS app showing a report: 25 pages, 171 findings, 55 things to change" width="820"></p>
 
+#### If you downloaded the zip instead: "SEO Audit is damaged and can't be opened"
+
+It is not damaged. The app is **ad-hoc signed** rather than notarised, because
+notarising needs a paid Apple Developer account this project does not have.
+macOS puts a `com.apple.quarantine` flag on anything a browser downloads, and
+for an app without a notarisation ticket Gatekeeper refuses it — with a message
+that says "damaged" and offers to move it to the Trash, which reads exactly like
+malware and is the single most confusing thing about installing this.
+
+**`brew install --cask seo-audit` does not have this problem.** Homebrew checks
+the download against a checksum written by the build that produced it, then
+clears the flag for you. That is the recommended route, and the rest of this
+section is for people who would rather not use Homebrew.
+
+If you downloaded the zip by hand, verify it first — the checksum is printed in
+every release's notes:
+
+```bash
+shasum -a 256 ~/Downloads/seo-audit-*-macos.zip
+```
+
+Then, once it matches, clear the flag:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/SEO Audit.app"
+```
+
+No `sudo`: the app is yours, in a directory you can write to, and the command
+works as you. If it ever answers `Operation not permitted`, the copy is owned by
+another user — `sudo xattr -dr com.apple.quarantine "/Applications/SEO Audit.app"`
+is the fallback, but reach for it second, not first.
+
+This is exactly what right-click → **Open** does in the Finder, minus the
+dialog. Do it because the checksum matched, not because a README said to — the
+same command on a file you have not checked is how people get hurt.
+
+Or avoid the question entirely and build it yourself, which produces a signature
+your own machine already trusts:
+
+```bash
+./mac/build.sh --run
+```
+
 SwiftUI throughout, Liquid Glass, and the report drawn natively: cause cards
 that expand into the pages they affect, filtering, search, and export as PDF,
 HTML, Markdown, CSV or JSON. Every finished run is kept, so a seven-minute

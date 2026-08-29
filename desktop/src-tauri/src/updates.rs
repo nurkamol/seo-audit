@@ -62,13 +62,25 @@ impl Version {
 /// How this copy got onto this machine.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Install {
+    // Three of these are built only under a `#[cfg]` in `install_kind` — two on
+    // Windows, one on Linux — so every build warned that some variant is never
+    // constructed, while every platform still matches on all of them in
+    // `move_for` and `describe`, because matching is not constructing.
+    //
+    // Silenced only where the claim is true. On Windows no `allow` applies, so
+    // a variant that stops being reachable there — the case that would actually
+    // matter — still warns. Narrower than an `allow` on the enum, which would
+    // have hidden that too.
     /// Windows, and winget has a record of it.
+    #[cfg_attr(not(windows), allow(dead_code))]
     Winget,
     /// Linux, and dpkg owns the file.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Apt,
     /// Linux, running from a single self-contained file.
     AppImage,
     /// Windows, installed by the bundled NSIS installer rather than winget.
+    #[cfg_attr(not(windows), allow(dead_code))]
     Installer,
     /// Somebody put it here.
     Elsewhere,

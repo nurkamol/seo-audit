@@ -114,7 +114,57 @@ jobs:
           title="$(git tag -l --format='%(contents:subject)' "$tag")"
           [ -n "$title" ] || title="${{ steps.package.outputs.version }}"
 
+          # The person most likely to be confused by this release is standing on
+          # this page, having just downloaded a zip that macOS will call
+          # "damaged". Telling them here costs nothing and is where they are.
+          cat > footer.md <<FOOTER
+
+          ---
+
+          ### Installing on macOS
+
+          \`\`\`bash
+          brew tap nurkamol/seo-audit https://github.com/nurkamol/seo-audit
+          brew trust nurkamol/seo-audit
+          brew install --cask seo-audit
+          \`\`\`
+
+          Homebrew verifies the download against the checksum below and clears the
+          quarantine flag for you, so the app opens the first time.
+
+          **Downloading the zip instead?** macOS may say *"SEO Audit is damaged and
+          can't be opened."* It is not damaged. The app is ad-hoc signed rather than
+          notarised — notarising needs a paid Apple Developer account this project
+          does not have — and macOS refuses quarantined apps without a notarisation
+          ticket. Check what you downloaded first:
+
+          \`\`\`bash
+          shasum -a 256 seo-audit-${{ steps.package.outputs.version }}-macos.zip
+          # ${{ steps.package.outputs.sha }}
+          \`\`\`
+
+          Then, once it matches, clear the flag — no \`sudo\` needed:
+
+          \`\`\`bash
+          xattr -dr com.apple.quarantine "/Applications/SEO Audit.app"
+          \`\`\`
+
+          That is what right-click → **Open** does in the Finder, without the dialog.
+          Apple Silicon, macOS Tahoe or newer.
+
+          ### Windows and Linux
+
+          The \`setup.exe\`, \`.deb\` and \`.AppImage\` below are attached by a separate
+          job and may appear a few minutes after this release does.
+
+          The Windows installer is unsigned, so SmartScreen shows *"Windows protected
+          your PC"* — **More info → Run anyway**. Same reason as macOS: a code-signing
+          certificate is a paid, per-year thing this project does not have. The
+          \`.AppImage\` needs \`chmod +x\` before it will run.
+          FOOTER
+
           if [ -s notes.md ]; then
+            cat footer.md >> notes.md
             gh release create "$tag" --title "$title" --notes-file notes.md
           else
             # A tag with no CHANGELOG section is worth saying out loud, but not
@@ -122,6 +172,12 @@ jobs:
             # built and signed.
             echo "::warning::no CHANGELOG section for ${{ steps.package.outputs.version }} — using generated notes"
             gh release create "$tag" --title "$title" --generate-notes
+            # Generated notes replace rather than append, so the footer goes on
+            # afterwards — the install instructions matter more than the reason
+            # the notes were generated.
+            gh release view "$tag" --json body -q .body > body.md
+            cat footer.md >> body.md
+            gh release edit "$tag" --notes-file body.md
           fi
         env:
           GH_TOKEN: ${{ github.token }}

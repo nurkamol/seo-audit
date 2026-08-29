@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Three enum variants warned on every build that they were never
+  constructed.** Each is built under a `#[cfg]` — two on Windows, one on Linux —
+  while every platform matches on all of them, because matching is not
+  constructing. Silenced per variant and only where the claim is true, so a
+  variant that stops being reachable on the platform that owns it still warns.
+
 - **The first tagged release built its Windows and Linux bundles and then could
   not attach them.** `gh release upload` came back with "HTTP 403: Resource not
   accessible by integration" — the workflow never asked for `contents: write`,
@@ -23,6 +29,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   release must ask for permission to.
 
 ### Added
+- **Every release now says how to install it, on the page where it is
+  downloaded.** The macOS app is ad-hoc signed rather than notarised — that
+  needs a paid Apple Developer account this project does not have — so macOS
+  quarantines the downloaded zip and Gatekeeper refuses it with *"SEO Audit is
+  damaged and can't be opened"*, offering to move it to the Trash. It is not
+  damaged, and that message reads exactly like malware.
+
+  Homebrew never had this problem: the cask verifies the checksum and clears the
+  flag. But the release page and the README's download badge both led somewhere
+  that explained none of it. Both now do, with the checksum printed first, so
+  clearing the flag is something done after verifying the file rather than on
+  the say-so of a README.
+
+  Windows gets the same treatment for SmartScreen, and the AppImage's `chmod +x`
+  is written down rather than assumed.
+
 - **The desktop workflow can attach bundles to a tag it is given.** A release
   whose upload failed can be completed by running the workflow manually, rather
   than by force-moving a tag that people may already have fetched.
