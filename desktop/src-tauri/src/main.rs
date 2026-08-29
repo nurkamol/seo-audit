@@ -169,6 +169,55 @@ fn which_node() -> Option<std::path::PathBuf> {
     })
 }
 
+/// Make the operating system kill the engine when this process dies.
+///
+/// Everything else here is cooperative: closing the window fires `Destroyed`,
+/// quitting fires `Exit`, and both stop the child. Nothing fires when a process
+/// is terminated outright — Task Manager, a crash, `Stop-Process -Force` — and
+/// on Windows the engine then survived, holding its port and 110 MB until
+/// somebody noticed. CI found it by killing the app the hard way.
+///
+/// A job object with `KILL_ON_JOB_CLOSE` moves the promise from this code to
+/// the kernel: when the last handle to the job closes, which happens when this
+/// process ends however it ends, everything in the job goes with it.
+///
+/// The handle is deliberately never closed. Closing it is the thing that kills
+/// the child, so it has to outlive everything except the process itself.
+#[cfg(windows)]
+fn tie_to_our_lifetime(child: &Child) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            note("could not create a job object; the engine is only stopped cooperatively");
+            return;
+        }
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let set = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &limits as *const _ as *const std::ffi::c_void,
+            std::mem::size_of_val(&limits) as u32,
+        );
+        let assigned = AssignProcessToJobObject(job, child.as_raw_handle() as _);
+        note(&format!("job object: set={set} assigned={assigned}"));
+    }
+}
+
+#[cfg(not(windows))]
+fn tie_to_our_lifetime(_child: &Child) {
+    // The engine already exits when its stdin closes, and a dying parent closes
+    // it. That is the same guarantee, arrived at by a route Windows does not
+    // offer — its pipe does not read as one to Node.
+}
+
 /// Start the engine and wait for it to say where it is.
 ///
 /// Port zero: the operating system picks one that is free and the server prints
@@ -251,6 +300,8 @@ fn start_engine(app: &tauri::AppHandle) -> Result<(String, Child), String> {
     let mut child = command
         .spawn()
         .map_err(|e| format!("The audit engine would not start: {e}"))?;
+
+    tie_to_our_lifetime(&child);
 
     let stdout = child.stdout.take().ok_or("The engine gave no output to read.")?;
     let (tx, rx) = mpsc::channel();

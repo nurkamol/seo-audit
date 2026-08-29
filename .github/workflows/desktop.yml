@@ -196,6 +196,10 @@ jobs:
           Write-Host 'the engine came up'
           if (Test-Path $env:SEO_AUDIT_SHELL_LOG) { Get-Content $env:SEO_AUDIT_SHELL_LOG }
 
+          # Terminated outright, which is the case nothing cooperative can
+          # catch: no Destroyed, no Exit, no chance to stop anything. A job
+          # object with KILL_ON_JOB_CLOSE is what makes this survivable, so this
+          # is the harshest version of the test on purpose.
           Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue
           foreach ($_ in 1..15) {
             if (-not (Get-Process node -ErrorAction SilentlyContinue)) {

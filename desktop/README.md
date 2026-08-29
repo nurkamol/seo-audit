@@ -35,10 +35,13 @@ getting them wrong there:
 - **Node by path, not by `PATH`.** A window launched from a dock or a Start
   menu inherits almost none, so looking Node up the obvious way finds nothing
   on a machine that plainly has it.
-- **The child is killed with the window.** A server that outlives the window
-  that opened it holds its port against the next launch. That bug shipped once
-  on macOS; there is a test for it here in the sense that it is the one thing
-  worth checking by hand after any change to `Engine`.
+- **The child dies with the window, however the window dies.** A server that
+  outlives the window that opened it holds its port against the next launch —
+  a bug that shipped once on macOS. Closing fires `Destroyed` and quitting fires
+  `Exit`, and both stop it; nothing fires when a process is terminated outright,
+  and on Windows the engine then survived. A job object with
+  `KILL_ON_JOB_CLOSE` moves that promise from this code to the kernel. CI kills
+  the app the hard way on both platforms to check.
 - **A failure is a window, not a stream.** An app that opens and does nothing
   is the worst version of this, and it is the one that shipped on macOS.
 
