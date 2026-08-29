@@ -45,6 +45,8 @@ const HELP = `
                        strings the crawl actually read. A page whose trail
                        has an uncrawled step is skipped rather than given a
                        name invented from its slug
+    --reports [date]   list the runs kept on this machine and stop; with a
+                       date, only those finished on or after it
     --since <date>     crawl only URLs the sitemap says changed on or after
                        this date. Refuses when lastmod cannot answer it —
                        absent, or one build stamp on every URL
@@ -152,6 +154,14 @@ function parseArgs(argv) {
     else if (arg === '--verbose') opts.verbose = true;
     else if (arg === '--dry-run') opts.dryRun = true;
     else if (arg === '--since') opts.since = value();
+    // The only flag here whose value is optional: `--reports` lists everything
+    // kept, `--reports 2026-08-01` lists what was kept since. Peeked rather
+    // than consumed, so `--reports` followed by nothing, or by another flag,
+    // does not swallow it.
+    else if (arg === '--reports') {
+      const next = argv[i + 1];
+      opts.reports = next !== undefined && !next.startsWith('-') ? argv[++i] : true;
+    }
     // Repeatable: one pattern per flag reads better than one flag with a
     // comma-separated list, and a URL can contain a comma.
     else if (arg === '--exclude') (opts.exclude ??= []).push(value());
@@ -298,6 +308,43 @@ const live = (origin) =>
 // One site or twenty: the same options, resolved the same way. A site entry in
 // the config may carry its own overrides, which land on top of the shared ones.
 let sites = resolveSites(cli.targets ?? [], file);
+
+// The runs kept on this machine. Also a different program: it reads the same
+// folder the window and `--serve` read, and crawls nothing.
+if (opts.reports !== undefined) {
+  const { library } = await import('../src/library.mjs');
+  const { sinceWhen, keptSince } = await import('../src/kept.mjs');
+  const asked = sinceWhen(opts.reports === true ? null : opts.reports);
+  if (asked.error) {
+    console.error(`\n  --reports wants ${asked.error}\n`);
+    process.exit(2);
+  }
+
+  const store = library();
+  const all = store.list();
+  const rows = keptSince(all, asked.at);
+
+  if (!all.length) {
+    console.log(`\n  Nothing kept yet. Finished runs are kept in ${store.where()}\n`);
+  } else if (!rows.length) {
+    // Saying how many were skipped, because an empty list and an empty library
+    // read identically and only one of them means "widen the date".
+    console.log(`\n  None of the ${all.length} kept runs finished on or after that date.\n`);
+  } else {
+    const width = Math.max(...rows.map((r) => (r.site ?? '').length));
+    console.log('');
+    for (const row of rows) {
+      const when = String(row.finishedAt ?? '').slice(0, 10);
+      const score = row.score === undefined || row.score === null ? '  —' : String(row.score).padStart(3);
+      console.log(
+        `  ${(row.site ?? '').padEnd(width)}  ${when}  ${String(row.pages ?? '?').padStart(5)} pages  ${score}`,
+      );
+    }
+    const shown = rows.length === all.length ? `${all.length}` : `${rows.length} of ${all.length}`;
+    console.log(`\n  ${shown} kept in ${store.where()}\n`);
+  }
+  process.exit(0);
+}
 
 // The local UI, which is a different program from here on: no target, no
 // report file, and it runs until interrupted.

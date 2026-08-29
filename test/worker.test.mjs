@@ -571,6 +571,38 @@ test('a deployed Worker has no library, and a local server does', async () => {
   assert.match(listed, /x\.test/);
   assert.match(listed, /74\/100/);
 
+  // The date filter, which is the same function the CLI's --reports uses.
+  rows.push({
+    id: '22222222-2222-4222-8222-222222222222',
+    host: 'y.test', finishedAt: '2026-06-01T10:00:00Z', pages: 5, causes: 1, score: 90,
+    payload: { meta: { origin: 'https://y.test', pages: 5, date: '2026-06-01' }, findings: [], causes: [] },
+  });
+
+  const since = await read(await handle(
+    get('/reports?since=2026-03-01', { token: SECRET }), env({ STORE: store })));
+  // The list is grouped under a heading per host, so those are what the filter
+  // moves. Asserted on the headings rather than on the page: the sidebar lists
+  // every run whatever the filter says, deliberately — it is navigation, and a
+  // filter that hides the way back out is a worse page than an unfiltered one.
+  assert.match(since, /<h2>y\.test<\/h2>/, 'the newer run is listed');
+  assert.doesNotMatch(since, /<h2>x\.test<\/h2>/, 'the older one is filtered out');
+  assert.match(since, /1 of 2 kept/, 'and it says how many it is not showing');
+
+  // A date that hides everything must not look like an empty library: one of
+  // those means "widen the date" and the other means "go and run something".
+  const none = await read(await handle(
+    get('/reports?since=2030-01-01', { token: SECRET }), env({ STORE: store })));
+  assert.match(none, /None of the 2 kept runs/);
+  assert.doesNotMatch(none, /Nothing kept yet/);
+
+  // A date it cannot read is said out loud and changes nothing, rather than
+  // silently filtering to everything or to nothing.
+  const bad = await read(await handle(
+    get('/reports?since=nonsense', { token: SECRET }), env({ STORE: store })));
+  assert.match(bad, /<h2>x\.test<\/h2>/);
+  assert.match(bad, /<h2>y\.test<\/h2>/);
+  assert.match(bad, /nothing was filtered/);
+
   // And one of them opens as the same report every other front end draws.
   const one = await read(await handle(
     get('/reports/11111111-1111-4111-8111-111111111111', { token: SECRET }), env({ STORE: store })));

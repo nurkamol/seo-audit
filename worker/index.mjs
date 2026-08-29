@@ -15,6 +15,7 @@ import { html as htmlReport, markdown as markdownReport, csv as csvReport, repor
 import { causePayload } from '../src/causes.mjs';
 import { scoreRun, checklist, WEIGHT } from '../src/score.mjs';
 import { diff } from '../src/baseline.mjs';
+import { sinceWhen, keptSince } from '../src/kept.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 import { runParameters, notInApp, formFields } from '../src/options.mjs';
 import { FORMATS, formatById, filenameFor, renderExport } from '../src/exports.mjs';
@@ -559,6 +560,17 @@ const page = (title, body) => `<!doctype html>
   td.pick input { width: auto; }
   td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
+  /* The kept-since filter. A row, so it reads as one control rather than three
+     things that happen to be near each other. */
+  form.since {
+    display: flex; align-items: center; flex-wrap: wrap; gap: .6rem;
+    margin: 0 0 1.4rem;
+  }
+  form.since label { color: var(--muted); font-size: .9rem; }
+  form.since input[type="date"] { width: auto; margin: 0; }
+  form.since button { width: auto; margin: 0; }
+  form.since .warn { color: var(--warn); font-size: .88rem; }
+
   /* Save as … — a row of links, so a browser downloads them and the desktop
      shell inherits the whole thing without owning a control. */
   .exports {
@@ -845,14 +857,42 @@ export async function handle(request, env, ctx, deps = {}) {
   // deployed Worker. The list, one report, and a comparison between two — the
   // three things the macOS window has had since 1.23.0 and the browser has not.
   if (url.pathname === '/reports' && env.STORE) {
-    const rows = env.STORE.list();
-    if (!rows.length) {
+    const all = env.STORE.list();
+    // The same filter the CLI's `--reports <date>` uses, imported rather than
+    // written again, so the two cannot disagree about what "since" means.
+    const asked = sinceWhen(url.searchParams.get('since'));
+    const rows = asked.error ? all : keptSince(all, asked.at);
+    if (!all.length) {
       return htmlResponse(shell('Reports', `
         <div class="hero"><div class="inner">
           <h1>Nothing kept yet</h1>
           <p class="sub">Every finished run is kept in <code>${esc(env.STORE.where())}</code>.</p>
           <p><a class="cta" href="/">Audit a site</a></p>
         </div></div>`, env));
+    }
+
+    // A date control, and a sentence when it hides everything — an empty list
+    // and an empty library read identically, and only one of them means "widen
+    // the date".
+    const since = esc(url.searchParams.get('since') ?? '');
+    const filter = `<form class="since" method="get" action="/reports">
+      <label for="since">Kept since</label>
+      <input type="date" id="since" name="since" value="${since}">
+      <button type="submit">Filter</button>
+      ${since ? '<a href="/reports">Show all</a>' : ''}
+      ${asked.error ? `<span class="warn">Wanted ${esc(asked.error)}, so nothing was filtered.</span>` : ''}
+    </form>`;
+
+    if (!rows.length) {
+      return htmlResponse(shell('Reports', `
+        <main>
+          <div class="bar">
+            <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
+          </div>
+          <h1>Reports</h1>
+          ${filter}
+          <p class="sub">None of the ${all.length} kept runs finished on or after that date.</p>
+        </main>`, env));
     }
 
     // A comparison needs two, so the list is a form: tick two, press Compare.
@@ -876,7 +916,8 @@ export async function handle(request, env, ctx, deps = {}) {
           <a class="mark" href="https://github.com/nurkamol/seo-audit">seo<span>-</span>audit</a>
         </div>
         <h1>Reports</h1>
-        <p class="sub">${rows.length} kept on this machine,
+        ${filter}
+        <p class="sub">${rows.length === all.length ? all.length : `${rows.length} of ${all.length}`} kept on this machine,
           ${env.STORE.bytes ? `${Math.max(1, Math.round(env.STORE.bytes() / 1024))} KB in ` : 'in '}
           <code>${esc(env.STORE.where())}</code>.</p>
         <form action="/compare">

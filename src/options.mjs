@@ -84,6 +84,7 @@ export const OPTIONS = [
   { flag: '--quiet', query: null, app: 'the crawl log is on screen while it runs' },
   { flag: '--verbose', query: null, app: 'the crawl log is on screen while it runs' },
   { flag: '--serve', query: null, app: 'the window is what --serve serves' },
+  { flag: '--reports', query: null, app: 'the sidebar is this list, and it is always on' },
   { flag: '--fail-on', query: null, app: 'a window has no exit code for a build to read' },
   { flag: '--update-baseline', query: null, app: 'a baseline is a file a repository commits' },
   { flag: '--config', query: null, app: 'a config file is a file a repository commits' },

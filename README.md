@@ -533,6 +533,7 @@ reason.
 |---|---|---|
 | `--md <file>` | — | Write a Markdown report |
 | `--html <file>` | — | Write a self-contained HTML report — one file, no assets |
+| `--reports [date]` | — | List the runs kept on this machine and stop. With a date, only those finished on or after it |
 | `--since <date>` | — | Crawl only URLs the sitemap says changed on or after this date. Refuses when `lastmod` cannot answer it |
 | `--exclude <glob>` | — | Leave URLs out of the crawl. Repeatable; `*` stops at a slash, `**` does not |
 | `--dry-run` | — | Say what would be crawled and stop. A handful of requests instead of hundreds |

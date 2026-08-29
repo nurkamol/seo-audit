@@ -19,6 +19,7 @@ import { Fetcher } from '../src/http.mjs';
 import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 import { plural } from '../src/text.mjs';
+import { sinceWhen, keptSince } from '../src/kept.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -2651,6 +2652,32 @@ test('a baseline round-trips through serialize and parse', () => {
   const findings = [{ level: 'warn', id: 'a', title: 'T', detail: 'D', url: 'https://x.test/' }];
   const restored = parseBaseline(serialize(findings, { date: '2026-01-01' }), 'test');
   assert.deepEqual(restored.findings, findings);
+});
+
+test('a date the library filter cannot read is refused, not ignored', () => {
+  // Listing every run when somebody asked for one week looks like an answer,
+  // which is the worst way to be wrong.
+  assert.equal(sinceWhen('').at, null, 'no date asked means no filter');
+  assert.equal(sinceWhen(null).at, null);
+  assert.ok(sinceWhen('nonsense').error, 'a date it cannot read says so');
+  assert.ok(sinceWhen('2026-13-45').error, 'including one that looks like a date');
+  assert.equal(sinceWhen('2026-08-01').at, Date.parse('2026-08-01T00:00:00Z'),
+    'a bare date is midnight UTC, so that whole day is included');
+});
+
+test('a kept run with no readable date survives a filter', () => {
+  // An index written by an older version should not quietly vanish from a
+  // filtered list. Dropping it would be indistinguishable from it never having
+  // existed, and the run is still on disk.
+  const rows = [
+    { site: 'a', finishedAt: '2026-08-29T10:00:00Z' },
+    { site: 'b', finishedAt: '2026-01-01T10:00:00Z' },
+    { site: 'c', finishedAt: undefined },
+  ];
+  const kept = keptSince(rows, sinceWhen('2026-06-01').at);
+
+  assert.deepEqual(kept.map((r) => r.site), ['a', 'c']);
+  assert.equal(keptSince(rows, null).length, 3, 'no date keeps everything');
 });
 
 test('one of a thing is singular, and none of it is plural', () => {
