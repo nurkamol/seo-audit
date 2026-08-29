@@ -16,7 +16,7 @@
 // suite that passed — the same failure this project refuses in its reports.
 
 import { spawnSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readdirSync, existsSync } from 'node:fs';
 
 const run = (command, args) =>
   spawnSync(command, args, { stdio: 'inherit', shell: false }).status ?? 1;
@@ -38,11 +38,28 @@ const node = run(process.execPath, ['--test', ...files]);
 console.log('\n── The desktop shell ───────────────────────────────────────\n');
 // Rust, which most machines touching this repo do not have either. Same rule:
 // a suite that did not run says so rather than being absent from the tally.
-const canRunCargo = has('cargo');
+// Tauri's build script validates `externalBin` at compile time, so cargo
+// cannot even compile the tests until a Node has been staged beside them. That
+// is a 110 MB copy, which is not something a test run should do behind
+// somebody's back — so it is reported as not run, with the command that fixes
+// it, exactly like a missing toolchain.
+const staged = (() => {
+  if (!has('rustc')) return false;
+  const host = spawnSync('rustc', ['-vV'], { encoding: 'utf8' }).stdout ?? '';
+  const triple = host.split('\n').find((line) => line.startsWith('host:'))?.slice(5).trim();
+  if (!triple) return false;
+  const suffix = process.platform === 'win32' ? '.exe' : '';
+  return existsSync(`desktop/src-tauri/binaries/node-${triple}${suffix}`);
+})();
+
+const canRunCargo = has('cargo') && staged;
 let cargo = 0;
-if (!canRunCargo) {
+if (!has('cargo')) {
   console.log('  Not run: no Rust toolchain here. `brew install rustup` adds one.');
   console.log('  CI runs them on every push.\n');
+} else if (!staged) {
+  console.log('  Not run: no engine is staged beside the shell, and Tauri will not');
+  console.log('  compile without one. `cd desktop && npm run stage` puts it there.\n');
 } else {
   cargo = run('cargo', ['test', '--manifest-path', 'desktop/src-tauri/Cargo.toml', '--quiet']);
 }

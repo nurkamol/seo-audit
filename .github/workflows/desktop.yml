@@ -71,17 +71,22 @@ jobs:
         working-directory: desktop
         run: npm ci
 
-      - name: The shell's own tests
-        working-directory: desktop/src-tauri
-        run: cargo test
-
-      # Stages a Node and the engine, then starts the staged copy and waits for
-      # it to announce a port. The first bundle shipped without `worker/` and
-      # produced an app that opened, started nothing and waited; a list of
+      # Before any cargo command, not just the build. Tauri's build script
+      # validates `externalBin` at compile time, so `cargo test` on an unstaged
+      # tree fails with "resource path binaries/node-… doesn't exist" — which is
+      # how this job failed the first time it ran.
+      #
+      # It stages a Node and the engine, then starts the staged copy and waits
+      # for it to announce a port. The first bundle shipped without `worker/`
+      # and produced an app that opened, started nothing and waited; a list of
       # directories is exactly the kind of thing that looks right and is not.
       - name: Stage the engine, and prove it runs
         working-directory: desktop
         run: node scripts/prepare.mjs
+
+      - name: The shell's own tests
+        working-directory: desktop/src-tauri
+        run: cargo test
 
       - name: Bundle
         working-directory: desktop
