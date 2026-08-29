@@ -147,6 +147,8 @@ export interface CrawlOptions {
   checkExternal?: boolean;
   sitemap?: string;
   userAgent?: string;
+  // `true` asks about the site being crawled; a string names the property.
+  searchConsole?: string | boolean;
   onProgress?: (event: { phase?: string; url?: string; detail?: string; status?: number }) => void;
 }
 

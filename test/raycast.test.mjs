@@ -11,6 +11,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSyn
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+
+/** A repo file, as text. The manifest and the module that reads it are checked
+ *  against each other, so both have to be read from disk rather than imported. */
+const read = (rel) =>
+  readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
 import { join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +46,47 @@ test('preferences arrive as strings, and nonsense is the default rather than NaN
   assert.equal(crawlOptions({ speed: 'fast' }).concurrency, 12);
   // A checkbox that is absent is not a checkbox that is on.
   assert.equal(crawlOptions({}).checkExternal, false);
+});
+
+test('Search Console is off unless asked for, and a property is optional', () => {
+  // The checkbox is the switch and the textfield is the property, the same
+  // shape --search-console has: bare means the site being crawled, a value
+  // names a property. The engine reads `true` and a string differently, so
+  // this must send exactly one of them.
+  assert.equal(crawlOptions({}).searchConsole, undefined, 'off unless asked');
+  assert.equal(crawlOptions({ searchConsole: true }).searchConsole, true,
+    'on with no property asks about the site being crawled');
+  assert.equal(
+    crawlOptions({ searchConsole: true, searchConsoleProperty: '  sc-domain:x.test  ' }).searchConsole,
+    'sc-domain:x.test',
+    'a property is trimmed and passed through',
+  );
+  // A property typed with the switch off does nothing, which is why the
+  // preference says "When Ask Search Console is on" — the same wording the
+  // performance sample field uses for the same reason.
+  assert.equal(
+    crawlOptions({ searchConsoleProperty: 'sc-domain:x.test' }).searchConsole,
+    undefined,
+  );
+  // An empty or blank property is not a property, and must not reach the
+  // engine as the empty string — `typeof === 'string'` is how it decides.
+  assert.equal(crawlOptions({ searchConsole: true, searchConsoleProperty: '   ' }).searchConsole, true);
+});
+
+test('every Search Console preference the extension reads is declared', () => {
+  // A preference the code reads and the manifest never declares is a control
+  // nobody can reach; one declared and never read is a control that does
+  // nothing. Both are silent, so both are checked.
+  const manifest = JSON.parse(read('raycast/package.json'));
+  const declared = new Set(manifest.preferences.map((p) => p.name));
+  for (const name of ['searchConsole', 'searchConsoleProperty']) {
+    assert.ok(declared.has(name), `${name} is read by crawlOptions but not declared`);
+  }
+  const source = read('raycast/lib/present.mjs');
+  for (const name of [...declared].filter((n) => n.startsWith('searchConsole'))) {
+    assert.match(source, new RegExp(`preferences\\.${name}\\b`),
+      `${name} is declared but crawlOptions never reads it`);
+  }
 });
 
 test('what somebody types is accepted exactly as the macOS app accepts it', () => {

@@ -79,6 +79,20 @@ export function crawlOptions(preferences = {}) {
     options.psiStrategy = preferences.performanceDesktop === true ? 'desktop' : 'mobile';
   }
 
+  // Search Console, off unless asked for. `true` means "the site being
+  // audited", which is what the engine does with a bare --search-console; a
+  // property is passed through when this is one account covering several sites.
+  //
+  // The credentials are not asked for here. Getting them opens a browser and
+  // writes a file, which is a terminal errand rather than a control in a
+  // window — the same answer the macOS app gives. Without them the engine
+  // reports `search-console-unconfigured` and names what is missing, so this
+  // fails loudly in the report rather than quietly returning nothing.
+  if (preferences.searchConsole === true) {
+    const property = (preferences.searchConsoleProperty ?? '').trim();
+    options.searchConsole = property || true;
+  }
+
   return options;
 }
 

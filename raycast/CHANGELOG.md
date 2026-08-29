@@ -11,6 +11,11 @@ one from `seo-audit --json` are the same report.
   checked, and where the weight of the site is. A full crawl takes minutes and a
   launcher is built for the second you spend in it, so this is the command the
   extension exists for.
+- **Search Console**, optional — how many times Google actually showed each
+  page, which is the only number in this extension that is not a proxy for
+  attention. Credentials are a terminal errand (`seo-audit
+  --search-console-login`, once); without them the report says which ones are
+  missing rather than going quiet.
 - **Audit a Site** — crawls and lists what to change, worst first and grouped,
   so 171 findings read as 55 things to fix. Capped by preference, and it counts
   against that ceiling while it runs.

@@ -230,6 +230,24 @@
       "required": false
     },
     {
+      "name": "searchConsole",
+      "title": "Search Console",
+      "description": "Asks Google how many times each page was actually shown, and marks findings on pages that earn impressions. The one number here that is not a proxy. Needs credentials on this machine: run seo-audit --search-console-login once in a terminal. Without them the report says so rather than going quiet.",
+      "label": "Ask Search Console",
+      "type": "checkbox",
+      "default": false,
+      "required": false
+    },
+    {
+      "name": "searchConsoleProperty",
+      "title": "Property",
+      "description": "When Ask Search Console is on. The property to ask about, if it is not the site being audited \u2014 a domain property, or a URL-prefix one. Leave empty and the crawled site is used.",
+      "type": "textfield",
+      "placeholder": "sc-domain:example.com",
+      "default": "",
+      "required": false
+    },
+    {
       "name": "ignore",
       "title": "Silenced checks",
       "description": "Check ids to leave out, comma separated. Copy one from any finding with \u2318. \u2014 a report still says how many were silenced.",

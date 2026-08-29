@@ -6,6 +6,23 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **The Raycast extension can ask Search Console.** The engine has had
+  `--search-console` since 1.21.0 and the extension never exposed it — a
+  launcher showing every finding except the one number that is not a proxy for
+  attention. A checkbox switches it on and a field names the property, the same
+  shape the flag has: bare means the site being crawled, a value names a
+  property.
+
+  It does not ask for credentials. Getting them opens a browser and writes a
+  file, which is a terminal errand rather than a control in a window — the same
+  answer the macOS app gives. Without them the engine reports
+  `search-console-unconfigured` and names what is missing, so this fails in the
+  report rather than going quiet.
+
+  Checked in both directions, because both failures are silent: a preference
+  the code reads and the manifest never declares is a control nobody can reach,
+  and one declared but never read is a control that does nothing.
+
 - **A check that fires on every page is one thing to change, not one per
   section.** Grouping by URL prefix is right when a check hits part of a site —
   that is the Shopify `/products/` insight this project's grouping was built on
