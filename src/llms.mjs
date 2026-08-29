@@ -19,6 +19,7 @@
 // need a parser.
 
 import { sectionOf } from './causes.mjs';
+import { plural } from './text.mjs';
 
 /** Markdown's structural characters, inside text that came off a page.
  *
@@ -54,13 +55,13 @@ export function buildLlms(pages, context = {}) {
 
   if (truncated > 0) {
     return refuse(
-      `The crawl stopped at its limit with ${truncated} URL(s) unread, so this file would present a ` +
+      `The crawl stopped at its limit with ${plural(truncated, 'URL')} unread, so this file would present a ` +
         `fraction of the site as the whole of it. Run again with --limit ${pages.length + truncated}.`,
     );
   }
   if (rateLimited > 0) {
     return refuse(
-      `${rateLimited} page(s) were never read because the server was rate limiting, so what belongs ` +
+      `${plural(rateLimited, 'page')} were never read because the server was rate limiting, so what belongs ` +
         'in this file is not known. Run again with a lower --concurrency.',
     );
   }
@@ -154,7 +155,7 @@ const REASONS = {
 /** The summary line for a terminal, and for the note the CLI prints. */
 export function describeLlms(result, path) {
   if (result.refused) return `  Did not write ${path}: ${result.refused}\n`;
-  const out = [`  wrote ${path} — ${result.urls.length} pages in ${result.sections} section(s)`];
+  const out = [`  wrote ${path} — ${result.urls.length} pages in ${plural(result.sections, 'section')}`];
   for (const [reason, count] of Object.entries(result.excluded).sort((a, b) => b[1] - a[1])) {
     out.push(`    dropped ${String(count).padEnd(3)} (${REASONS[reason] ?? reason})`);
   }

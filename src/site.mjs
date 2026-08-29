@@ -6,6 +6,7 @@ import { parseRobots, robotsVerdict } from './robots.mjs';
 import { aiAccess, describeAccess } from './agents-ai.mjs';
 import { parseHtml } from './parse.mjs';
 import { schemaNodes, seriesOf, paginatedCanonical } from './checks.mjs';
+import { plural } from './text.mjs';
 
 // Two weeks is enough to renew by hand if the automation has quietly stopped,
 // which is the failure this is for — nobody is short of warning about a
@@ -123,7 +124,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       if (blocked.length) {
         const shown = blocked.slice(0, 3).map((b) => `${b.listed} (Disallow: ${b.rule.path})`).join(', ');
         out.push(f('error', 'robots-blocks-sitemap-url',
-          `${blocked.length} sitemap URL(s) are disallowed by robots.txt`,
+          `${plural(blocked.length, 'sitemap URL')} are disallowed by robots.txt`,
           `${shown}${blocked.length > 3 ? `, and ${blocked.length - 3} more` : ''}. The sitemap asks Google ` +
             'to index these and robots.txt forbids fetching them, so they land in the index without a ' +
             'description, or not at all. One of the two files is wrong.', robots.url));
@@ -149,7 +150,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     const shut = describeAccess(access);
     if (shut) {
       out.push(f('info', 'ai-crawler-blocked',
-        `${shut.blocked.length} AI crawler(s) are disallowed by robots.txt`,
+        `${plural(shut.blocked.length, 'AI crawler')} are disallowed by robots.txt`,
         shut.detail, robotsUrl));
 
       // The site contradicting itself. llms.txt exists to tell an AI assistant
@@ -321,11 +322,11 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       const days = Math.floor((expiresAt - (opts.now ?? Date.now())) / DAY);
       const on = new Date(expiresAt).toISOString().slice(0, 10);
       if (days < 0) {
-        out.push(f('error', 'tls-expired', `The TLS certificate expired ${-days} day(s) ago`,
+        out.push(f('error', 'tls-expired', `The TLS certificate expired ${plural(-days, 'day')} ago`,
           `It ran out on ${on}. Browsers refuse to load the site, so nothing else in this report matters ` +
             'until it is renewed.', origin));
       } else if (days <= CERT_WARN_DAYS) {
-        out.push(f('warn', 'tls-expiring', `The TLS certificate expires in ${days} day(s)`,
+        out.push(f('warn', 'tls-expiring', `The TLS certificate expires in ${plural(days, 'day')}`,
           `On ${on}. Usually this means automatic renewal has stopped without anyone noticing — the ` +
             'certificates that lapse are the ones nobody was worried about.', origin));
       }
@@ -441,7 +442,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   // is a legitimate reason to have one.
   const redirecting = results.filter((r) => r.status >= 300 && r.status < 400);
   if (redirecting.length) {
-    out.push(f('info', 'link-redirects', `${redirecting.length} internal link(s) point at a redirect`,
+    out.push(f('info', 'link-redirects', `${plural(redirecting.length, 'internal link')} point at a redirect`,
       `First: ${redirecting.slice(0, 3).map((r) => `${r.target} (${r.status})`).join(', ')}. ` +
         'Linking to the final URL saves the hop.', origin));
   }
@@ -545,7 +546,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       (r) => r.final.status === 404 || r.final.status === 410 || r.final.status === 0,
     );
     if (dead.length) {
-      out.push(f('warn', 'external-broken', `${dead.length} outbound link(s) do not resolve`,
+      out.push(f('warn', 'external-broken', `${plural(dead.length, 'outbound link')} do not resolve`,
         `${dead.slice(0, 3).map((r) => `${r.href} (${r.final.status || r.final.error})`).join(', ')}` +
           `${dead.length > 3 ? `, and ${dead.length - 3} more` : ''}. A link out that goes nowhere is a dead ` +
           'end for a reader. Checked leniently — anything but a 404, a 410 or no answer at all is left alone.',
@@ -554,7 +555,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
 
     const moved = externalResults.filter((r) => r.first >= 300 && r.first < 400 && r.final.ok);
     if (moved.length) {
-      out.push(f('info', 'external-redirects', `${moved.length} outbound link(s) point at a redirect`,
+      out.push(f('info', 'external-redirects', `${plural(moved.length, 'outbound link')} point at a redirect`,
         `${moved.slice(0, 3).map((r) => `${r.href} → ${r.final.url}`).join(', ')}` +
           `${moved.length > 3 ? `, and ${moved.length - 3} more` : ''}. They work; linking to the final ` +
           'URL is tidier and survives the day the redirect is removed.', origin));
@@ -593,7 +594,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     (r) => r.status === 404 || r.status === 410 || r.status === 0,
   );
   if (deadSchemaImages.length) {
-    out.push(f('warn', 'schema-image-broken', `${deadSchemaImages.length} image(s) named in structured data do not load`,
+    out.push(f('warn', 'schema-image-broken', `${plural(deadSchemaImages.length, 'image')} named in structured data do not load`,
       `${deadSchemaImages.slice(0, 3).map((r) => `${r.href} (${r.status || r.error})`).join(', ')}` +
         `${deadSchemaImages.length > 3 ? `, and ${deadSchemaImages.length - 3} more` : ''}. Google is told to ` +
         'use these for rich results and finds nothing there. The markup is valid, so nothing else reports it.',
@@ -633,7 +634,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   }
   for (const [source, dead] of deadByPage) {
     const shown = dead.slice(0, 3).join(', ');
-    out.push(f('error', 'hreflang-dead', `${dead.length} hreflang target(s) do not load`,
+    out.push(f('error', 'hreflang-dead', `${plural(dead.length, 'hreflang target')} do not load`,
       `${shown}${dead.length > 3 ? `, and ${dead.length - 3} more` : ''} — declared on ${source}. Each ` +
         'version that does not load drops out of the set, and the pages pointing at it lose the annotation.',
       source));

@@ -13,6 +13,7 @@
 // guesses at severity or invents a score; it groups, counts, and orders.
 
 import { categoryOf } from './areas.mjs';
+import { noun } from './text.mjs';
 
 /** The template a URL belongs to: everything up to its last segment.
  *
@@ -53,16 +54,41 @@ const WORST_FIRST = { error: 0, warn: 1, info: 2 };
  *
  *  Ordered by level, then by how many pages carry it, then by id so two runs of
  *  an unchanged site produce the same report and --baseline stays meaningful. */
-export function byCause(findings) {
+export function byCause(findings, totalPages = 0) {
+  // A check that fires on every page crawled is not a section problem, and
+  // splitting it by section makes the reader do arithmetic to find that out.
+  // gohugo.io produced 200 things to change, and 104 of them were four checks
+  // that each applied to all 150 pages — `canonical-missing` alone arrived as
+  // twenty-six separate pieces of work. One sentence says it better than
+  // twenty-six do.
+  //
+  // Exactly every page, never nearly: on 149 of 150, "every page" is a false
+  // sentence, and this file's whole argument is that a report is worth reading
+  // because its sentences are true.
+  const everywhere = new Set();
+  if (totalPages > 1) {
+    const seenPerCheck = new Map();
+    for (const finding of findings ?? []) {
+      if (!finding.url) continue;
+      if (!seenPerCheck.has(finding.id)) seenPerCheck.set(finding.id, new Set());
+      seenPerCheck.get(finding.id).add(finding.url);
+    }
+    for (const [id, pages] of seenPerCheck) {
+      if (pages.size === totalPages) everywhere.add(id);
+    }
+  }
+
   const causes = new Map();
   for (const finding of findings ?? []) {
-    const section = sectionOf(finding.url);
+    const onEveryPage = everywhere.has(finding.id);
+    const section = onEveryPage ? '*' : sectionOf(finding.url);
     const key = `${finding.id} ${section}`;
     const cause = causes.get(key) ?? {
       id: finding.id,
       title: finding.title,
       level: finding.level,
       section,
+      everywhere: onEveryPage,
       findings: [],
     };
     cause.findings.push(finding);
@@ -135,16 +161,26 @@ export function causeScope(cause, totalPages) {
   const pages = cause.pages.length;
   if (pages <= 1) return cause.section === '/' ? 'once' : `on one page under ${cause.section}`;
 
-  const where = cause.section === '/' ? 'across the site' : `under ${cause.section}`;
+  const where = cause.everywhere
+    ? null
+    : cause.section === '/'
+      ? 'across the site'
+      : `under ${cause.section}`;
   const share =
     totalPages && pages / totalPages >= 0.5 ? `, ${Math.round((pages / totalPages) * 100)}% of the crawl` : '';
   const seen = cause.impressions
-    ? `, ${cause.impressions.toLocaleString()} impressions in 28 days` +
+    ? `, ${cause.impressions.toLocaleString()} ${noun(cause.impressions, 'impression')} in 28 days` +
       (cause.position ? `, best at position ${cause.position}` : '')
     : '';
-  const reach = seen || (cause.inlinks ? `, ${cause.inlinks.toLocaleString()} links in` : '');
+  // "1 links in" — found by running this against a real site, which is the only
+  // way anything here has ever been found.
+  const reach =
+    seen || (cause.inlinks ? `, ${cause.inlinks.toLocaleString()} ${noun(cause.inlinks, 'link')} in` : '');
   const near =
     cause.depth === 0 ? ', starting at the homepage' : cause.depth === 1 ? ', one click from home' : '';
+  // No share for a cause that is on everything: "100% of the crawl" is the
+  // sentence it already just said.
+  if (where === null) return `every page crawled (${pages})${reach}${near}`;
   return `${pages} pages ${where}${share}${reach}${near}`;
 }
 
@@ -159,11 +195,14 @@ export function causeScope(cause, totalPages) {
  *  terminal, the HTML and the app all print, and a second phrasing of it in
  *  another language is exactly the drift this project refuses everywhere else. */
 export function causePayload(findings, totalPages) {
-  return byCause(findings).map((cause) => ({
+  return byCause(findings, totalPages).map((cause) => ({
     id: cause.id,
     title: cause.title,
     level: cause.level,
     section: cause.section,
+    // So a native client can say "every page" in its own words rather than
+    // matching on the sentence this file writes.
+    ...(cause.everywhere ? { everywhere: true } : {}),
     count: cause.count,
     pages: cause.pages,
     scope: causeScope(cause, totalPages),

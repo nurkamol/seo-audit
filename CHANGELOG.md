@@ -5,6 +5,33 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **A check that fires on every page is one thing to change, not one per
+  section.** Grouping by URL prefix is right when a check hits part of a site —
+  that is the Shopify `/products/` insight this project's grouping was built on
+  — and wrong when it hits all of it. gohugo.io produced **200 things to change
+  and 104 of them were four checks that each applied to all 150 pages**;
+  `canonical-missing` alone arrived as twenty-six separate pieces of work, one
+  per prefix, making the reader do the arithmetic that tells them it was
+  site-wide. The same report is now 100 things to change, and those four read
+  `every page crawled (150), 1,695 links in`.
+
+  Exactly every page, never nearly. On 149 of 150 "every page" is a false
+  sentence, and a report is only worth reading because its sentences are true.
+  It costs no extra requests — the grouping was already computed.
+
+### Fixed
+- **"1 image(s) without width/height"** was the most repeated finding title in a
+  real report and read like a form nobody finished. Fifty of these across seven
+  files now pick the right word. Zero is plural, which is the case that gets
+  written wrong by reaching for `n > 1`.
+
+- **"1 links in"** — the same defect one line further on, hardcoded rather than
+  spelled `(s)`, so no search for the first would have found it. It had been
+  shipping for as long as reach has been reported, and no fixture ever had
+  exactly one inbound link. Found by running the tool against a real site and
+  reading the output, which is the only way anything here has ever been found.
+
 ### Fixed
 - **A PDF's section headings could be left alone at the foot of a page**, with
   the findings they introduce overleaf. A cause block listing every affected

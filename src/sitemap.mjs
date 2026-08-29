@@ -11,6 +11,8 @@
 // So this refuses to write anything from a run that did not see the whole site,
 // and says which run would.
 
+import { plural } from './text.mjs';
+
 /** The five characters XML cannot carry raw. `&` first, or the others get
  *  their own ampersands escaped a second time. */
 const escape = (text) =>
@@ -46,13 +48,13 @@ export function rebuild(pages, findings = [], context = {}) {
   // --- when not to write anything ----------------------------------------
   if (truncated > 0) {
     return refuse(
-      `The crawl stopped at its limit with ${truncated} URL(s) unread, so this file would leave ` +
+      `The crawl stopped at its limit with ${plural(truncated, 'URL')} unread, so this file would leave ` +
         `them out of the sitemap entirely. Run again with --limit ${pages.length + truncated}.`,
     );
   }
   if (rateLimited > 0) {
     return refuse(
-      `${rateLimited} page(s) were never read because the server was rate limiting, so whether they ` +
+      `${plural(rateLimited, 'page')} were never read because the server was rate limiting, so whether they ` +
         'belong in a sitemap is not known. Run again with a lower --concurrency.',
     );
   }

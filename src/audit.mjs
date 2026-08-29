@@ -15,6 +15,7 @@ import { applyIgnores, expectationChecks, matchGlob } from './config.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 import { sectionOf } from './causes.mjs';
 import { rebuild, changedSince } from './sitemap.mjs';
+import { plural } from './text.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -246,7 +247,7 @@ export async function audit(target, opts = {}) {
         ? {
             level: 'error',
             id: 'tls-expired',
-            title: `The TLS certificate expired ${lapsed} day(s) ago`,
+            title: `The TLS certificate expired ${plural(lapsed, 'day')} ago`,
             detail:
               `It ran out on ${new Date(expiresAt).toISOString().slice(0, 10)}, which is why nothing here ` +
               'could be fetched — browsers refuse the site outright. Renew it; nothing else about this ' +
@@ -307,9 +308,9 @@ export async function audit(target, opts = {}) {
       findings.push({
         level: 'info',
         id: 'since',
-        title: `${changed.skipped.length} URL(s) were unchanged since ${opts.since}`,
+        title: `${plural(changed.skipped.length, 'URL')} were unchanged since ${opts.since}`,
         detail:
-          `The sitemap says ${changed.changed.length} page(s) changed on or after ${opts.since}` +
+          `The sitemap says ${plural(changed.changed.length, 'page')} changed on or after ${opts.since}` +
           (changed.unknown.length
             ? `, and ${changed.unknown.length} carry no lastmod and were checked anyway — not knowing ` +
               'when a page changed is not evidence that it did not'
@@ -342,7 +343,7 @@ export async function audit(target, opts = {}) {
     findings.push({
       level: 'info',
       id: 'excluded',
-      title: `${excluded.length} URL(s) were excluded by --exclude`,
+      title: `${plural(excluded.length, 'URL')} were excluded by --exclude`,
       detail:
         `${patterns.join(', ')} matched ${excluded.length} of the ${considered.length} URLs considered, ` +
         `so ${wanted.length} were left to check. This is a fact about the run, not about the site — ` +
@@ -400,7 +401,7 @@ export async function audit(target, opts = {}) {
             detail:
               `Tried: ${tried.join(', ')}. The server answered HTTP 429 — "ask later" — so this run ` +
               'never saw whether a sitemap is there, and followed links from the homepage instead, ' +
-              `reaching ${pages.length} page(s). This is a fact about the crawl, not about the site. ` +
+              `reaching ${plural(pages.length, 'page')}. This is a fact about the crawl, not about the site. ` +
               'Run it again with a lower --concurrency, or pass --sitemap <url>.',
             url: origin,
           }
@@ -504,7 +505,7 @@ export async function audit(target, opts = {}) {
     findings.push(...notes);
     if (targets.length) {
       opts.onNote?.(
-        `measuring ${targets.length} page(s) with PageSpeed Insights — about ` +
+        `measuring ${plural(targets.length, 'page')} with PageSpeed Insights — about ` +
           `${Math.ceil(estimateSeconds(targets.length) / 60)} min …`,
       );
       findings.push(...(await psiChecks(targets, { strategy: opts.psiStrategy, onProgress })));
@@ -521,7 +522,7 @@ export async function audit(target, opts = {}) {
       id: 'rate-limit-slowed',
       title: 'The crawl was slowed down to get through',
       detail:
-        `The server answered HTTP 429 — asking for a slower crawl — ${fetcher.rateLimited} time(s), so ` +
+        `The server answered HTTP 429 — asking for a slower crawl — ${plural(fetcher.rateLimited, 'time')}, so ` +
         `requests were paused and the concurrency came down to ${fetcher.concurrency}. This is not a ` +
         'finding about the site — it explains the elapsed time, and any page reported as rate-limited ' +
         'was not read at all. Pass a lower --concurrency to get through cleanly.',
@@ -602,7 +603,7 @@ export async function audit(target, opts = {}) {
       findings.push({
         level: 'warn',
         id: 'sitemap-not-indexable',
-        title: `${contradictions.length} sitemap URL(s) will not be indexed`,
+        title: `${plural(contradictions.length, 'sitemap URL')} will not be indexed`,
         detail:
           `${contradictions.slice(0, 3).map((p) => `${p.url} (${why(p)})`).join(', ')}` +
           `${contradictions.length > 3 ? `, and ${contradictions.length - 3} more` : ''}. A sitemap is a ` +

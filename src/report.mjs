@@ -22,8 +22,8 @@ const PAINT = { error: red, warn: yellow, info: blue };
  *  know is that they are 62 pieces of work and four of them are most of it.
  *  Shown when there is something to summarise — under a handful of causes the
  *  list below already reads as the summary. */
-export function worstCauses(findings, limit = 8) {
-  const causes = byCause(findings);
+export function worstCauses(findings, totalPages = 0, limit = 8) {
+  const causes = byCause(findings, totalPages);
   return causes.length > limit + 2 ? causes.slice(0, limit) : [];
 }
 
@@ -127,9 +127,9 @@ export function terminal(findings, meta, { score } = {}) {
   }
 
   const costs = costsById(score);
-  const causes = worstCauses(findings);
+  const causes = worstCauses(findings, meta.pages);
   if (causes.length) {
-    const total = byCause(findings).length;
+    const total = byCause(findings, meta.pages).length;
     lines.push(rule('Start here'));
     lines.push('');
     lines.push(dim(`  ${findings.length} findings are ${total} things to change. The widest:`));
@@ -252,11 +252,11 @@ export function markdown(findings, meta, { score } = {}) {
   }
 
   const costs = costsById(score);
-  const causes = worstCauses(findings);
+  const causes = worstCauses(findings, meta.pages);
   if (causes.length) {
     out.push('## Start here');
     out.push('');
-    out.push(`${findings.length} findings are **${byCause(findings).length} things to change**. The widest:`);
+    out.push(`${findings.length} findings are **${byCause(findings, meta.pages).length} things to change**. The widest:`);
     out.push('');
     out.push('| | What to change | Where | Worth |');
     out.push('|:-:|---|---|--:|');
@@ -1193,11 +1193,12 @@ export function reportParts(findings, meta, { backHref, backLabel = 'New audit',
   ${dial()}
 
   ${(() => {
-    const causes = worstCauses(findings);
+    const causes = worstCauses(findings, meta.pages);
     if (!causes.length) return '';
+    const total = byCause(findings, meta.pages).length;
     return `<section class="causes">
-    <h2 id="start-here"><span>Start here</span><span class="rule"></span><span class="tick">${byCause(findings).length}</span></h2>
-    <p class="lede">${findings.length} findings are ${byCause(findings).length} things to change. The widest:</p>
+    <h2 id="start-here"><span>Start here</span><span class="rule"></span><span class="tick">${total}</span></h2>
+    <p class="lede">${findings.length} findings are ${total} things to change. The widest:</p>
     <ol>${causes
       .map((cause) => {
         const points = causeCost(cause, costs);

@@ -370,7 +370,7 @@ test('a dead host with an expired certificate is told what is actually wrong', a
     now: Date.parse('2026-08-24T00:00:00Z'),
   });
   assert.deepEqual(lapsed.findings.map((f) => f.id), ['tls-expired']);
-  assert.match(lapsed.findings[0].title, /expired 4152 day\(s\) ago/);
+  assert.match(lapsed.findings[0].title, /expired 4152 days ago/);
   assert.match(lapsed.findings[0].detail, /2015-04-12/);
   // It must not also guess at bot protection: one cause, named.
   assert.doesNotMatch(lapsed.findings[0].detail, /bot-protection|Cloudflare/i);

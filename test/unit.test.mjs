@@ -18,6 +18,7 @@ import { audit } from '../src/audit.mjs';
 import { Fetcher } from '../src/http.mjs';
 import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
+import { plural } from '../src/text.mjs';
 
 // --- parse ----------------------------------------------------------------
 
@@ -389,7 +390,7 @@ test('an expired certificate is an error, since nothing else matters then', asyn
   const [finding] = await certIds(-3);
   assert.equal(finding.id, 'tls-expired');
   assert.equal(finding.level, 'error');
-  assert.match(finding.title, /3 day\(s\) ago/);
+  assert.match(finding.title, /3 days ago/);
 });
 
 test('a certificate that cannot be read is not guessed at', async () => {
@@ -585,7 +586,7 @@ test('a truncated crawl measures no depth at all', () => {
   const found = crossPageChecks(corridor, { truncated: 12 });
   const skipped = found.find((finding) => finding.id === 'click-depth-skipped');
   assert.ok(skipped);
-  assert.match(skipped.detail, /12 page\(s\) short/);
+  assert.match(skipped.detail, /12 pages short/);
   assert.ok(!found.some((finding) => finding.id === 'deep-page'));
 });
 
@@ -960,7 +961,7 @@ test('orphans are not looked for across a crawl that stopped early', () => {
   const skipped = found.find((f) => f.id === 'orphan-check-skipped');
   assert.ok(skipped);
   assert.equal(skipped.level, 'info');
-  assert.match(skipped.detail, /125 page\(s\) short/);
+  assert.match(skipped.detail, /125 pages short/);
 });
 
 test('orphans are not looked for when the pages that would prove it did not load', () => {
@@ -1220,7 +1221,7 @@ test('a destination linked with no words at all is reported once, not once per p
   );
   const found = crossPageChecks(pages).filter((finding) => finding.id === 'link-no-text');
   assert.equal(found.length, 1, 'one destination, one finding');
-  assert.match(found[0].detail, /3 page\(s\)/);
+  assert.match(found[0].detail, /3 pages/);
   assert.match(found[0].detail, /https:\/\/x\.test\/contact/);
 });
 
@@ -2652,6 +2653,89 @@ test('a baseline round-trips through serialize and parse', () => {
   assert.deepEqual(restored.findings, findings);
 });
 
+test('one of a thing is singular, and none of it is plural', () => {
+  // "1 image(s) without width/height" was the most repeated finding title in a
+  // real report. Zero is plural in English — "0 images" — which is the case
+  // that gets written wrong when somebody reaches for `n > 1`.
+  assert.equal(plural(1, 'image'), '1 image');
+  assert.equal(plural(2, 'image'), '2 images');
+  assert.equal(plural(0, 'image'), '0 images');
+  assert.equal(plural(1, 'URL'), '1 URL');
+  assert.equal(plural(3, 'decorative image'), '3 decorative images');
+  // The escape hatch, for the first plural here that is not regular.
+  assert.equal(plural(1, 'entry', 'entries'), '1 entry');
+  assert.equal(plural(4, 'entry', 'entries'), '4 entries');
+});
+
+test('a scope sentence counts one link as one link', () => {
+  // "1 links in" shipped for as long as reach has been reported, and no test
+  // caught it because every fixture happened to have more than one. Found by
+  // reading a real report, which is how everything here gets found.
+  const one = {
+    id: 'x', title: 'X', level: 'warn', section: '/',
+    pages: ['https://x.test/a', 'https://x.test/b'],
+    findings: [], count: 2, inlinks: 1, depth: null, impressions: null, position: null,
+  };
+  assert.match(causeScope(one, 10), /1 link in/);
+  assert.doesNotMatch(causeScope(one, 10), /1 links in/);
+  assert.match(causeScope({ ...one, inlinks: 2 }, 10), /2 links in/);
+});
+
+test('a check on every page is one thing to change, not one per section', () => {
+  // gohugo.io produced 200 things to change and 104 of them came from four
+  // checks that each applied to all 150 pages — `canonical-missing` arrived as
+  // twenty-six separate pieces of work, one per URL prefix. Splitting a
+  // site-wide fact by section makes the reader do the arithmetic that tells
+  // them it was site-wide.
+  const page = (n) => `https://x.test/${n < 3 ? '' : `s${n}/`}p${n}`;
+  const findings = Array.from({ length: 6 }, (_, i) => ({
+    level: 'warn', id: 'canonical-missing', title: 'No canonical link', detail: 'D', url: page(i),
+  }));
+
+  const split = byCause(findings);                 // no page count: nothing to compare against
+  const whole = byCause(findings, 6);
+
+  assert.ok(split.length > 1, 'these pages really are under different sections');
+  assert.equal(whole.length, 1, 'one check on every page is one piece of work');
+  assert.equal(whole[0].everywhere, true);
+  assert.match(causeScope(whole[0], 6), /every page crawled \(6\)/);
+});
+
+test('a check on all but one page is still reported by section', () => {
+  // The half that matters. "Every page" has to be true when it is said, so the
+  // rule is exactly every page and never nearly — on 5 of 6 this must behave
+  // exactly as it always did.
+  const page = (n) => `https://x.test/${n < 3 ? '' : `s${n}/`}p${n}`;
+  const findings = Array.from({ length: 5 }, (_, i) => ({
+    level: 'warn', id: 'canonical-missing', title: 'No canonical link', detail: 'D', url: page(i),
+  }));
+
+  const causes = byCause(findings, 6);
+
+  assert.ok(causes.length > 1, 'five of six pages is a section problem, not a site-wide one');
+  assert.ok(causes.every((c) => !c.everywhere), 'nothing may claim to be on every page');
+  for (const cause of causes) {
+    assert.doesNotMatch(causeScope(cause, 6), /every page/);
+  }
+});
+
+test('two different checks on every page stay two things to change', () => {
+  // Collapsing is per check. Two site-wide problems are two pieces of work, and
+  // merging them would be the opposite failure: a report that hides work.
+  const findings = [
+    { level: 'warn', id: 'a', title: 'A', detail: 'D', url: 'https://x.test/one' },
+    { level: 'warn', id: 'a', title: 'A', detail: 'D', url: 'https://x.test/s/two' },
+    { level: 'warn', id: 'b', title: 'B', detail: 'D', url: 'https://x.test/one' },
+    { level: 'warn', id: 'b', title: 'B', detail: 'D', url: 'https://x.test/s/two' },
+  ];
+
+  const causes = byCause(findings, 2);
+
+  assert.equal(causes.length, 2);
+  assert.deepEqual(causes.map((c) => c.id).sort(), ['a', 'b']);
+  assert.ok(causes.every((c) => c.everywhere));
+});
+
 test('a report carries the grouping and a baseline does not', () => {
   // The CLI wrote findings and the Worker wrote findings *and* causes, so a
   // machine reading `--json` got a different document from one reading the
@@ -2667,10 +2751,13 @@ test('a report carries the grouping and a baseline does not', () => {
   assert.equal(report.causes.length, 1, 'two findings of one check under one section are one cause');
   assert.deepEqual(
     Object.keys(report.causes[0]).sort(),
-    ['area', 'count', 'id', 'level', 'pages', 'scope', 'section', 'title'],
+    // `everywhere` is here because this check is on both of the two pages
+    // crawled — see the site-wide test below. It is omitted, not false, when a
+    // cause is not on everything.
+    ['area', 'count', 'everywhere', 'id', 'level', 'pages', 'scope', 'section', 'title'],
     'the same shape the Worker sends, because it is the same function',
   );
-  assert.equal(report.causes[0].scope, causeScope(byCause(findings)[0], meta.pages));
+  assert.equal(report.causes[0].scope, causeScope(byCause(findings, meta.pages)[0], meta.pages));
 
   // A baseline is committed and diffed, and grouping moves whenever page counts
   // do — which is the churn the baseline shape exists to avoid.
@@ -2800,7 +2887,7 @@ test('a rebuilt sitemap refuses rather than quietly dropping real pages', () => 
   // would take every unread page out of the site's sitemap.
   const cut = rebuild(pages, [], { truncated: 185 });
   assert.equal(cut.xml, null);
-  assert.match(cut.refused, /185 URL\(s\) unread/);
+  assert.match(cut.refused, /185 URLs unread/);
   assert.match(cut.refused, /--limit 186/, 'and says which run would work');
 
   // A page nobody could read is a page nobody can place.

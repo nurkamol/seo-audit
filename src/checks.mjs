@@ -14,6 +14,7 @@ import { linkGraph, key as graphKey } from './graph.mjs';
 
 import { attr, bodyKind, stripMarkupInAttributes } from './parse.mjs';
 import { cluster } from './dupes.mjs';
+import { plural } from './text.mjs';
 
 // Defaults, overridable per site under `limits` in the config file. A
 // documentation site and a shop disagree about what "thin" means, and the tool
@@ -602,7 +603,7 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     // An <img> can have no src either — a lazy-loading placeholder, or markup
     // waiting on JavaScript. Saying "First: null" helped nobody find it.
     const where = noAlt[0].src ?? 'an <img> with no src attribute either';
-    out.push(f('error', 'img-alt', `${noAlt.length} image(s) with no alt attribute`,
+    out.push(f('error', 'img-alt', `${plural(noAlt.length, 'image')} with no alt attribute`,
       `First: ${where}. Decorative images need alt="" — the attribute must exist either way.`, url));
   }
   // Alt text that exists but says nothing. alt="" is deliberate and correct for
@@ -613,13 +614,13 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
 
   const filename = described.filter((i) => ALT_FILENAME.test(i.alt.trim()) || ALT_SERIAL.test(i.alt.trim()));
   if (filename.length) {
-    out.push(f('warn', 'img-alt-filename', `${filename.length} image(s) with a filename as alt text`,
+    out.push(f('warn', 'img-alt-filename', `${plural(filename.length, 'image')} with a filename as alt text`,
       `First: alt="${filename[0].alt}" on ${filename[0].src}. That is what a CMS fills in when nobody typed anything — it describes the file, not the picture.`, url));
   }
 
   const placeholder = described.filter((i) => ALT_PLACEHOLDER.has(norm(i)));
   if (placeholder.length) {
-    out.push(f('warn', 'img-alt-placeholder', `${placeholder.length} image(s) with placeholder alt text`,
+    out.push(f('warn', 'img-alt-placeholder', `${plural(placeholder.length, 'image')} with placeholder alt text`,
       `First: alt="${placeholder[0].alt}" on ${placeholder[0].src}. It names the medium, not the content — a screen reader already announces "image" before reading it.`, url));
   }
 
@@ -645,7 +646,7 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     (i) => i.title && i.alt && i.title.trim() === i.alt.trim(),
   );
   if (titledSameAsAlt.length) {
-    out.push(f('info', 'img-title-duplicates-alt', `${titledSameAsAlt.length} image(s) repeat the alt text as a title`,
+    out.push(f('info', 'img-title-duplicates-alt', `${plural(titledSameAsAlt.length, 'image')} repeat the alt text as a title`,
       `First: "${titledSameAsAlt[0].title}" on ${titledSameAsAlt[0].src}. One field filling both is the usual ` +
         'cause. It adds nothing for a sighted visitor and a screen reader that surfaces both reads it twice.', url));
   }
@@ -654,7 +655,7 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     (i) => i.title && (i.alt === '' || decorativeByRole(i)),
   );
   if (titledDecorative.length) {
-    out.push(f('info', 'img-title-on-decorative', `${titledDecorative.length} decorative image(s) carry a title`,
+    out.push(f('info', 'img-title-on-decorative', `${plural(titledDecorative.length, 'decorative image')} carry a title`,
       `First: "${titledDecorative[0].title}" on ${titledDecorative[0].src}. The markup declares the image ` +
         'decorative and then attaches a tooltip to it — one of the two is wrong.', url));
   }
@@ -672,7 +673,7 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     (i) => /^lazy$/i.test(i.loading ?? '') && /^high$/i.test(i.fetchpriority ?? ''),
   );
   if (hurriedAndDeferred.length) {
-    out.push(f('info', 'img-lazy-priority', `${hurriedAndDeferred.length} image(s) are both deferred and prioritised`,
+    out.push(f('info', 'img-lazy-priority', `${plural(hurriedAndDeferred.length, 'image')} are both deferred and prioritised`,
       `First: ${hurriedAndDeferred[0].src}. loading="lazy" and fetchpriority="high" on one element ask ` +
         'for opposite things, and lazy decides when the request happens. If this is the image the page ' +
         'is judged on, drop the lazy; if it is not, drop the priority.', url));
@@ -680,18 +681,18 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
 
   const longAlt = described.filter((i) => i.alt.length > ALT_MAX);
   if (longAlt.length) {
-    out.push(f('info', 'img-alt-long', `${longAlt.length} image(s) with very long alt text`,
+    out.push(f('info', 'img-alt-long', `${plural(longAlt.length, 'image')} with very long alt text`,
       `First: ${longAlt[0].alt.length} chars on ${longAlt[0].src}. Alt is read in one breath, with no way to skim — a description this long belongs in the page text, where everyone gets it.`, url));
   }
 
   const noDim = doc.images.filter((i) => i.src && (!i.width || !i.height));
   if (noDim.length) {
-    out.push(f('warn', 'img-dimensions', `${noDim.length} image(s) without width/height`,
+    out.push(f('warn', 'img-dimensions', `${plural(noDim.length, 'image')} without width/height`,
       `First: ${noDim[0].src}. Without them the page reflows as images arrive (layout shift).`, url));
   }
   const noSrcset = doc.images.filter((i) => i.src && !i.srcset && !i.inPicture && !/\.svg($|\?)/i.test(i.src));
   if (noSrcset.length) {
-    out.push(f('info', 'img-srcset', `${noSrcset.length} image(s) served at one size`,
+    out.push(f('info', 'img-srcset', `${plural(noSrcset.length, 'image')} served at one size`,
       `First: ${noSrcset[0].src}. A phone downloads the desktop file.`, url));
   }
 
@@ -705,7 +706,7 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   // crawled — so a note, not a complaint.
   const nofollowed = doc.links.nofollowInternal ?? [];
   if (nofollowed.length) {
-    out.push(f('info', 'internal-nofollow', `${nofollowed.length} internal link(s) marked nofollow`,
+    out.push(f('info', 'internal-nofollow', `${plural(nofollowed.length, 'internal link')} marked nofollow`,
       `First: ${nofollowed.slice(0, 3).join(', ')}. Fair for a login or a filter nobody should crawl; ` +
         'on an ordinary page it withholds a path through your own site for no gain.', url));
   }
@@ -874,7 +875,7 @@ export function sitemapChecks(entries, source, now = Date.now(), files = []) {
   });
   if (listedTwice.length) {
     const [loc, inFiles] = listedTwice[0];
-    out.push(f('info', 'sitemap-duplicate-url', `${listedTwice.length} URL(s) are listed more than once`,
+    out.push(f('info', 'sitemap-duplicate-url', `${plural(listedTwice.length, 'URL')} are listed more than once`,
       `First: ${loc}${inFiles.size > 1 ? `, in ${[...inFiles].join(' and ')}` : ' — twice in one file'}. ` +
         'A sitemap is a list of the pages you want indexed, and listing one twice says nothing extra ' +
         'while making the file harder to trust.', source ?? loc));
@@ -897,7 +898,7 @@ export function sitemapChecks(entries, source, now = Date.now(), files = []) {
     return Number.isFinite(at) && at > now + DAY;
   });
   if (future.length) {
-    out.push(f('warn', 'sitemap-lastmod-future', `${future.length} page(s) claim a lastmod in the future`,
+    out.push(f('warn', 'sitemap-lastmod-future', `${plural(future.length, 'page')} claim a lastmod in the future`,
       `First: ${future[0].loc} says ${future[0].lastmod}. A date that has not happened yet is not a ` +
         'signal a crawler can use, and it is usually a timezone or a scheduling bug in the generator.', source));
   }
@@ -975,7 +976,7 @@ export function crossPageChecks(pages, opts = {}) {
   const uncomparable = live.filter((p) => !p.doc.fingerprint).length;
   if (uncomparable > 0 && live.length > 1) {
     out.push(f('info', 'duplicate-content-not-checked',
-      `${uncomparable} page(s) were not compared for duplicate content`,
+      `${plural(uncomparable, 'page')} were not compared for duplicate content`,
       'Content is compared inside <main> or <article>. Without one of those the text of a page is ' +
         'the whole document, navigation and footer included, and every page of a small site would ' +
         'look like a copy of every other. Pages under about a hundred words are skipped for the ' +
@@ -997,7 +998,7 @@ export function crossPageChecks(pages, opts = {}) {
   const unfetched = pages.length - live.length;
   const partial =
     opts.truncated > 0
-      ? `the crawl stopped ${opts.truncated} page(s) short of the whole site`
+      ? `the crawl stopped ${plural(opts.truncated, 'page')} short of the whole site`
       : unfetched > pages.length * 0.1
         ? `${unfetched} of ${pages.length} crawled pages did not load`
         : null;
@@ -1148,7 +1149,7 @@ export function crossPageChecks(pages, opts = {}) {
   for (const [href, pages] of namelessTargets.slice(0, 10)) {
     out.push(f('warn', 'link-no-text', 'Link with nothing to read',
       `${href} is linked with no text, no image alt, no aria-label and no title, from ` +
-        `${pages.length} page(s): ${pages.slice(0, 3).join(', ')}. Google is told the page exists and ` +
+        `${plural(pages.length, 'page')}: ${pages.slice(0, 3).join(', ')}. Google is told the page exists and ` +
         'nothing about it, and a screen reader announces the URL instead of a description.',
       pages[0]));
   }
@@ -1171,7 +1172,7 @@ export function crossPageChecks(pages, opts = {}) {
     const names = inbound.get(withoutSlash(p.url));
     const shown = [...new Set(names.map((n) => `"${n}"`))].slice(0, 3).join(', ');
     out.push(f('info', 'anchor-generic', 'Every link to this page says the same empty thing',
-      `${names.length} link(s) point here and all of them read ${shown}. Anchor text is the one ` +
+      `${plural(names.length, 'link')} point here and all of them read ${shown}. Anchor text is the one ` +
         'description of a page that comes from somewhere other than the page itself, and this one has ' +
         'none — the words say what to do, not what is there.', p.url));
   }

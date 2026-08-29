@@ -16,6 +16,8 @@
 // A rule with a wildcard or a placeholder cannot be tested by asking for it
 // literally, so those are counted and reported rather than guessed at.
 
+import { plural } from './text.mjs';
+
 const HAS_PATTERN = /[*:]/;
 
 /** Rules from a redirect map. `to` and `status` may be null. */
@@ -56,13 +58,13 @@ export async function redirectChecks(rules, fetcher, origin, { limit = 200, onPr
   const checked = testable.slice(0, limit);
 
   if (patterned.length) {
-    out.push(f('info', 'redirect-pattern-skipped', `${patterned.length} wildcard rule(s) were not tested`,
+    out.push(f('info', 'redirect-pattern-skipped', `${plural(patterned.length, 'wildcard rule')} were not tested`,
       `Rules like ${patterned.slice(0, 2).map((r) => r.from).join(', ')} match a shape rather than a URL, ` +
         'so asking for them literally proves nothing. Add a real example of each to the map, or test them by hand.',
       origin));
   }
   if (testable.length > checked.length) {
-    out.push(f('info', 'redirect-map-capped', `${testable.length - checked.length} rule(s) were not tested`,
+    out.push(f('info', 'redirect-map-capped', `${plural(testable.length - checked.length, 'rule')} were not tested`,
       `The map has ${testable.length} testable rules and the limit is ${limit}. Raise it with maxRedirectChecks.`,
       origin));
   }
@@ -128,17 +130,17 @@ export async function redirectChecks(rules, fetcher, origin, { limit = 200, onPr
       `${shown}${lines.length > 3 ? `, and ${lines.length - 3} more` : ''}. ${detail}`, origin));
   };
 
-  say('gone', 'error', 'redirect-dead', (n) => `${n} old URL(s) in the redirect map are simply gone`,
+  say('gone', 'error', 'redirect-dead', (n) => `${plural(n, 'old URL')} in the redirect map are simply gone`,
     'The rule is not in effect, so every link and every ranking pointing at these lands on nothing.');
-  say('broken', 'error', 'redirect-broken', (n) => `${n} redirect(s) land on a page that does not load`,
+  say('broken', 'error', 'redirect-broken', (n) => `${plural(n, 'redirect')} land on a page that does not load`,
     'The rule fires and then arrives nowhere, which is worse than no rule: it looks handled.');
-  say('notRedirecting', 'warn', 'redirect-not-applied', (n) => `${n} old URL(s) answer 200 instead of redirecting`,
+  say('notRedirecting', 'warn', 'redirect-not-applied', (n) => `${plural(n, 'old URL')} answer 200 instead of redirecting`,
     'The map says these moved, and the server disagrees. Either the rule never shipped or something serves the old path.');
-  say('hops', 'warn', 'redirect-hops', (n) => `${n} redirect(s) take more than one hop`,
+  say('hops', 'warn', 'redirect-hops', (n) => `${plural(n, 'redirect')} take more than one hop`,
     'Each hop is a round trip a visitor and a crawler both pay for. Point the first rule at the final URL.');
-  say('elsewhere', 'warn', 'redirect-elsewhere', (n) => `${n} redirect(s) land somewhere the map does not expect`,
+  say('elsewhere', 'warn', 'redirect-elsewhere', (n) => `${plural(n, 'redirect')} land somewhere the map does not expect`,
     'Another rule is probably matching first. The map is no longer describing what the site does.');
-  say('temporary', 'warn', 'redirect-temporary', (n) => `${n} permanent redirect(s) are served as 302`,
+  say('temporary', 'warn', 'redirect-temporary', (n) => `${plural(n, 'permanent redirect')} are served as 302`,
     'A 302 tells Google the move is temporary, so it keeps the old URL indexed and passes less through it.');
 
   return out;

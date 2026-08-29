@@ -27,6 +27,7 @@
 //     prettified slug.
 
 import { GENERIC_ANCHORS, anchorPhrase } from './checks.mjs';
+import { plural } from './text.mjs';
 
 const SCHEMA = 'https://schema.org';
 
@@ -163,14 +164,14 @@ export function buildSchema(pages, context = {}) {
 
   if (truncated > 0) {
     return refuse(
-      `The crawl stopped at its limit with ${truncated} URL(s) unread. A breadcrumb trail is only ` +
+      `The crawl stopped at its limit with ${plural(truncated, 'URL')} unread. A breadcrumb trail is only ` +
         'honest when every step of it was fetched, so this would silently describe fewer pages than ' +
         `it looks like. Run again with --limit ${pages.length + truncated}.`,
     );
   }
   if (rateLimited > 0) {
     return refuse(
-      `${rateLimited} page(s) were never read because the server was rate limiting, so the trails ` +
+      `${plural(rateLimited, 'page')} were never read because the server was rate limiting, so the trails ` +
         'through them cannot be built. Run again with a lower --concurrency.',
     );
   }
@@ -313,7 +314,7 @@ export function describeSchema(result, path) {
   for (const entry of result.generated) {
     types[entry.jsonld['@type']] = (types[entry.jsonld['@type']] ?? 0) + 1;
   }
-  const out = [`  wrote ${path} — ${result.generated.length} block(s) for ${new Set(result.generated.map((e) => e.url)).size} page(s)`];
+  const out = [`  wrote ${path} — ${plural(result.generated.length, 'block')} for ${plural(new Set(result.generated.map((e) => e.url)).size, 'page')}`];
   for (const [type, count] of Object.entries(types).sort((a, b) => b[1] - a[1])) {
     out.push(`    ${String(count).padEnd(4)} ${type}`);
   }
