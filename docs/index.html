@@ -227,15 +227,25 @@
 <section class="wrap">
   <h2>What it looks like</h2>
   <p class="lede">
-    The same run, three ways. Nothing here is a mock-up — the app is a real window, the
-    report is a real report, and the PDF came out of the app's export.
+    Nothing here is a mock-up. The app is a real window, the report is a real report, the PDF
+    came out of the app's export, and the numbers are a real crawl of a real site.
   </p>
   <figure class="shot wide">
-    <img src="shots/app.png" alt="The macOS app showing a report: 25 pages, 171 findings, 55 things to change, listed worst first"
-         width="1600" height="1139" loading="lazy">
+    <img src="shots/app.png" alt="The macOS app showing a real audit of astro.build: 60 pages, 232 findings, 37 things to change, scored 87 out of 100, worst first"
+         width="1640" height="1054" loading="lazy">
     <figcaption>
-      The macOS app. 171 findings on jekyllrb.com are 55 things to change, worst first — and
-      every finished run stays in the sidebar, to compare the next one against.
+      A real run against astro.build. 232 findings are 37 things to change, worst first, scored
+      87 — and the one error at the top is a link to a page that does not exist, which is the
+      bug this tool was written to catch.
+    </figcaption>
+  </figure>
+  <figure class="shot wide">
+    <img src="shots/compare.png" alt="The compare sheet: docs.astro.build against astro.build, showing 26 findings that appeared"
+         width="1640" height="1054" loading="lazy">
+    <figcaption>
+      Compare two runs — a site against itself last week, or one property against another.
+      Findings that appeared come first, because those are the ones somebody just introduced.
+      Different hosts are matched by path.
     </figcaption>
   </figure>
   <div class="shots">
@@ -252,11 +262,11 @@
   </div>
   <div class="shots settings-row">
     <figure class="shot">
-      <img src="shots/settings.png" alt="The app's settings: a sidebar of seven panes — crawl, coverage, identity, performance, silenced, reports and updates"
-           width="1100" height="850" loading="lazy">
+      <img src="shots/settings.png" alt="The app's settings: a sidebar of nine panes — crawl, coverage, identify as, performance, Search Console, silenced, reports, updates and help"
+           width="1480" height="1144" loading="lazy">
     </figure>
     <p class="lede">
-      Settings: seven panes, laid out the way macOS lays out System Settings. <b>Gentle</b> is one
+      Settings: nine panes, laid out the way macOS lays out System Settings. <b>Gentle</b> is one
       connection at a time — the setting that gets through a site answering 429. Anything left at
       its default is not sent, so the engine's defaults stay in the engine.
     </p>

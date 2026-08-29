@@ -36,6 +36,37 @@ test('a tag trigger names version tags, never a bare v*', () => {
     ". Use 'v[0-9]+.[0-9]+.[0-9]+', the shape the other release workflows use.");
 });
 
+test('a job that runs gh without a checkout says which repo it means', () => {
+  // gh works out the repository from the git remote. A job with no
+  // actions/checkout has no remote, so it fails with "failed to run git: fatal:
+  // not a git repository" — which names the wrong problem entirely and sends
+  // you looking for a missing checkout you never wanted. GH_REPO tells it
+  // directly, and is what a job that needs release assets rather than source
+  // should use.
+  //
+  // Jobs are found by indentation: two spaces under `jobs:`. Crude, but this
+  // suite has no YAML parser and cannot grow one.
+  const missing = [];
+  for (const { name, text } of workflows) {
+    const jobsAt = text.indexOf('\njobs:');
+    if (jobsAt < 0) continue;
+    const body = text.slice(jobsAt);
+    const starts = [...body.matchAll(/^ {2}([A-Za-z0-9_-]+):$/gm)];
+    for (let i = 0; i < starts.length; i++) {
+      const from = starts[i].index;
+      const to = i + 1 < starts.length ? starts[i + 1].index : body.length;
+      const job = body.slice(from, to);
+      if (!/\bgh (release|api|run|pr) /.test(job)) continue;
+      if (/uses:\s*actions\/checkout/.test(job)) continue;
+      if (/GH_REPO:/.test(job)) continue;
+      missing.push(`${name}: job "${starts[i][1]}"`);
+    }
+  }
+  assert.deepEqual(missing, [],
+    `${missing.join(', ')} runs gh with neither a checkout nor GH_REPO. ` +
+    'gh will fail with "fatal: not a git repository", which is not what is wrong.');
+});
+
 test('a workflow that writes to a release asks for permission to', () => {
   // Without `contents: write` the token is read-only and `gh release upload`
   // fails with "HTTP 403: Resource not accessible by integration" — after the

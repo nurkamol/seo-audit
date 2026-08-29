@@ -45,6 +45,13 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Windows gets the same treatment for SmartScreen, and the AppImage's `chmod +x`
   is written down rather than assumed.
 
+- **The checksums job had no repository to talk to.** It needs a release's
+  assets rather than the source, so it had no `actions/checkout` — and `gh`
+  works the repository out from the git remote, so it failed with "fatal: not a
+  git repository", which names a problem that was not the problem. `GH_REPO`
+  says it directly. Checked now, like the other two: a job running `gh` with
+  neither a checkout nor `GH_REPO` fails the suite.
+
 - **Every file on a release has a published checksum.** The macOS zip always had
   one, because the Homebrew cask needs it. The `.deb`, the `.AppImage` and the
   `setup.exe` had none — so "check it before you wave the warning away" was
@@ -62,6 +69,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   which also proves the upload arrived intact. One job rather than a step in each
   build: two matrix jobs editing the same release notes race, and the loser's
   edit is gone with nothing to show it.
+
+- **The screenshots are a real crawl of a real site.** The app shot was a
+  25-page run whose numbers had drifted from what the app draws; it is now
+  astro.build — 60 pages, 232 findings, 37 things to change, scored 87 — and the
+  one error at the top is a link to a page that does not exist, which is the bug
+  this tool was written to catch. A compare shot goes with it, docs.astro.build
+  against astro.build, matched by path because the hosts differ. Settings was
+  captioned "seven panes" and has had nine since Search Console shipped.
 
 - **The site says there are three apps now, and what to do when one will not
   open.** nurkamol.github.io/seo-audit offered a single "Download for macOS"

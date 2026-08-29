@@ -205,7 +205,13 @@ brew install --cask seo-audit
 ./mac/build.sh --run
 ```
 
-<p align="center"><img src="docs/shots/app.png" alt="The macOS app showing a report: 25 pages, 171 findings, 55 things to change" width="820"></p>
+<p align="center"><img src="docs/shots/app.png" alt="The macOS app showing a real audit of astro.build: 60 pages, 232 findings, 37 things to change, scored 87 out of 100" width="820"></p>
+
+<p align="center"><em>A real run against astro.build — and the one error at the top is a link to a page that does not exist, which is the bug this tool was written to catch.</em></p>
+
+<p align="center"><img src="docs/shots/compare.png" alt="The compare sheet: docs.astro.build against astro.build, showing the 26 findings that appeared" width="820"></p>
+
+<p align="center"><em>Compare two runs: a site against itself last week, or one property against another. Different hosts are matched by path.</em></p>
 
 #### If you downloaded the zip instead: "SEO Audit is damaged and can't be opened"
 

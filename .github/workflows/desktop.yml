@@ -322,6 +322,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          # No checkout in this job — it needs the release's assets, not the
+          # repository. Without this, gh looks for a git remote to work out
+          # which repo it is talking about and fails with "fatal: not a git
+          # repository", which names the wrong problem.
+          GH_REPO: ${{ github.repository }}
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
           mkdir -p dl && cd dl
@@ -338,6 +343,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           tag="${{ inputs.tag || github.ref_name }}"
           gh release view "$tag" --json body -q .body > body.md
