@@ -123,8 +123,11 @@ jobs:
           test -n "$app" || { echo "::error::the package installed no runnable binary"; exit 1; }
           echo "installed at $app"
 
+          # The shell narrates its startup here, because a windowed app that
+          # fails has nowhere else to say why.
+          export SEO_AUDIT_SHELL_LOG="$RUNNER_TEMP/shell.log"
+
           xvfb-run -a "$app" &
-          shell_pid=$!
 
           # The engine is a child process announcing a port. Waiting for it is
           # the only proof that the whole chain works: bundle, sidecar,
@@ -136,14 +139,20 @@ jobs:
           done
           if [ -z "$started" ]; then
             echo "::error::the app started and its engine never did"
-            kill "$shell_pid" 2>/dev/null || true
+            echo "── what the shell said ──"; cat "$SEO_AUDIT_SHELL_LOG" 2>/dev/null || echo "(nothing)"
+            pkill -f "$app" || true
             exit 1
           fi
           echo "the engine came up"
+          cat "$SEO_AUDIT_SHELL_LOG" 2>/dev/null || true
 
           # And it goes away again. A server that outlives the window holding
           # its port is a bug this project has already shipped once.
-          kill "$shell_pid" 2>/dev/null || true
+          #
+          # The app itself, not the xvfb wrapper around it — killing the wrapper
+          # left the app running, and then reported the engine as having
+          # outlived a window that was still open.
+          pkill -f "$app" || true
           for _ in $(seq 1 15); do
             pgrep -f 'seo-audit.mjs --serve' >/dev/null || { echo "and it stopped with the window"; exit 0; }
             sleep 1
@@ -168,6 +177,7 @@ jobs:
           Write-Host '── what came with it ──'
           Get-ChildItem $app.DirectoryName | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}} | Format-Table
 
+          $env:SEO_AUDIT_SHELL_LOG = Join-Path $env:RUNNER_TEMP 'shell.log'
           $shell = Start-Process -FilePath $app.FullName -PassThru
           $started = $false
           foreach ($_ in 1..40) {
@@ -175,11 +185,16 @@ jobs:
             Start-Sleep -Seconds 1
           }
           if (-not $started) {
+            Write-Host '── is the app even still running? ──'
+            Get-Process -Id $shell.Id -ErrorAction SilentlyContinue | Format-Table Id, ProcessName
+            Write-Host '── what the shell said ──'
+            if (Test-Path $env:SEO_AUDIT_SHELL_LOG) { Get-Content $env:SEO_AUDIT_SHELL_LOG } else { Write-Host '(nothing)' }
             Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue
             Write-Error 'the app started and its engine never did'
             exit 1
           }
           Write-Host 'the engine came up'
+          if (Test-Path $env:SEO_AUDIT_SHELL_LOG) { Get-Content $env:SEO_AUDIT_SHELL_LOG }
 
           Stop-Process -Id $shell.Id -Force -ErrorAction SilentlyContinue
           foreach ($_ in 1..15) {

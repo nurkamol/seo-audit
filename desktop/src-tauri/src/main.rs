@@ -34,6 +34,24 @@ use tauri_plugin_opener::OpenerExt;
 /// window is not a thing anybody waits through.
 const ANNOUNCE_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// Somewhere for a windowed app to say what happened.
+///
+/// On Windows this is built with `windows_subsystem = "windows"`, which means
+/// no console and no stdout: when it fails it can put a sentence in a window
+/// and nothing else, which is fine for a person and useless for anything
+/// automated — including the job that installs it and checks it runs.
+///
+/// So when `SEO_AUDIT_SHELL_LOG` names a file, the startup path narrates itself
+/// into it. Off unless asked for, and it holds no secrets: paths, a version and
+/// whatever the engine said about its own failure.
+fn note(line: &str) {
+    let Ok(path) = std::env::var("SEO_AUDIT_SHELL_LOG") else { return };
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 /// The child, kept so it can be killed. A server that outlives the window that
 /// opened it holds its port against the next launch — which is a bug this
 /// project has already shipped once, on the other platform.
@@ -61,11 +79,15 @@ fn engine_command(app: &tauri::AppHandle) -> Result<(Command, PathBuf), String> 
     // different places — the runtime next to the binary, the JavaScript with
     // the icons.
     if let (Ok(exe), Ok(resources)) = (std::env::current_exe(), app.path().resource_dir()) {
+        note(&format!("exe: {}", exe.display()));
+        note(&format!("resources: {}", resources.display()));
         let node = exe
             .parent()
             .map(|beside| beside.join(if cfg!(windows) { "node.exe" } else { "node" }))
             .unwrap_or_default();
         let cli = resources.join("engine/bin/seo-audit.mjs");
+        note(&format!("node: {} ({})", node.display(), if node.is_file() { "there" } else { "missing" }));
+        note(&format!("cli: {} ({})", cli.display(), if cli.is_file() { "there" } else { "missing" }));
         if node.is_file() && cli.is_file() {
             let mut command = Command::new(&node);
             command.arg(&cli);
@@ -176,7 +198,10 @@ fn start_engine(app: &tauri::AppHandle) -> Result<(String, Child), String> {
     // disagree is not a thing to find out about halfway through a report.
     if !bundled.as_os_str().is_empty() {
         let (mut probe, _) = engine_command(app)?;
-        if let Some(why) = disagrees(&bundled, engine_version(&mut probe).as_deref()) {
+        let found = engine_version(&mut probe);
+        note(&format!("engine says version {found:?}, shell is {}", env!("CARGO_PKG_VERSION")));
+        if let Some(why) = disagrees(&bundled, found.as_deref()) {
+            note(&format!("refused: {why}"));
             return Err(why);
         }
     }
@@ -236,11 +261,16 @@ fn start_engine(app: &tauri::AppHandle) -> Result<(String, Child), String> {
     }
 
     match rx.recv_timeout(ANNOUNCE_TIMEOUT) {
-        Ok(url) => Ok((url, child)),
+        Ok(url) => {
+            note(&format!("serving at {url}"));
+            Ok((url, child))
+        }
         Err(_) => {
             let _ = child.kill();
             let said = complaints.lock().map(|held| held.clone()).unwrap_or_default();
-            Err(refusal(&said))
+            let why = refusal(&said);
+            note(&format!("failed: {why}"));
+            Err(why)
         }
     }
 }
@@ -427,6 +457,7 @@ fn main() {
                     .build()?;
                 }
                 Err(why) => {
+                    note(&format!("no window on a report: {why}"));
                     // Said in a window, not on a stream nobody is reading. An
                     // app that opens and does nothing is the worst version of
                     // this failure, and it is the one that shipped on macOS.
@@ -466,8 +497,18 @@ fn main() {
                 window.app_handle().state::<Engine>().stop();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("the window could not start");
+        .build(tauri::generate_context!())
+        .expect("the window could not start")
+        .run(|app, event| {
+            // Closing the last window is one way this ends; being terminated is
+            // another, and only the first fires `Destroyed`. CI killed the app
+            // rather than clicking its close button and the engine carried on
+            // holding its port — which is the same bug this project shipped
+            // once on macOS, reached by a different door.
+            if let tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. } = event {
+                app.state::<Engine>().stop();
+            }
+        });
 }
 
 #[cfg(test)]
