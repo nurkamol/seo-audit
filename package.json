@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/audit.mjs",
     "./causes": "./src/causes.mjs",
+    "./exports": "./src/exports.mjs",
     "./report": "./src/report.mjs",
     "./score": "./src/score.mjs",
     "./sitemap": "./src/sitemap.mjs",

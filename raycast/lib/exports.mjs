@@ -8,6 +8,12 @@
 //
 // Plain ESM with no `@raycast/api` import, like the rest of `lib/`, so
 // `node --test` can run it.
+//
+// **This is a second copy of `src/exports.mjs` and should not stay one.** The
+// engine gained the canonical list when the served window needed it, and this
+// file should import `@nurkamol/seo-audit/exports` instead — but that subpath
+// only exists from 1.34.1, and this extension's lockfile cannot move while its
+// Store submission is in review. Collapse it once that lands.
 
 import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';

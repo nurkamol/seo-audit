@@ -22,7 +22,9 @@ use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_opener::OpenerExt;
 
 /// How long to wait for the engine to say where it is listening.
 ///
@@ -167,12 +169,122 @@ fn announced_url(line: &str) -> Option<String> {
     url.starts_with("http://").then(|| url.to_string())
 }
 
+/// Where the report lives, and the only place this window is allowed to go.
+///
+/// A report is full of the audited site's own URLs, and clicking one used to
+/// navigate the window away from the report and into somebody else's website —
+/// with no address bar and no back button to get out of. Worse, that website
+/// would then be running inside a window holding this app's capabilities.
+///
+/// So: the engine's own origin is the app, and everything else is a link that
+/// belongs in a browser.
+fn is_the_app(engine: &str, target: &tauri::Url) -> bool {
+    tauri::Url::parse(engine)
+        .map(|home| {
+            target.scheme() == home.scheme()
+                && target.host_str() == home.host_str()
+                && target.port_or_known_default() == home.port_or_known_default()
+        })
+        .unwrap_or(false)
+}
+
+/// The menu, which is only ever navigation.
+///
+/// Every item here goes somewhere the served UI already is. That is the rule
+/// this shell lives by: a menu item that did something the web UI cannot would
+/// be a feature Windows has and macOS does not.
+///
+/// Edit and Window are the predefined ones rather than hand-written, because on
+/// Linux and Windows a webview with no Edit menu is a text field where Ctrl-C
+/// does nothing — which is not a thing anybody would think to test.
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let about = AboutMetadata {
+        name: Some("SEO Audit".into()),
+        version: Some(env!("CARGO_PKG_VERSION").into()),
+        website: Some("https://github.com/nurkamol/seo-audit".into()),
+        ..Default::default()
+    };
+
+    let file = Submenu::with_items(
+        app,
+        "File",
+        true,
+        &[
+            &MenuItem::with_id(app, "new", "New Audit", true, Some("CmdOrCtrl+N"))?,
+            &MenuItem::with_id(app, "reports", "Reports", true, Some("CmdOrCtrl+L"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[
+            &MenuItem::with_id(app, "help:site", "SEO Audit Help", true, None::<&str>)?,
+            &MenuItem::with_id(app, "help:checks", "What It Checks", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(app, "help:repo", "Source on GitHub", true, None::<&str>)?,
+            &MenuItem::with_id(app, "help:changelog", "Release Notes", true, None::<&str>)?,
+            &MenuItem::with_id(app, "help:issues", "Report an Issue", true, None::<&str>)?,
+        ],
+    )?;
+
+    Menu::with_items(
+        app,
+        &[
+            &Submenu::with_items(
+                app,
+                "SEO Audit",
+                true,
+                &[
+                    &PredefinedMenuItem::about(app, Some("About SEO Audit"), Some(about))?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::quit(app, None)?,
+                ],
+            )?,
+            &file,
+            &edit,
+            &help,
+        ],
+    )
+}
+
+/// What a Help item points at. One table, so a link that moves moves once.
+fn help_link(id: &str) -> Option<&'static str> {
+    match id {
+        "help:site" => Some("https://nurkamol.github.io/seo-audit/"),
+        "help:checks" => Some("https://github.com/nurkamol/seo-audit#what-it-checks"),
+        "help:repo" => Some("https://github.com/nurkamol/seo-audit"),
+        "help:changelog" => Some("https://github.com/nurkamol/seo-audit/blob/main/CHANGELOG.md"),
+        "help:issues" => Some("https://github.com/nurkamol/seo-audit/issues"),
+        _ => None,
+    }
+}
+
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(Engine(Mutex::new(None)))
         .setup(|app| {
             let handle = app.handle().clone();
+            app.set_menu(build_menu(&handle)?)?;
 
             // The window is built here rather than declared in the config,
             // because until the engine answers there is no address to point it
@@ -181,6 +293,8 @@ fn main() {
             match start_engine(&handle) {
                 Ok((url, child)) => {
                     handle.state::<Engine>().0.lock().unwrap().replace(child);
+                    let home = url.clone();
+                    let opener = handle.clone();
                     WebviewWindowBuilder::new(
                         &handle,
                         "main",
@@ -189,6 +303,16 @@ fn main() {
                     .title("SEO Audit")
                     .inner_size(1180.0, 840.0)
                     .min_inner_size(720.0, 520.0)
+                    // A report is full of the audited site's own URLs. Following
+                    // one in here would replace the report with somebody else's
+                    // website, in a window with no address bar to leave by.
+                    .on_navigation(move |target| {
+                        if is_the_app(&home, target) {
+                            return true;
+                        }
+                        let _ = opener.opener().open_url(target.to_string(), None::<&str>);
+                        false
+                    })
                     .build()?;
                 }
                 Err(why) => {
@@ -207,6 +331,25 @@ fn main() {
             }
             Ok(())
         })
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            if let Some(link) = help_link(id) {
+                let _ = app.opener().open_url(link, None::<&str>);
+                return;
+            }
+            // The rest is navigation, because the served UI is where every
+            // control in this app lives.
+            let Some(window) = app.get_webview_window("main") else { return };
+            let Ok(here) = window.url() else { return };
+            let path = match id {
+                "new" => "/",
+                "reports" => "/reports",
+                _ => return,
+            };
+            if let Ok(target) = here.join(path) {
+                let _ = window.navigate(target);
+            }
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 window.app_handle().state::<Engine>().stop();
@@ -218,7 +361,52 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::announced_url;
+    use super::{announced_url, help_link, is_the_app};
+
+    fn url(text: &str) -> tauri::Url {
+        text.parse().expect("a test URL")
+    }
+
+    // A report is full of the audited site's own URLs, and this is what decides
+    // whether clicking one stays in the app. Getting it wrong in the generous
+    // direction puts somebody else's website inside a window holding this app's
+    // capabilities, with no address bar to leave by.
+    #[test]
+    fn only_the_engine_is_the_app() {
+        let engine = "http://127.0.0.1:53017/";
+
+        assert!(is_the_app(engine, &url("http://127.0.0.1:53017/")));
+        assert!(is_the_app(engine, &url("http://127.0.0.1:53017/reports")));
+        assert!(is_the_app(engine, &url("http://127.0.0.1:53017/run?url=https://x.test")));
+    }
+
+    #[test]
+    fn everything_else_is_a_link_for_a_browser() {
+        let engine = "http://127.0.0.1:53017/";
+
+        // The audited site, which is the common case and the whole point.
+        assert!(!is_the_app(engine, &url("https://example.com/about/")));
+        // Another port on this machine is another program.
+        assert!(!is_the_app(engine, &url("http://127.0.0.1:53018/")));
+        // The same port over TLS is not the same server.
+        assert!(!is_the_app(engine, &url("https://127.0.0.1:53017/")));
+        // A host that merely looks local.
+        assert!(!is_the_app(engine, &url("http://127.0.0.1.example.com/")));
+        assert!(!is_the_app(engine, &url("http://localhost:53017/")));
+        // And a scheme that is not the web at all.
+        assert!(!is_the_app(engine, &url("file:///etc/passwd")));
+    }
+
+    #[test]
+    fn a_menu_item_either_opens_a_link_or_navigates() {
+        // Help items leave the app; everything else is a path in the served UI,
+        // because the shell owns no controls of its own.
+        assert!(help_link("help:repo").is_some());
+        assert!(help_link("help:issues").is_some());
+        assert_eq!(help_link("new"), None);
+        assert_eq!(help_link("reports"), None);
+        assert_eq!(help_link("something-else"), None);
+    }
 
     // The one piece of parsing in this file, and the whole handshake depends on
     // it: get this wrong and the window waits fifteen seconds and then says the

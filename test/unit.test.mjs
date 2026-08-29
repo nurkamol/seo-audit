@@ -1670,13 +1670,14 @@ test('every report format leads with the same causes', () => {
 test('every check the tool can emit has a category', async () => {
   // The guard that keeps this from drifting: a new check with no category would
   // silently land in "Other" and the grouping would quietly stop being useful.
-  const { readdirSync, readFileSync } = await import('node:fs');
-  const ids = new Set();
-  for (const file of readdirSync('src').filter((f) => f.endsWith('.mjs'))) {
-    const src = readFileSync(`src/${file}`, 'utf8');
-    for (const m of src.matchAll(/f\('(?:error|warn|info)',\s*'([a-z0-9-]+)'/g)) ids.add(m[1]);
-    for (const m of src.matchAll(/id:\s*'([a-z0-9-]+)'/g)) ids.add(m[1]);
-  }
+  //
+  // Asked of `emittedLevels()` rather than by matching every `id:` in `src/`.
+  // The broad match read `{ id: 'html' }` in the export list as seven checks
+  // and demanded categories for them — a scanner that cannot tell a finding
+  // from a file format. This one only counts an id that carries a level, which
+  // is what makes it a finding.
+  const { emittedLevels } = await import('../scripts/check-levels.mjs');
+  const ids = new Set(emittedLevels().keys());
   assert.ok(ids.size > 60, `expected to find the checks, found ${ids.size}`);
   const uncategorised = [...ids].filter((id) => categoryOf(id) === 'Other').sort();
   assert.deepEqual(uncategorised, [], `these checks need a category in report.mjs: ${uncategorised}`);
@@ -4732,4 +4733,69 @@ test('a row whose file has gone is not listed', async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// --- the export list ------------------------------------------------------
+// The list of formats was written out twice — once in the macOS app's
+// ExportFormat and once in the Raycast extension — and a third copy for the
+// served window would have been the point at which they started disagreeing
+// about whether "Structured data" is called that.
+
+test('the format list is one list, and every entry is complete', async () => {
+  const { FORMATS, formatById } = await import('../src/exports.mjs');
+  assert.deepEqual(FORMATS.map((f) => f.id),
+    ['html', 'markdown', 'csv', 'json', 'sitemap', 'llms', 'schema']);
+  for (const format of FORMATS) {
+    assert.ok(format.label?.length > 2, `${format.id} needs a label`);
+    assert.ok(format.extension?.length, `${format.id} needs an extension`);
+    assert.match(format.mime, /\//, `${format.id} needs a media type a browser will honour`);
+    assert.ok(format.detail?.length > 15, `${format.id} needs a sentence somebody can read`);
+  }
+  assert.equal(formatById('nope'), null);
+});
+
+test('a saved file is named for the site and the day', async () => {
+  const { filenameFor } = await import('../src/exports.mjs');
+  const at = new Date('2026-08-29T10:00:00Z');
+  assert.equal(filenameFor('csv', 'jekyllrb.com', at), 'seo-audit-jekyllrb.com-2026-08-29.csv');
+  assert.equal(filenameFor('llms', 'x.test', at), 'seo-audit-x.test-2026-08-29.txt');
+  // Anything a filesystem would argue about is replaced rather than escaped.
+  assert.match(filenameFor('html', 'a site/with slashes', at), /^seo-audit-a-site-with-slashes-/);
+});
+
+test('what a run did not build carries the reason, not an empty file', async () => {
+  const { renderExport } = await import('../src/exports.mjs');
+  const meta = { origin: 'https://x.test', pages: 1, date: '2026-01-01' };
+  const bare = { meta, findings: [], causes: [] };
+
+  // Never asked for.
+  assert.match(renderExport('sitemap', bare).refused, /did not build a sitemap/);
+  assert.match(renderExport('llms', bare).refused, /did not build an llms.txt/);
+  assert.match(renderExport('schema', bare).refused, /did not build any structured data/);
+
+  // Asked for and refused: the engine's own reason travels, because it names
+  // the run that would have worked.
+  const cut = renderExport('llms', {
+    ...bare,
+    llms: { text: null, urls: [], sections: 0, refused: 'The crawl stopped at its limit. Run again with --limit 210.' },
+  });
+  assert.equal(cut.text, null);
+  assert.match(cut.refused, /--limit 210/);
+
+  // And no report at all is its own answer.
+  assert.match(renderExport('html', null).refused, /no report to write/);
+  assert.match(renderExport('nonsense', bare).refused, /Unknown format/);
+});
+
+test('a saved report carries the score the window is showing', async () => {
+  const { renderExport } = await import('../src/exports.mjs');
+  const report = {
+    meta: { origin: 'https://x.test', pages: 4, date: '2026-01-01' },
+    findings: [{ level: 'warn', id: 'desc-missing', title: 'x', detail: 'y', url: 'https://x.test/a' }],
+    causes: [],
+    score: { score: 96, grade: 'A', lost: 1, checks: { passed: 2, failed: 1, skipped: 0 },
+             failed: [], passed: [], skipped: [], areas: [] },
+  };
+  assert.match(renderExport('markdown', report).text, /## Score: 96\/100 \(A\)/);
+  assert.match(renderExport('html', report).text, /Score 96 out of 100/);
 });

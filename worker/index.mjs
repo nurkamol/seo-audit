@@ -17,6 +17,7 @@ import { scoreRun, checklist, WEIGHT } from '../src/score.mjs';
 import { diff } from '../src/baseline.mjs';
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 import { runParameters, notInApp, formFields } from '../src/options.mjs';
+import { FORMATS, formatById, filenameFor, renderExport } from '../src/exports.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
 // 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
@@ -448,6 +449,22 @@ const CHROME = `
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
+  /* Save as … — a row of links, so a browser downloads them and the desktop
+     shell inherits the whole thing without owning a control of its own. */
+  .exports {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .5rem;
+    margin: 1.6rem 0 2rem; padding-bottom: 1.3rem;
+    border-bottom: 1px solid var(--line);
+    font-size: .82rem;
+  }
+  .exports span { color: var(--faint); }
+  .exports a {
+    color: var(--muted); text-decoration: none;
+    padding: .25rem .55rem; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--panel);
+  }
+  .exports a:hover { color: var(--fg); border-color: var(--rule-firm); }
+
   @media (max-width: 52rem) {
     .app { grid-template-columns: 1fr; }
     .side { display: none; }
@@ -476,6 +493,21 @@ function sidebar(env, currentId) {
     ${runs.length > 1 ? '<a class="foot" href="/reports">Compare two runs →</a>' : ''}
     <span class="foot">Nothing leaves this machine.</span>
   </aside>`;
+}
+
+/** Every way this report can be saved, as links.
+ *
+ *  Links rather than a menu: a browser knows how to download one, and the
+ *  desktop shell inherits it for free. A format the run did not build is still
+ *  offered — following it lands on the reason, which is more use than a control
+ *  that is missing without saying why. */
+function exportBar(id) {
+  return `<nav class="exports" aria-label="Save this report">
+    <span>Save as</span>
+    ${FORMATS.map((format) =>
+      `<a href="/reports/${esc(id)}/export?as=${esc(format.id)}" title="${esc(format.detail)}">${esc(format.label)}</a>`,
+    ).join('')}
+  </nav>`;
 }
 
 /** A page inside the window. `main` is already the stage's content. */
@@ -526,6 +558,22 @@ const page = (title, body) => `<!doctype html>
   td.pick { width: 2rem; }
   td.pick input { width: auto; }
   td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* Save as … — a row of links, so a browser downloads them and the desktop
+     shell inherits the whole thing without owning a control. */
+  .exports {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .55rem;
+    margin: 1.4rem 0 -1rem; padding-bottom: 1.2rem;
+    border-bottom: 1px solid var(--line);
+    font-size: .82rem;
+  }
+  .exports span { color: var(--faint); margin-right: .2rem; }
+  .exports a {
+    color: var(--muted); text-decoration: none;
+    padding: .22rem .5rem; border-radius: 6px;
+    border: 1px solid var(--line);
+  }
+  .exports a:hover { color: var(--fg); border-color: var(--rule-firm); background: var(--panel); }
   input { width: 100%; padding: .6rem .7rem; font: inherit; border: 1px solid #9ca3af; border-radius: .4rem; background: transparent; color: inherit; }
   button { margin-top: 1.25rem; padding: .6rem 1.1rem; font: inherit; font-weight: 600; border: 0; border-radius: .4rem; background: #2563eb; color: #fff; cursor: pointer; }
   pre { white-space: pre-wrap; word-break: break-word; background: #11182710; padding: 1rem; border-radius: .4rem; font: 13px/1.5 ui-monospace, monospace; }
@@ -626,6 +674,15 @@ export async function handle(request, env, ctx, deps = {}) {
       if (value !== null && value !== '') carried.set(query, value);
     }
     carried.set('limit', String(pageLimit(url.searchParams.get('limit'), env)));
+    // Always asked for, exactly as the macOS window asks. They are built from
+    // per-page data that is gone by the time the report arrives — the sitemap
+    // from every page's status and canonical, the other two from their titles
+    // and descriptions — so a run that did not ask can never offer them later.
+    //
+    // Without this the Save-as links were permanently refused for anybody who
+    // started a crawl from the browser, which is every Linux and Windows user.
+    // The sitemap costs one already-cached request; the other two cost none.
+    for (const wanted of ['sitemap-out', 'llms-out', 'schema-out']) carried.set(wanted, '1');
     const stream = `/stream?${carried}`;
     // The log is streamed rather than the page being held back, because an
     // audit takes a minute or two and a blank tab for that long reads as a
@@ -833,6 +890,41 @@ export async function handle(request, env, ctx, deps = {}) {
       </main>`, env));
   }
 
+  // A kept report, as a file. The macOS window has had an Export menu since it
+  // shipped and the browser had none, so somebody on Linux could read a report
+  // and not save one. A download rather than a native dialog on purpose: it
+  // works in a plain browser as well as in the desktop shell, and the shell
+  // gaining a control the served UI lacks is the one thing it must not do.
+  if (url.pathname.startsWith('/reports/') && url.pathname.endsWith('/export') && env.STORE) {
+    const id = url.pathname.slice('/reports/'.length, -'/export'.length);
+    const kept = env.STORE.read(id);
+    const format = formatById(url.searchParams.get('as') ?? '');
+    if (!kept || !format) return new Response('No such report or format.', { status: 404 });
+
+    const { text, refused } = renderExport(format.id, kept);
+    if (!text) {
+      // The refusal is the useful half, so it is shown rather than downloaded
+      // as an empty file — which would look like a working export.
+      return htmlResponse(shell(format.label, `<main><div class="bar"></div>
+        <h1>No ${esc(format.label.toLowerCase())} to save</h1>
+        <p class="sub">${esc(refused ?? 'This run did not build one.')}</p>
+        <p><a class="cta secondary" href="/reports/${esc(id)}">Back to the report</a></p></main>`, env), 409);
+    }
+
+    let host = kept.meta?.origin ?? 'report';
+    try {
+      host = new URL(kept.meta.origin).host;
+    } catch {
+      /* keep whatever it was */
+    }
+    return new Response(text, {
+      headers: {
+        'content-type': format.mime,
+        'content-disposition': `attachment; filename="${filenameFor(format.id, host)}"`,
+      },
+    });
+  }
+
   if (url.pathname.startsWith('/reports/') && env.STORE) {
     const kept = env.STORE.read(url.pathname.slice('/reports/'.length));
     if (!kept) {
@@ -840,9 +932,10 @@ export async function handle(request, env, ctx, deps = {}) {
         <p class="sub">It may have been dropped to keep the list a list.</p>
         <p><a class="cta secondary" href="/reports">All reports</a></p></main>`, env), 404);
     }
+    const id = url.pathname.slice('/reports/'.length);
     const parts = reportParts(kept.findings ?? [], kept.meta, { score: kept.score });
-    return htmlResponse(shell(parts.title, `<main>${parts.body}</main>`, env, {
-      currentId: url.pathname.slice('/reports/'.length),
+    return htmlResponse(shell(parts.title, `<main>${exportBar(id)}${parts.body}</main>`, env, {
+      currentId: id,
     }));
   }
 
@@ -1041,8 +1134,10 @@ export async function handle(request, env, ctx, deps = {}) {
           // a crawl finished — which is the one moment somebody wants to click
           // back to what they ran before.
           const parts = reportParts(all, meta, { score: scored });
-          await send('done', env.STORE
-            ? shell(parts.title, `<main>${parts.body}</main>`, env, { currentId: kept?.id })
+          await send('done', env.STORE && kept
+            ? shell(parts.title, `<main>${exportBar(kept.id)}${parts.body}</main>`, env, {
+                currentId: kept.id,
+              })
             : render(all, meta, { backHref: '/', backLabel: 'Audit another site', score: scored }));
         }
       } catch (err) {

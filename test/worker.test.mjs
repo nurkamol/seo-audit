@@ -690,3 +690,97 @@ test('the score chip changes colour where the dial does', async () => {
   assert.match(await at(60), /chip fair/);
   assert.match(await at(59), /chip poor/);
 });
+
+// --- saving a report from the window --------------------------------------
+// The macOS app has had an Export menu since it shipped and the browser had
+// none, so somebody on Linux could read a report and not save one. Downloads
+// rather than a native dialog: it works in a plain browser as well as in the
+// desktop shell, and the shell gaining a control the served UI lacks is the one
+// thing it must not do.
+
+const keptStore = (payload) => {
+  const rows = [{ id: '11111111-1111-4111-8111-111111111111', host: 'x.test',
+    finishedAt: '2026-01-01T10:00:00Z', pages: 2, causes: 0, score: 90 }];
+  return {
+    list: () => rows,
+    read: (id) => (id === rows[0].id ? payload : null),
+    keep: () => null, where: () => '/tmp', bytes: () => 0,
+  };
+};
+
+test('every format the engine can write can be saved from the window', async () => {
+  const { FORMATS } = await import('../src/exports.mjs');
+  const payload = {
+    meta: { origin: 'https://x.test', pages: 2, date: '2026-01-01' },
+    findings: [{ level: 'warn', id: 'desc-missing', title: 'No description', detail: 'x', url: 'https://x.test/a' }],
+    causes: [],
+    sitemap: { xml: '<urlset/>', urls: [], added: [], refused: null },
+    llms: { text: '# x.test\n', urls: [], sections: 1, refused: null },
+    schema: { json: '{"generated":[]}\n', generated: [], skipped: {}, refused: null },
+  };
+  const store = keptStore(payload);
+
+  for (const format of FORMATS) {
+    const res = await handle(
+      get(`/reports/11111111-1111-4111-8111-111111111111/export?as=${format.id}`, { token: SECRET }),
+      env({ STORE: store }),
+    );
+    assert.equal(res.status, 200, `${format.id} should save`);
+    // A name somebody can find again, and that sorts.
+    assert.match(
+      res.headers.get('content-disposition') ?? '',
+      new RegExp(`attachment; filename="seo-audit-x\\.test-\\d{4}-\\d{2}-\\d{2}\\.${format.extension}"`),
+      `${format.id} should be named for the site and the day`,
+    );
+    assert.ok((await read(res)).length > 5, `${format.id} wrote almost nothing`);
+  }
+});
+
+// The refusal is the useful half. An empty file would look like a working
+// export; a page saying which run would have built one does not.
+test('a format this run did not build says so instead of downloading nothing', async () => {
+  const store = keptStore({ meta: { origin: 'https://x.test', pages: 2, date: '2026-01-01' }, findings: [], causes: [] });
+  const res = await handle(
+    get('/reports/11111111-1111-4111-8111-111111111111/export?as=llms', { token: SECRET }),
+    env({ STORE: store }),
+  );
+  assert.equal(res.status, 409);
+  const page = await read(res);
+  assert.match(page, /No llms.txt to save/);
+  assert.match(page, /did not build an llms.txt/);
+
+  // And a format or a report that does not exist is a 404, not a blank file.
+  assert.equal((await handle(
+    get('/reports/11111111-1111-4111-8111-111111111111/export?as=nonsense', { token: SECRET }),
+    env({ STORE: store }))).status, 404);
+  assert.equal((await handle(
+    get('/reports/22222222-2222-4222-8222-222222222222/export?as=html', { token: SECRET }),
+    env({ STORE: store }))).status, 404);
+});
+
+// Found by clicking the links rather than by writing this test: a run started
+// from the browser never asked the engine to build the sitemap, the llms.txt or
+// the structured data, so three of the seven Save-as links were permanently
+// refused for every Linux and Windows user. The macOS window has always asked.
+test('a run started from the browser builds everything it will offer to save', async () => {
+  const html = await read(await handle(
+    get('/run?url=https://x.test&limit=5', { token: SECRET }),
+    env({ ALLOWED_HOSTS: 'x.test' }),
+  ));
+  for (const wanted of ['sitemap-out=1', 'llms-out=1', 'schema-out=1']) {
+    assert.ok(html.includes(wanted), `the run should ask for ${wanted}`);
+  }
+});
+
+test('a report in the window offers the whole list, refusals included', async () => {
+  const { FORMATS } = await import('../src/exports.mjs');
+  const store = keptStore({ meta: { origin: 'https://x.test', pages: 2, date: '2026-01-01' }, findings: [], causes: [] });
+  const page = await read(await handle(
+    get('/reports/11111111-1111-4111-8111-111111111111', { token: SECRET }), env({ STORE: store })));
+
+  // Offered even where the run built nothing: following the link lands on the
+  // reason, which is more use than a control missing without saying why.
+  for (const format of FORMATS) {
+    assert.match(page, new RegExp(`export\\?as=${format.id}"`), `${format.id} should be offered`);
+  }
+});

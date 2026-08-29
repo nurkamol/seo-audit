@@ -65,10 +65,27 @@ not on macOS, and the rule that keeps five front ends honest is that none of
 them re-implements anything. New UI belongs in the served HTML, where every
 platform gets it at once.
 
+## The window's furniture
+
+A menu of **File · Edit · Help**, and every item in it is either navigation or a
+link. Edit is the predefined one rather than hand-written, because on Linux and
+Windows a webview with no Edit menu is a text field where Ctrl-C does nothing —
+which is not a thing anybody would think to test.
+
+**External links leave.** A report is full of the audited site's own URLs, and
+following one used to replace the report with somebody else's website, inside a
+window with no address bar to get out of and holding this app's capabilities.
+Now the engine's own origin is the app and everything else opens in a browser.
+`is_the_app()` is the whole policy and it is the most-tested function here.
+
+**Saving is not a control this owns.** The seven export formats are links in the
+served HTML — `/reports/<id>/export?as=…` — so a plain browser downloads them
+and this window inherits the lot without a native dialog or a menu item. That is
+the rule working: the feature landed once and every platform got it.
+
 ## Not done yet
 
-Phase 1 is the shell. Still to come: window furniture (menu, native save
-dialogs, external links), packaging with a bundled Node, updates, and the
+Phases 1 and 2. Still to come: packaging with a bundled Node, updates, and the
 release wiring. `desktop/src-tauri/tauri.conf.json` already names the three
 bundle targets; nothing has been built with them.
 
