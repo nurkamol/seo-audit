@@ -67,6 +67,34 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and a third copy would have been where they started disagreeing about whether
   "Structured data" is called that.
 
+- **A tagged release carries the Windows and Linux bundles too.** Pushing a
+  version tag already ran three workflows; this is the fourth, and it attaches
+  the `setup.exe`, the `.deb` and the AppImage beside the macOS zip. It builds
+  them the same way a branch push does — including installing what it built and
+  waiting for the engine — so the file on a release page is one that was proven
+  to start, not one that was proven to compile.
+
+  It never creates the release, only waits for it. The macOS job writes the
+  title from the tag's annotation and the notes from the CHANGELOG section, and
+  a job racing it to create an empty one would win about half the time and take
+  both away. Waiting is the whole of the coordination between them.
+
+  A **winget manifest** goes with it, which is what makes the Windows half of
+  the updater reachable at all: `winget upgrade` can only move a copy winget
+  installed. Submitting one opens a pull request against `microsoft/winget-pkgs`
+  and so needs a token this repository does not have — so the job says out loud
+  that it was skipped, because a release that quietly did not publish looks
+  exactly like one that did.
+
+- **Two things that were written down twice are now checked.** The version
+  lives in four files, and the shell refuses to start when its version and the
+  engine's disagree — so a half-finished bump would have produced bundles that
+  cannot run, discovered after the tag was pushed. And the winget identifier
+  lives in the workflow that publishes it and the Rust that queries it; winget
+  answers a name it has never heard of with silence, so that drift would have
+  shipped as a Windows build that simply never finds an update. Neither had a
+  symptom worth debugging. Both now fail on the machine of whoever caused them.
+
 - **`npm run test:all` runs three suites**, adding `cargo test` over `desktop/`.
   Same rule as the others: a toolchain that is not there, or an engine not yet
   staged beside the shell, is reported as not run and never silently skipped.

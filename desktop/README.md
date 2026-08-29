@@ -183,10 +183,16 @@ not the smaller one.
 
 ## Not done yet
 
-Phases 1 to 4. Still to come: attaching the bundles to a release, and a winget
-manifest — until that exists, no Windows copy is a winget install and the first
-row of that table is unreachable. `desktop/src-tauri/tauri.conf.json` already names the three
-bundle targets; nothing has been built with them.
+All five phases. A version tag builds the three bundles, installs and runs each
+one on its runner, and attaches them to that release.
+
+The winget row of that table is the one thing that is not fully self-serving:
+submitting a manifest opens a pull request against `microsoft/winget-pkgs` and
+needs a `WINGET_TOKEN` secret this repository does not carry. Without it the
+release still ships a `setup.exe` — it is just not a winget install, so that
+copy is sent to the release page rather than offered `winget upgrade`. The job
+warns rather than passing quietly, because a release that did not publish looks
+exactly like one that did.
 
 ## A note on running it
 

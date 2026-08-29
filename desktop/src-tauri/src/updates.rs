@@ -105,7 +105,7 @@ pub fn move_for(install: Install) -> Move {
             args: vec![
                 "upgrade".into(),
                 "--id".into(),
-                "nurkamol.seo-audit".into(),
+                "Nurkamol.SeoAudit".into(),
                 "--silent".into(),
                 "--accept-source-agreements".into(),
                 "--accept-package-agreements".into(),
@@ -191,7 +191,7 @@ pub fn install_kind() -> Install {
     #[cfg(windows)]
     {
         let known = Command::new("winget")
-            .args(["list", "--id", "nurkamol.seo-audit", "--exact"])
+            .args(["list", "--id", "Nurkamol.SeoAudit", "--exact"])
             .output()
             .map(|out| out.status.success() && String::from_utf8_lossy(&out.stdout).contains("seo-audit"))
             .unwrap_or(false);
@@ -286,6 +286,11 @@ mod tests {
             Move::Run { command, args } => {
                 assert_eq!(command, "winget");
                 assert!(args.contains(&"upgrade".to_string()));
+                // The identifier the workflow publishes under. A test in
+                // test/options.test.mjs asserts these two agree; naming a
+                // package winget has never heard of finds nothing and says
+                // nothing, which is the quietest possible failure.
+                assert!(args.contains(&"Nurkamol.SeoAudit".to_string()));
                 assert!(args.contains(&"--silent".to_string()));
             }
             other => panic!("winget should run its own upgrade, got {other:?}"),

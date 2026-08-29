@@ -99,6 +99,58 @@ test('the app\'s own test knows which parameters every run sends', () => {
     `ModelTests.swift expects ${stale.join(', ')} and CrawlSettings.swift no longer sends it`);
 });
 
+// The version lives in four files and a bump touches one of them.
+//
+// This is not tidiness. The desktop shell refuses to start when its own version
+// disagrees with the engine's — that guard exists because Tauri's Windows
+// installer can replace one and not the other, and a stale engine runs old
+// checks while looking new. The guard compares `CARGO_PKG_VERSION` with what
+// `bin/seo-audit.mjs --version` prints, which is the root `package.json`. Bump
+// one without the other and every bundled build refuses to open, on somebody
+// else's machine, after the tag is already pushed.
+test('every file that carries the version agrees about it', () => {
+  const version = JSON.parse(read('package.json')).version;
+  assert.match(version, /^\d+\.\d+\.\d+$/, 'the engine should have a plain semver');
+
+  const elsewhere = {
+    'desktop/package.json': JSON.parse(read('desktop/package.json')).version,
+    'desktop/src-tauri/tauri.conf.json': JSON.parse(read('desktop/src-tauri/tauri.conf.json')).version,
+    'desktop/src-tauri/Cargo.toml':
+      read('desktop/src-tauri/Cargo.toml').match(/^version\s*=\s*"([^"]+)"/m)?.[1],
+  };
+
+  const disagreeing = Object.entries(elsewhere)
+    .filter(([, theirs]) => theirs !== version)
+    .map(([file, theirs]) => `${file} says ${theirs ?? '(nothing)'}`);
+
+  assert.deepEqual(disagreeing, [],
+    `package.json says ${version} and ${disagreeing.join(', ')}. The desktop shell refuses to ` +
+    'start when its version and the engine\'s disagree, so this is not cosmetic.');
+});
+
+test('the winget identifier the workflow publishes is the one the shell looks for', () => {
+  // Windows' update path runs `winget list --id <identifier>` to find out whether
+  // this copy came from winget, and `winget upgrade --id <identifier>` to move
+  // it. Both are silent when the identifier is one winget has never heard of —
+  // no error, no output, just an app that never offers an update. So the name in
+  // the Rust and the name the release workflow submits under have to be the same
+  // string, and nothing at runtime would ever tell us they had drifted.
+  const workflow = read('.github/workflows/desktop.yml');
+  const published = workflow.match(/^\s*identifier:\s*(\S+)\s*$/m)?.[1];
+  assert.ok(published, 'the desktop workflow should submit a winget manifest under some identifier');
+
+  const rust = read('desktop/src-tauri/src/updates.rs');
+  const asked = [...rust.matchAll(/"--id",\s*"([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(asked.length, 'updates.rs should ask winget about some identifier');
+
+  for (const id of new Set(asked)) {
+    assert.equal(id, published,
+      `updates.rs asks winget about ${id}, but the workflow publishes ${published}. ` +
+      'winget answers a name it does not know with silence, so this drift would ship as ' +
+      'a Windows build that simply never finds an update.');
+  }
+});
+
 test('every reason is a sentence somebody can act on', () => {
   for (const { flag, reason } of notInApp()) {
     assert.equal(typeof reason, 'string', `${flag} needs a reason, not ${reason}`);

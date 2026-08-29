@@ -644,9 +644,14 @@ It opens a browser onto the same window the macOS app draws: a sidebar of kept r
 
 Nothing leaves the machine. It binds to the loopback address, which is the whole of its security model.
 
-A native window for Windows and Linux is being built on top of exactly this — a
+There is also a **native window for Windows and Linux** built on exactly this: a
 Tauri shell that starts the same server and shows the same report, in
-[`desktop/`](desktop/README.md). Phase 1 works; it is not packaged yet.
+[`desktop/`](desktop/README.md). It ships a Node inside it, so there is nothing
+to install first. Every release attaches a `setup.exe`, a `.deb` and an
+AppImage, each built on its own runner and then **installed and run there**
+before it is attached. It tells you when there is a new version and offers
+whatever is safe for the way you installed it — `winget upgrade` in place, or
+the command to run, or the release page.
 
 `--no-open` if you would rather it did not open a browser. It opens one when a person ran the command and never when something else did, so the macOS window — which spawns this — is unaffected.
 

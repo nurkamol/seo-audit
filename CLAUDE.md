@@ -147,7 +147,14 @@ git tag -a v0.4.0 -m "…" && git push --follow-tags
 git tag -f -a v1 -m "…" && git push -f origin v1   # only if compatible
 ```
 
-That is the whole procedure. Pushing the version tag runs three workflows and
+Bump the version in **four** files, not one — `package.json`,
+`desktop/package.json`, `desktop/src-tauri/tauri.conf.json` and
+`desktop/src-tauri/Cargo.toml`. The shell refuses to start when its version and
+the engine's disagree, so a half-finished bump ships bundles that cannot run.
+`npm test` fails on the disagreement, which is the only reason that is a note
+rather than an outage.
+
+That is the whole procedure. Pushing the version tag runs four workflows and
 none of them needs a hand:
 
 - **`macOS app`** builds and signs the app, **creates the GitHub release** if it
@@ -158,6 +165,13 @@ none of them needs a hand:
   falls back to generated notes rather than failing with the app already built.
 - **`npm`** publishes `@nurkamol/seo-audit` with provenance, and skips silently
   if that version is already on the registry.
+- **`Desktop shell`** builds the Windows and Linux bundles, installs and runs
+  each one on its own runner, and attaches them to that same release. It never
+  creates the release — it waits up to five minutes for the macOS job to, because
+  an empty one made first would lose both the title and the notes. It also
+  submits the winget manifest, or says in a warning that it did not: that needs a
+  `WINGET_TOKEN` secret with `public_repo` scope, and without it Windows copies
+  are never winget installs and are sent to the release page instead.
 - **`test`** runs the suite against the tag.
 
 `v1` floats forward with every backwards-compatible release, because projects
