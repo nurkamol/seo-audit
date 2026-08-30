@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.38.2] — 2026-08-30
 
 ### Fixed
 - **The Raycast extension was running an engine seven releases old.** It
@@ -3194,7 +3194,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.38.1...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.38.2...HEAD
+[1.38.2]: https://github.com/nurkamol/seo-audit/compare/v1.38.1...v1.38.2
 [1.38.1]: https://github.com/nurkamol/seo-audit/compare/v1.38.0...v1.38.1
 [1.38.0]: https://github.com/nurkamol/seo-audit/compare/v1.37.0...v1.38.0
 [1.37.0]: https://github.com/nurkamol/seo-audit/compare/v1.36.0...v1.37.0

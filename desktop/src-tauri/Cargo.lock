@@ -2969,7 +2969,7 @@ dependencies = [
 
 [[package]]
 name = "seo-audit"
-version = "1.38.1"
+version = "1.38.2"
 dependencies = [
  "serde_json",
  "tauri",
