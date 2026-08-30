@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The Raycast extension was running an engine seven releases old.** It
+  declared `^1.31.0`, and the score arrived in the engine at 1.34.0 — so the
+  extension carried score UI the engine it depended on could never populate.
+  Because the extension shares its library folder with the app and the command
+  line, that showed up as an inconsistency rather than an absence: in **Recent
+  Reports** a run crawled by the app had a score and a run crawled by the
+  extension did not, in the same list.
+
+  Now `^1.38.1`, which also brings the site-wide cause collapse and the plural
+  fixes. The lockfile had been held still while the Store submission was in
+  review; that submission is a pull request in another repository and is not
+  affected by this.
+
 - **The Windows update dialog did not say to close the app first.** It said
   running the new installer over this one was the whole update, which is true
   only once this one is closed: the installer offers to remove the old version
@@ -16,7 +29,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   very dialog and so still had the app running when the installer ran. The
   dialog had walked them into it.
 
-### Fixed
 - **The winget job failed a release it had no business failing.**
   `winget-releaser` only ever *updates* a package: with nothing yet in
   `microsoft/winget-pkgs` it exits 1 with "Package Nurkamol.SeoAudit does not
