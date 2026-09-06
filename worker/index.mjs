@@ -639,12 +639,36 @@ function sidebar(env, currentId) {
  *  desktop shell inherits it for free. A format the run did not build is still
  *  offered — following it lands on the reason, which is more use than a control
  *  that is missing without saying why. */
-function exportBar(id) {
+/** The host a kept run was of, for naming the files it exports. */
+function hostOf(kept) {
+  try {
+    return new URL(kept?.meta?.origin).host;
+  } catch {
+    return 'report';
+  }
+}
+
+function exportBar(id, host = 'report') {
   return `<nav class="exports" aria-label="Save this report">
     <span>Save as</span>
-    ${FORMATS.map((format) =>
-      `<a href="/reports/${esc(id)}/export?as=${esc(format.id)}" title="${esc(format.detail)}">${esc(format.label)}</a>`,
-    ).join('')}
+    ${FORMATS.map((format) => {
+      // The file name is in the *path*, not only in `content-disposition`.
+      //
+      // A browser reads the header and names the download correctly, which is
+      // why this looked fine on the web. The desktop shell cannot: Tauri hands
+      // its download handler a URL and no response headers, so
+      // `download_name()` in main.rs takes the last path segment — and every
+      // one of these links used to end in `/export`, so every format saved as
+      // a file called `export` with no extension. Reported as issue #2.
+      //
+      // Fixed here rather than in the Rust because a header the handler never
+      // receives cannot be made to arrive, and because a URL that names what it
+      // returns is better for every client: a browser still prefers the header,
+      // and `curl -O` now writes the right name too.
+      const name = filenameFor(format.id, host);
+      return `<a href="/reports/${esc(id)}/export/${esc(encodeURIComponent(name))}?as=${esc(format.id)}" ` +
+        `download="${esc(name)}" title="${esc(format.detail)}">${esc(format.label)}</a>`;
+    }).join('')}
   </nav>`;
 }
 
@@ -1133,8 +1157,14 @@ export async function handle(request, env, ctx, deps = {}) {
   // and not save one. A download rather than a native dialog on purpose: it
   // works in a plain browser as well as in the desktop shell, and the shell
   // gaining a control the served UI lacks is the one thing it must not do.
-  if (url.pathname.startsWith('/reports/') && url.pathname.endsWith('/export') && env.STORE) {
-    const id = url.pathname.slice('/reports/'.length, -'/export'.length);
+  // `/reports/<id>/export/<filename>` and the older `/reports/<id>/export`.
+  // The trailing name is decoration for whoever is saving the file — the format
+  // is still `?as=`, never guessed from an extension — but it is the decoration
+  // the desktop shell names the download after, so it is part of the route
+  // rather than a redirect. Old links keep working; people bookmark these.
+  const exporting = url.pathname.match(/^\/reports\/([^/]+)\/export(?:\/[^/]*)?$/);
+  if (exporting && env.STORE) {
+    const id = exporting[1];
     const kept = env.STORE.read(id);
     const format = formatById(url.searchParams.get('as') ?? '');
     if (!kept || !format) return new Response('No such report or format.', { status: 404 });
@@ -1149,12 +1179,7 @@ export async function handle(request, env, ctx, deps = {}) {
         <p><a class="cta secondary" href="/reports/${esc(id)}">Back to the report</a></p></main>`, env), 409);
     }
 
-    let host = kept.meta?.origin ?? 'report';
-    try {
-      host = new URL(kept.meta.origin).host;
-    } catch {
-      /* keep whatever it was */
-    }
+    const host = hostOf(kept);
     return new Response(text, {
       headers: {
         'content-type': format.mime,
@@ -1172,7 +1197,7 @@ export async function handle(request, env, ctx, deps = {}) {
     }
     const id = url.pathname.slice('/reports/'.length);
     const parts = reportParts(kept.findings ?? [], kept.meta, { score: kept.score });
-    return htmlResponse(shell(parts.title, `<main>${exportBar(id)}${parts.body}</main>`, env, {
+    return htmlResponse(shell(parts.title, `<main>${exportBar(id, hostOf(kept))}${parts.body}</main>`, env, {
       currentId: id,
     }));
   }
@@ -1374,7 +1399,7 @@ export async function handle(request, env, ctx, deps = {}) {
           // back to what they ran before.
           const parts = reportParts(all, meta, { score: scored });
           await send('done', env.STORE && kept
-            ? shell(parts.title, `<main>${exportBar(kept.id)}${parts.body}</main>`, env, {
+            ? shell(parts.title, `<main>${exportBar(kept.id, hostOf(kept))}${parts.body}</main>`, env, {
                 currentId: kept.id,
               })
             : render(all, meta, { backHref: '/', backLabel: 'Audit another site', score: scored }));

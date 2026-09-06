@@ -3,6 +3,30 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The desktop app saved every export as a file called `export`, with no
+  extension.** ([#2](https://github.com/nurkamol/seo-audit/issues/2)) The
+  reporter noticed the web version was fine, and that is the whole diagnosis:
+  the server has always sent a correct `content-disposition`, and a browser
+  reads it. Tauri's download handler is given a URL and no response headers, so
+  `download_name()` takes the last path segment — and every link ended in
+  `/export`.
+
+  Fixed by putting the file name in the path:
+  `/reports/<id>/export/seo-audit-example.com-2026-09-07.md?as=markdown`. Not in
+  the Rust, because a header the handler never receives cannot be made to
+  arrive, and because a URL that names what it returns is better for every
+  client — a browser still prefers the header, and `curl -O` now writes the
+  right name too. `?as=` still decides the format; the name in the path is
+  decoration and never overrules it. The bare `/export` form still routes,
+  because people bookmark these.
+
+  Pinned from both ends: the served link is asserted in `test/worker.test.mjs`
+  and the URL shape it produces is asserted against `download_name()` in
+  `main.rs`, so neither half can drift without the other failing.
+
 ## [1.39.0] — 2026-09-07
 
 ### Added

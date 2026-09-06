@@ -854,7 +854,43 @@ test('a report in the window offers the whole list, refusals included', async ()
 
   // Offered even where the run built nothing: following the link lands on the
   // reason, which is more use than a control missing without saying why.
+  const { filenameFor } = await import('../src/exports.mjs');
   for (const format of FORMATS) {
-    assert.match(page, new RegExp(`export\\?as=${format.id}"`), `${format.id} should be offered`);
+    assert.match(page, new RegExp(`as=${format.id}"`), `${format.id} should be offered`);
+    // And the link says what it returns. The desktop shell names a download
+    // after the last path segment — Tauri gives its handler a URL and no
+    // headers — so a link ending in `/export` saved every format as a file
+    // called `export` with no extension. Issue #2.
+    const name = filenameFor(format.id, 'x.test');
+    assert.ok(page.includes(`/export/${encodeURIComponent(name)}?as=${format.id}`),
+      `${format.id} should be linked by its file name, not as a bare /export`);
   }
+});
+
+test('an export link names the file, and the old bare URL still works', async () => {
+  const { filenameFor } = await import('../src/exports.mjs');
+  const store = keptStore({
+    meta: { origin: 'https://x.test', pages: 2, date: '2026-01-01' }, findings: [], causes: [],
+  });
+  const id = '11111111-1111-4111-8111-111111111111';
+  const name = filenameFor('markdown', 'x.test');
+
+  // The named form is what the export bar now links to.
+  const named = await handle(get(`/reports/${id}/export/${encodeURIComponent(name)}?as=markdown`,
+    { token: SECRET }), env({ STORE: store }));
+  assert.equal(named.status, 200);
+  assert.match(named.headers.get('content-disposition'), new RegExp(`filename="${name}"`));
+
+  // The bare form is what everybody bookmarked, and it keeps working. The name
+  // in the path is decoration for whoever saves the file; `?as=` is still the
+  // only thing that decides the format.
+  const bare = await handle(get(`/reports/${id}/export?as=markdown`, { token: SECRET }),
+    env({ STORE: store }));
+  assert.equal(bare.status, 200);
+  assert.equal(await read(bare), await read(named));
+
+  // A name in the path never overrules `?as=`.
+  const lying = await handle(get(`/reports/${id}/export/anything.csv?as=markdown`, { token: SECRET }),
+    env({ STORE: store }));
+  assert.match(lying.headers.get('content-type'), /markdown/);
 });

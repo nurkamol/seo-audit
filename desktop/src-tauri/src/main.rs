@@ -943,6 +943,20 @@ mod tests {
         assert_eq!(download_name("http://127.0.0.1:4321/x/site-2026-08-29.html"),
                    "site-2026-08-29.html");
         assert_eq!(download_name("http://127.0.0.1:4321/a/b.csv?as=csv#top"), "b.csv");
+        // The shape the served export bar actually links to. It used to end at
+        // `/export`, so every format saved as a file called `export` with no
+        // extension — issue #2, and the reason the file name is in the path at
+        // all. `exportBar()` in worker/index.mjs builds this; if that changes,
+        // this is the test that should stop it.
+        assert_eq!(
+            download_name(
+                "http://127.0.0.1:4321/reports/1111/export/seo-audit-x.test-2026-01-01.md?as=markdown"
+            ),
+            "seo-audit-x.test-2026-01-01.md"
+        );
+        // And the old bare form, which still routes: a dull name beats a wrong
+        // one, and nothing links here any more.
+        assert_eq!(download_name("http://127.0.0.1:4321/reports/1111/export?as=html"), "export");
         assert_eq!(download_name("http://127.0.0.1:4321/a/my%20report.md"), "my report.md");
         // Never empty: an empty save dialog is worse than a dull name.
         assert_eq!(download_name("http://127.0.0.1:4321/"), "seo-audit-report");
