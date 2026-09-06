@@ -9,9 +9,12 @@ import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
 import { fingerprint, similarity, cluster } from '../src/dupes.mjs';
 import { rebuild, changedSince, describe as describeSitemap } from '../src/sitemap.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
-import { markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
+import { terminal, markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
-import { siteChecks } from '../src/site.mjs';
+import { siteChecks, hostChecks } from '../src/site.mjs';
+import {
+  resolve as resolveDns, certificateNames, collapseFleets, rankHosts, looksLikeStaging, NXDOMAIN,
+} from '../src/dns.mjs';
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
 import { parseRedirectMap, redirectChecks } from '../src/redirects.mjs';
 import { audit } from '../src/audit.mjs';
@@ -4958,4 +4961,354 @@ test('a saved report carries the score the window is showing', async () => {
   };
   assert.match(renderExport('markdown', report).text, /## Score: 96\/100 \(A\)/);
   assert.match(renderExport('html', report).text, /Score 96 out of 100/);
+});
+
+// --- the rest of the domain ------------------------------------------------
+
+test('a DoH answer is read by record type, with the trailing dot taken off', async () => {
+  const answered = (body) => async () => ({ ok: true, async json() { return body; } });
+  const out = await resolveDns('x.test', 'A', {
+    fetchImpl: answered({
+      Status: 0,
+      // Asking for A on an alias answers with the CNAME *and* the addresses.
+      // Both are wanted, and neither may leak into the other's list.
+      Answer: [
+        { name: 'x.test', type: 5, data: 'target.example.net.' },
+        { name: 'target.example.net', type: 1, data: '198.51.100.7' },
+      ],
+    }),
+  });
+  assert.equal(out.ok, true);
+  assert.equal(out.status, 0);
+  assert.deepEqual(out.records, ['198.51.100.7']);
+  assert.deepEqual(out.cname, ['target.example.net']);
+});
+
+test('a resolver that does not answer is not a name that does not exist', async () => {
+  // The distinction the dangling-CNAME check rests on. `ok: false` means the
+  // lookup did not happen; an empty `records` means it did and there is
+  // nothing there. Reading the first as the second accuses a live domain.
+  const refused = await resolveDns('x.test', 'A', {
+    fetchImpl: async () => { throw new Error('ECONNRESET'); },
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.status, null);
+  assert.deepEqual(refused.records, []);
+
+  const nothing = await resolveDns('x.test', 'A', {
+    fetchImpl: async () => ({ ok: true, async json() { return { Status: 3 }; } }),
+  });
+  assert.equal(nothing.ok, true);
+  assert.equal(nothing.status, NXDOMAIN);
+});
+
+test('certificate transparency gives hostnames, not wildcards or other domains', async () => {
+  // certspotter's shape: one issuance, many names, already an array.
+  const answered = await certificateNames('x.test', {
+    fetchImpl: async () => ({
+      ok: true,
+      async json() {
+        return [
+          { dns_names: ['x.test', '*.x.test', 'www.x.test'] },
+          { dns_names: ['STAGING.X.TEST'] },        // the log is not case-normalised
+          { dns_names: ['shop.x.test', 'shop.x.test'] }, // one name, listed twice
+          { dns_names: ['unrelated.example.org'] }, // a certificate covering somebody else too
+        ];
+      },
+    }),
+  });
+  assert.equal(answered.source, 'certspotter');
+  assert.deepEqual(answered.names.sort(), ['shop.x.test', 'staging.x.test', 'www.x.test', 'x.test']);
+});
+
+test('the second log is asked when the first does not answer', async () => {
+  // Not a rare branch. Asked five times in forty seconds, crt.sh answered
+  // twice — one 502, two slow successes and two timeouts — which is why there
+  // is more than one source and why this path has a test.
+  let asked = 0;
+  const answered = await certificateNames('x.test', {
+    fetchImpl: async (url) => {
+      asked++;
+      // certspotter is first and is refusing.
+      if (url.includes('certspotter')) return { ok: false, status: 502 };
+      return {
+        ok: true,
+        // crt.sh's shape: many names packed into one newline-separated string.
+        async json() { return [{ name_value: 'staging.x.test\nx.test' }]; },
+      };
+    },
+  });
+  assert.equal(asked, 2, 'both sources were tried, in order');
+  assert.equal(answered.source, 'crt.sh');
+  assert.deepEqual(answered.names.sort(), ['staging.x.test', 'x.test']);
+});
+
+test('null only when every log failed, never an empty list', async () => {
+  // An empty list would report a domain with dozens of hosts as having none,
+  // which is the missing finding that reads exactly like a passing one. It
+  // takes every source failing to get there.
+  assert.equal(await certificateNames('x.test', { fetchImpl: async () => ({ ok: false }) }), null);
+  assert.equal(
+    await certificateNames('x.test', { fetchImpl: async () => { throw new Error('timed out'); } }),
+    null,
+  );
+  // A log that answers with nothing about this domain is an answer, and it is
+  // not the same as no log answering.
+  const empty = await certificateNames('x.test', {
+    fetchImpl: async () => ({ ok: true, async json() { return []; } }),
+  });
+  assert.deepEqual(empty, { source: 'certspotter', names: [] });
+});
+
+test('a numbered fleet collapses and distinct names survive', () => {
+  // cloudflare.com's log holds 3,425 names and roughly three thousand of them
+  // are `ssl2081.` and its siblings, none of which have existed for years.
+  const names = [...Array.from({ length: 40 }, (_, i) => `ssl${i}.x.test`), 'staging.x.test', 'staging2.x.test'];
+  const kept = collapseFleets(names);
+  assert.equal(kept.filter((n) => n.startsWith('ssl')).length, 2, 'the fleet collapses to two');
+  // Two shapes, both interesting, both kept — the case a digit-stripping rule
+  // would get wrong if it collapsed by prefix instead of by shape.
+  assert.ok(kept.includes('staging.x.test'));
+  assert.ok(kept.includes('staging2.x.test'));
+});
+
+test('an environment name outranks a service name, and a product is not an environment', () => {
+  const ranked = rankHosts(['cdn.x.test', 'staging.x.test', 'www.x.test', 'x.test'], 'x.test');
+  assert.equal(ranked[0], 'staging.x.test');
+  // The site itself is not a sibling of itself.
+  assert.ok(!ranked.includes('x.test'));
+  assert.ok(!ranked.includes('www.x.test'));
+
+  assert.ok(looksLikeStaging('staging.x.test'));
+  assert.ok(looksLikeStaging('uat.x.test'));
+  assert.ok(looksLikeStaging('dev2.x.test'));
+  // Deliberately not environments: companies ship all four as products, and
+  // reporting somebody's live beta as a leak is the false positive that gets a
+  // whole report closed.
+  for (const name of ['beta.x.test', 'demo.x.test', 'blog.x.test', 'shop.x.test']) {
+    assert.ok(!looksLikeStaging(name), `${name} should not read as an environment`);
+  }
+});
+
+/** A DoH stand-in. `zones` maps a hostname to what the resolver says about it. */
+const fakeDns = (zones) => async (name, type) => {
+  const zone = zones[name];
+  if (!zone) return { ok: true, status: NXDOMAIN, records: [], cname: [] };
+  return {
+    ok: true,
+    status: zone.status ?? 0,
+    records: (type === 'A' ? zone.a : zone[type.toLowerCase()]) ?? [],
+    cname: zone.cname ? [zone.cname] : [],
+  };
+};
+
+const paragraph = (word) => `${`${word} `.repeat(140)}`;
+const sitePage = (body) => `<html><head><title>Example</title></head><body><main>${body}</main></body></html>`;
+
+const hostRun = (routes, zones, names, opts = {}) =>
+  hostChecks('https://x.test', fakeFetcher(routes), {
+    certificateNames: async () => ({ source: 'test-log', names }),
+    resolveDns: fakeDns(zones),
+    ...opts,
+  });
+
+test('a subdomain whose CNAME points at a name that is gone is reported', async () => {
+  const { findings } = await hostRun(
+    () => ({ status: 404 }),
+    { 'blog.x.test': { cname: 'someone.wpengine.test', status: NXDOMAIN } },
+    ['blog.x.test'],
+  );
+  const found = findings.find((f) => f.id === 'subdomain-takeover');
+  assert.ok(found, 'a dangling alias is a finding');
+  assert.equal(found.level, 'error');
+  assert.match(found.detail, /someone\.wpengine\.test/);
+});
+
+test('a CNAME that resolves is not a takeover', async () => {
+  // The half that matters. Every site behind a CDN is a CNAME to somewhere
+  // else, and reporting those would fire on almost every domain there is.
+  const { findings } = await hostRun(
+    () => ({ status: 404 }),
+    { 'www.x.test': { cname: 'x.test.cdn.example', a: ['198.51.100.1'] } },
+    ['www.x.test'],
+  );
+  assert.equal(findings.filter((f) => f.id === 'subdomain-takeover').length, 0);
+});
+
+test('a live, indexable staging copy is reported', async () => {
+  const { findings, hosts } = await hostRun(
+    (url) => (url.includes('robots.txt') ? { status: 404 } : { body: sitePage(paragraph('staging')) }),
+    { 'staging.x.test': { a: ['198.51.100.9'] } },
+    ['staging.x.test'],
+  );
+  const found = findings.find((f) => f.id === 'staging-indexable');
+  assert.ok(found, 'an open staging host is a finding');
+  assert.equal(found.level, 'warn');
+  assert.equal(found.url, 'https://staging.x.test/');
+  // The inventory is shipped alongside, so a reader can check the finding
+  // rather than take it.
+  assert.equal(hosts.rows[0].host, 'staging.x.test');
+  assert.deepEqual(hosts.rows[0].addresses, ['198.51.100.9']);
+});
+
+test('a staging host somebody already closed is not reported', async () => {
+  // Four separate ways of having dealt with it, and each one has to silence the
+  // check on its own. This is the half of the test that keeps the check from
+  // crying wolf at every company that has a staging environment at all.
+  const closed = {
+    'a noindex meta tag': (url) =>
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : { body: '<html><head><meta name="robots" content="noindex"></head><body><main>x</main></body></html>' },
+    'an X-Robots-Tag header': (url) =>
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : { body: sitePage('x'), headers: { 'content-type': 'text/html', 'x-robots-tag': 'noindex' } },
+    'a robots.txt that disallows everything': (url) =>
+      url.includes('robots.txt')
+        ? { body: 'User-agent: *\nDisallow: /', headers: { 'content-type': 'text/plain' } }
+        : { body: sitePage('x') },
+    'a canonical pointing at production': (url) =>
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : { body: '<html><head><link rel="canonical" href="https://x.test/"></head><body><main>x</main></body></html>' },
+    'a redirect to a different sibling host': (url) =>
+      // dev.jquery.com 301s to bugs.jquery.com, which answers 200 with HTML at
+      // its own root. The old test only knew about the canonical host, so this
+      // came through as a leaked staging copy of a host that serves nothing.
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : url === 'https://staging.x.test/'
+          ? { status: 301, location: 'https://bugs.x.test/' }
+          : { body: sitePage(paragraph('bugs')) },
+    'a redirect to a login page on the same host': (url) =>
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : url === 'https://staging.x.test/'
+          ? { status: 307, location: 'https://staging.x.test/login?callbackUrl=%2F' }
+          : { body: sitePage('x') },
+    'a redirect to the canonical host': (url) =>
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : url.startsWith('https://staging.x.test')
+          ? { status: 301, location: 'https://x.test/' }
+          : { body: sitePage('x') },
+  };
+  for (const [how, routes] of Object.entries(closed)) {
+    const { findings } = await hostRun(routes, { 'staging.x.test': { a: ['198.51.100.9'] } }, ['staging.x.test']);
+    assert.equal(
+      findings.filter((f) => f.id === 'staging-indexable').length, 0,
+      `${how} should silence the check`,
+    );
+  }
+});
+
+test('a staging host that does not resolve is never fetched', async () => {
+  // A name in the log is not a host. Three quarters of what certificate
+  // transparency returns for a large domain stopped existing years ago, and
+  // reporting one of those would be reporting a certificate, not a site.
+  const fetcher = fakeFetcher(() => ({ body: sitePage(paragraph('staging')) }));
+  const { findings } = await hostChecks('https://x.test', fetcher, {
+    certificateNames: async () => ({ source: 'test-log', names: ['staging.x.test'] }),
+    resolveDns: fakeDns({}),
+  });
+  assert.equal(findings.filter((f) => f.id === 'staging-indexable').length, 0);
+  assert.equal(fetcher.calls.filter((u) => u.includes('staging.x.test')).length, 0);
+});
+
+test('another host serving the same site again is reported, once', async () => {
+  const same = sitePage(paragraph('identical'));
+  const { findings } = await hostRun(
+    (url) => (url.includes('robots.txt') ? { status: 404 } : { body: same }),
+    { 'mirror.x.test': { a: ['198.51.100.4'] } },
+    ['mirror.x.test'],
+  );
+  const found = findings.filter((f) => f.id === 'duplicate-host');
+  assert.equal(found.length, 1);
+  assert.equal(found[0].url, 'https://mirror.x.test/');
+});
+
+test('a host serving a different site is not a duplicate', async () => {
+  const { findings } = await hostRun(
+    (url) =>
+      url.includes('robots.txt')
+        ? { status: 404 }
+        : { body: sitePage(paragraph(url.startsWith('https://shop.') ? 'products' : 'articles')) },
+    { 'shop.x.test': { a: ['198.51.100.4'] } },
+    ['shop.x.test'],
+  );
+  assert.equal(findings.filter((f) => f.id === 'duplicate-host').length, 0);
+});
+
+test('a staging host is not also reported as a duplicate', async () => {
+  // One fault gets one finding. A leaked staging copy is a copy by definition,
+  // and saying so twice is the noise this project keeps refusing.
+  const same = sitePage(paragraph('identical'));
+  const { findings } = await hostRun(
+    (url) => (url.includes('robots.txt') ? { status: 404 } : { body: same }),
+    { 'staging.x.test': { a: ['198.51.100.4'] } },
+    ['staging.x.test'],
+  );
+  assert.equal(findings.filter((f) => f.id === 'staging-indexable').length, 1);
+  assert.equal(findings.filter((f) => f.id === 'duplicate-host').length, 0);
+});
+
+test('a certificate log that did not answer says so, and claims nothing', async () => {
+  const { findings, hosts } = await hostChecks('https://x.test', fakeFetcher(() => ({ status: 404 })), {
+    certificateNames: async () => null,
+    resolveDns: fakeDns({}),
+  });
+  assert.deepEqual(findings.map((f) => f.id), ['hosts-not-checked']);
+  assert.equal(findings[0].level, 'info');
+  assert.equal(hosts, null, 'no inventory, rather than an empty one that reads as a clean domain');
+});
+
+test('a sweep that stopped at its cap says how many it did not reach', async () => {
+  const names = Array.from({ length: 12 }, (_, i) => `host-${'x'.repeat(i)}.x.test`);
+  const { findings, hosts } = await hostRun(() => ({ status: 404 }), {}, names, { maxHostChecks: 4 });
+  const capped = findings.find((f) => f.id === 'host-sweep-capped');
+  assert.ok(capped);
+  assert.match(capped.title, /8 hostnames were not looked up/);
+  assert.equal(hosts.capped, 8);
+});
+
+test('a domain with no domain to enumerate is left alone', async () => {
+  // An IP address and a bare hostname have no siblings to ask about, and the
+  // log has nothing to say about either.
+  for (const origin of ['https://127.0.0.1', 'http://localhost:8080']) {
+    const { findings, hosts } = await hostChecks(origin, fakeFetcher(() => ({ status: 404 })), {
+      certificateNames: async () => { throw new Error('should never be asked'); },
+      resolveDns: fakeDns({}),
+    });
+    assert.deepEqual(findings, []);
+    assert.equal(hosts, null);
+  }
+});
+
+test('the inventory reaches the terminal and the Markdown, findings marked', async () => {
+  const { findings, hosts } = await hostRun(
+    (url) => (url.includes('robots.txt') ? { status: 404 } : { body: sitePage(paragraph('staging')) }),
+    { 'staging.x.test': { a: ['198.51.100.9'] }, 'gone.x.test': { cname: 'dead.example.net', status: NXDOMAIN } },
+    ['staging.x.test', 'gone.x.test'],
+  );
+  const meta = { origin: 'https://x.test', pages: 1, requests: 3, ms: 10, hosts };
+
+  const text = terminal(findings, meta, {});
+  assert.match(text, /Hosts on x\.test/);
+  assert.match(text, /staging\.x\.test/);
+  assert.match(text, /CNAME → dead\.example\.net \(gone\)/);
+
+  const md = markdown(findings, meta, {});
+  assert.match(md, /## Hosts on x\.test/);
+  // The hosts a finding is about are the ones bolded, read back out of the
+  // findings rather than recomputed.
+  assert.match(md, /\| \*\*staging\.x\.test\*\* \|/);
+  assert.match(md, /\| \*\*gone\.x\.test\*\* \|/);
+});
+
+test('a run that never asked about the domain shows no host section', async () => {
+  const meta = { origin: 'https://x.test', pages: 1, requests: 1, ms: 10 };
+  assert.ok(!terminal([], meta, {}).includes('Hosts on'));
+  assert.ok(!markdown([], meta, {}).includes('## Hosts on'));
+  assert.ok(!html([], meta, {}).includes('id="hosts"'));
 });

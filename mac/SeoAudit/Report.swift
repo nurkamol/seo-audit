@@ -147,6 +147,56 @@ struct Meta: Decodable, Hashable {
     let date: String?
     let notIndexable: Int?
     let ignored: Int?
+    /// The rest of the domain, when the run was asked to look. Absent rather
+    /// than empty when it was not: a report that shows no other hosts must not
+    /// be readable as a domain that has none.
+    let hosts: HostInventory?
+}
+
+/// One host on the domain, as DNS and one HTTP request found it.
+struct HostRow: Codable, Hashable, Identifiable {
+    let host: String
+    let addresses: [String]
+    let cname: String?
+    let dangling: Bool
+    let status: Int?
+    let title: String?
+    let redirectsHome: Bool
+    let noindex: Bool
+    let checked: Bool
+
+    var id: String { host }
+
+    /// What this row says about itself, in one line. The same sentence the
+    /// terminal and the HTML print, because three renderings of one fact is
+    /// three chances to disagree about it.
+    var summary: String {
+        if dangling { return "CNAME → \(cname ?? "?") (gone)" }
+        if addresses.isEmpty { return cname.map { "CNAME → \($0)" } ?? "does not resolve" }
+        if !checked { return "not fetched" }
+        if redirectsHome { return "\(status ?? 0) → the canonical host" }
+        if noindex { return "\(status ?? 0), noindex" }
+        guard let status, status > 0 else { return "no answer" }
+        if let title, !title.isEmpty { return "\(status)  \(title)" }
+        return "\(status)"
+    }
+}
+
+/// What else is on the domain. Discovery is certificate transparency and
+/// verification is DNS plus a request, which is why `found` and `resolved` are
+/// different numbers and both are worth showing.
+struct HostInventory: Codable, Hashable {
+    let apex: String
+    /// Which log answered. Optional because a report kept before there was
+    /// more than one source still has to open.
+    let source: String?
+    let found: Int
+    let resolved: Int
+    let capped: Int
+    let nameservers: [String]
+    let mail: [String]
+    let policies: [String]
+    let rows: [HostRow]
 }
 
 /// The corrected sitemap, when the engine was asked for one. `xml` is nil when
@@ -211,6 +261,23 @@ struct Report: Decodable, Hashable {
             buckets[name, default: []].append(cause)
         }
         return order.map { ($0, buckets[$0] ?? []) }
+    }
+
+    /// Which hosts a finding is about, and at what level — so the inventory can
+    /// mark the two or three rows the report is actually complaining about.
+    ///
+    /// Read back out of the findings rather than recomputed from the rows: the
+    /// engine decided what counts as a leaked staging copy, and a second
+    /// opinion here would be a second answer to the same question. An error
+    /// outranks a warning on the same host.
+    var flaggedHosts: [String: Finding.Level] {
+        var out: [String: Finding.Level] = [:]
+        for finding in findings
+        where ["subdomain-takeover", "staging-indexable", "duplicate-host"].contains(finding.id) {
+            guard let url = URL(string: finding.url ?? ""), let host = url.host() else { continue }
+            if finding.level == .error || out[host] == nil { out[host] = finding.level }
+        }
+        return out
     }
 }
 

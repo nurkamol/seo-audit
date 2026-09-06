@@ -79,6 +79,15 @@
       "required": false
     },
     {
+      "name": "hosts",
+      "title": "The rest of the domain",
+      "label": "Audit other hosts on this domain too",
+      "description": "Asks certificate transparency what else is on the domain, then resolves and fetches it: a staging copy open to the index, a subdomain pointing at a service that is gone, a second host serving the same site. Adds a few seconds, and more on a domain with hundreds of hosts.",
+      "type": "checkbox",
+      "default": true,
+      "required": false
+    },
+    {
       "name": "sitemap",
       "title": "Sitemap",
       "description": "Only when a sitemap is somewhere the usual names do not find it. It has to be on the site being audited.",
@@ -258,7 +267,7 @@
     }
   ],
   "dependencies": {
-    "@nurkamol/seo-audit": "^1.38.1",
+    "@nurkamol/seo-audit": "^1.39.0",
     "@raycast/api": "^1.77.0"
   },
   "devDependencies": {

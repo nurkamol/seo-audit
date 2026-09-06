@@ -22,14 +22,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 import {
   SPEEDS, crawlOptions, normalise, previewRows, causeRows, summaryLine, keptReports, readReport,
-  scoreTag, scoreLine, gainFor, passedRows, skippedRows,
+  scoreTag, scoreLine, gainFor, passedRows, skippedRows, hostRows, hostLine,
 } from '../raycast/lib/present.mjs';
 import { FORMATS, filenameFor, render } from '../raycast/lib/exports.mjs';
 import { BROWSER_NAMES, OS_NAMES } from '../src/agents.mjs';
 
 test('preferences arrive as strings, and nonsense is the default rather than NaN', () => {
   assert.deepEqual(crawlOptions({ limit: '40', speed: 'gentle', checkExternal: true }),
-    { limit: 40, concurrency: 1, checkExternal: true });
+    { limit: 40, concurrency: 1, checkExternal: true, hosts: false });
 
   // Raycast hands back "" for a cleared text field, and somebody will type a
   // word into it. Neither is a page count.
@@ -46,6 +46,8 @@ test('preferences arrive as strings, and nonsense is the default rather than NaN
   assert.equal(crawlOptions({ speed: 'fast' }).concurrency, 12);
   // A checkbox that is absent is not a checkbox that is on.
   assert.equal(crawlOptions({}).checkExternal, false);
+  assert.equal(crawlOptions({}).hosts, false);
+  assert.equal(crawlOptions({ hosts: true }).hosts, true);
 });
 
 test('Search Console is off unless asked for, and a property is optional', () => {
@@ -260,10 +262,10 @@ test('every preference reaches the engine, and defaults are left out', () => {
   // Left out rather than sent explicitly: the engine's defaults stay written
   // down in the engine, and an option that is present is one somebody chose.
   assert.deepEqual(Object.keys(crawlOptions({})).sort(),
-    ['checkExternal', 'concurrency', 'limit']);
+    ['checkExternal', 'concurrency', 'hosts', 'limit']);
 
   const all = crawlOptions({
-    limit: '40', speed: 'gentle', checkExternal: true,
+    limit: '40', speed: 'gentle', checkExternal: true, hosts: true,
     sitemap: '/sitemaps/all.xml',
     exclude: '/tag/**, /page/*\n/collections/*/products/*',
     since: '2026-08-17',
@@ -619,4 +621,57 @@ test('a site that already declares everything gets that as the answer', () => {
   });
   assert.equal(written.refused, null);
   assert.equal(filenameFor('schema', 'x.test', new Date('2026-08-24T10:00:00Z')), 'seo-audit-x.test-2026-08-24.json');
+});
+
+test('the rest of the domain becomes rows, with the flagged hosts coloured', () => {
+  const meta = {
+    hosts: {
+      apex: 'x.test', found: 40, resolved: 2, capped: 0,
+      nameservers: [], mail: [], policies: [],
+      rows: [
+        { host: 'staging.x.test', addresses: ['198.51.100.9'], cname: null, dangling: false,
+          status: 200, title: 'Staging', redirectsHome: false, noindex: false, checked: true },
+        { host: 'gone.x.test', addresses: [], cname: 'dead.example.net', dangling: true,
+          status: null, title: null, redirectsHome: false, noindex: false, checked: false },
+        { host: 'mail.x.test', addresses: ['198.51.100.3'], cname: null, dangling: false,
+          status: 0, title: null, redirectsHome: false, noindex: false, checked: true },
+      ],
+    },
+  };
+  const findings = [
+    { level: 'warn', id: 'staging-indexable', url: 'https://staging.x.test/' },
+    { level: 'error', id: 'subdomain-takeover', url: 'https://gone.x.test/' },
+  ];
+
+  const rows = hostRows(meta, findings);
+  assert.deepEqual(rows.map((r) => r.tone), ['warn', 'error', 'plain']);
+  assert.equal(rows[0].subtitle, '198.51.100.9 \u00b7 200  Staging');
+  assert.equal(rows[1].subtitle, 'CNAME \u2192 dead.example.net (gone)');
+  // A host nothing was said about stays plain — most of a healthy domain is
+  // rows like this one, and colouring them would make an ordinary domain read
+  // as a broken one.
+  assert.equal(rows[2].subtitle, '198.51.100.3 \u00b7 no answer');
+});
+
+test('a run that never asked about the domain contributes no rows', () => {
+  // Absent rather than empty, all the way to the launcher: a report showing no
+  // other hosts must not be readable as a domain that has none.
+  assert.deepEqual(hostRows(undefined), []);
+  assert.deepEqual(hostRows({}), []);
+  assert.deepEqual(hostRows({ hosts: { rows: [] } }), []);
+});
+
+test('a host that redirects to the canonical host says so rather than looking broken', () => {
+  // Parking an old name on the real one is the correct arrangement, and the
+  // line has to read as correct.
+  assert.equal(
+    hostLine({ host: 'www.x.test', addresses: ['198.51.100.1'], cname: null, dangling: false,
+               status: 301, title: null, redirectsHome: true, noindex: false, checked: true }),
+    '198.51.100.1 \u00b7 301 \u2192 the canonical host',
+  );
+  assert.equal(
+    hostLine({ host: 'preview.x.test', addresses: ['198.51.100.2'], cname: null, dangling: false,
+               status: 200, title: null, redirectsHome: false, noindex: true, checked: true }),
+    '198.51.100.2 \u00b7 200, noindex',
+  );
 });

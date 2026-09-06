@@ -420,6 +420,7 @@ struct CrawlSettingsTests {
         settings.speed = .normal
         settings.limit = 200
         settings.checkExternal = false
+        settings.hosts = true       // the shipped default, not a test's leftover
         settings.browser = ""
         settings.system = ""
         settings.sitemap = ""
@@ -440,7 +441,11 @@ struct CrawlSettingsTests {
         // structured data from their titles and descriptions — so all three
         // are always asked for. The sitemap costs one already-cached request
         // and the other two cost none at all.
-        #expect(names == ["url", "limit", "format", "sitemap-out", "llms-out", "schema-out"])
+        //
+        // `hosts` is here because the window defaults it on: this is a window
+        // somebody is watching, where a few seconds buys a finding a crawl
+        // cannot otherwise see. The command line defaults the other way.
+        #expect(names == ["url", "limit", "format", "hosts", "sitemap-out", "llms-out", "schema-out"])
         #expect(items.first { $0.name == "format" }?.value == "json")
     }
 
@@ -454,6 +459,32 @@ struct CrawlSettingsTests {
         #expect(items.first { $0.name == "concurrency" }?.value == "1")
         #expect(CrawlSettings.Speed.gentle.connections < CrawlSettings.Speed.normal.connections)
         #expect(CrawlSettings.Speed.normal.connections < CrawlSettings.Speed.fast.connections)
+    }
+
+    @MainActor
+    @Test("the domain sweep is off unless it is asked for")
+    func hosts() {
+        let settings = fresh()
+        let run = Run(url: "https://x.test", limit: 10)
+
+        // On by default in a window somebody is watching, where a few seconds
+        // buys a finding a crawl cannot otherwise see. The command line
+        // defaults the other way, and that difference is deliberate.
+        let asked = Dictionary(
+            settings.queryItems(for: run).map { ($0.name, $0.value) },
+            uniquingKeysWith: { a, _ in a }
+        )
+        #expect(asked["hosts"] == "1")
+
+        // Off means sending nothing, not sending "0" — the engine reads a
+        // present parameter as a request.
+        settings.hosts = false
+        defer { settings.hosts = true }
+        let quiet = Dictionary(
+            settings.queryItems(for: run).map { ($0.name, $0.value) },
+            uniquingKeysWith: { a, _ in a }
+        )
+        #expect(quiet["hosts"] == nil)
     }
 
     @MainActor
@@ -677,6 +708,81 @@ struct PreviewTests {
         settings.userAgent = "   "
         let fallback = settings.queryItems(for: Run(url: "https://a.test", limit: 10))
         #expect(fallback.contains { $0.name == "browser" }, "whitespace is not a user agent")
+    }
+}
+
+@Suite("The rest of the domain, carried with the report")
+struct HostInventoryTests {
+    private func report(_ json: String) throws -> Report {
+        try JSONDecoder().decode(Report.self, from: Data(json.utf8))
+    }
+
+    private let withHosts = """
+    {"meta":{"origin":"https://x.test","pages":1,"hosts":{
+       "apex":"x.test","found":40,"resolved":2,"capped":6,
+       "nameservers":["ns1.x.net"],"mail":["mx.x.net"],"policies":["v=spf1 -all"],
+       "rows":[
+         {"host":"staging.x.test","addresses":["198.51.100.9"],"cname":null,"dangling":false,
+          "status":200,"title":"Staging","redirectsHome":false,"noindex":false,"checked":true},
+         {"host":"gone.x.test","addresses":[],"cname":"dead.example.net","dangling":true,
+          "status":null,"title":null,"redirectsHome":false,"noindex":false,"checked":false}]}},
+     "findings":[
+       {"level":"warn","id":"staging-indexable","title":"open","detail":"d","url":"https://staging.x.test/"},
+       {"level":"error","id":"subdomain-takeover","title":"gone","detail":"d","url":"https://gone.x.test/"}],
+     "causes":[]}
+    """
+
+    @Test("an inventory arrives with the report and keeps its numbers")
+    func decodes() throws {
+        let inventory = try #require(report(withHosts).meta.hosts)
+        #expect(inventory.apex == "x.test")
+        // Found and resolved are different questions — certificate
+        // transparency names hosts that stopped existing years ago — and the
+        // window must not collapse them into one number.
+        #expect(inventory.found == 40)
+        #expect(inventory.resolved == 2)
+        #expect(inventory.capped == 6)
+        #expect(inventory.rows.count == 2)
+        #expect(inventory.nameservers == ["ns1.x.net"])
+    }
+
+    @Test("a report from a run that never asked has no inventory, not an empty one")
+    func absent() throws {
+        // The distinction the whole feature rests on: a domain nobody looked at
+        // must not read as a domain with nothing on it.
+        let plain = """
+        {"meta":{"origin":"https://x.test","pages":1},"findings":[],"causes":[]}
+        """
+        #expect(try report(plain).meta.hosts == nil)
+    }
+
+    @Test("each row says what it is in one line")
+    func summaries() throws {
+        let rows = try #require(report(withHosts).meta.hosts).rows
+        #expect(rows[0].summary == "200  Staging")
+        // The name it points at is the thing somebody has to go and delete, so
+        // it is named rather than reduced to a status.
+        #expect(rows[1].summary == "CNAME → dead.example.net (gone)")
+    }
+
+    @Test("the hosts a finding is about are marked, worst level winning")
+    func flagged() throws {
+        let flagged = try report(withHosts).flaggedHosts
+        #expect(flagged["staging.x.test"] == .warn)
+        #expect(flagged["gone.x.test"] == .error)
+        // A host nothing was said about is not marked.
+        #expect(flagged["x.test"] == nil)
+    }
+
+    @Test("an exported report carries the inventory it was shown with")
+    func roundTrips() throws {
+        // Meta declares its CodingKeys by hand for the export, and the same
+        // enum is what Decodable synthesises against — so a field missing from
+        // it is a field that neither writes nor reads back.
+        let meta = try report(withHosts).meta
+        let again = try JSONDecoder().decode(Meta.self, from: JSONEncoder().encode(meta))
+        #expect(again.hosts?.rows.map { $0.host } == ["staging.x.test", "gone.x.test"])
+        #expect(again.hosts?.found == 40)
     }
 }
 

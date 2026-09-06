@@ -88,6 +88,16 @@ struct ReportView: View {
                         // only lists faults gives no way to tell a check that
                         // passed from one that was never run, and a missing
                         // finding reads exactly like a passing one.
+                        // The rest of the domain, when the run was asked to
+                        // look. Not a finding and not filtered with them: the
+                        // inventory is the working behind the host findings,
+                        // and it is worth reading on a domain where nothing
+                        // was wrong. Before Passing, which is the order the
+                        // terminal, the Markdown, the HTML and the PDF all use.
+                        if let inventory = report.meta.hosts, search.isEmpty, level == nil {
+                            HostsSection(inventory: inventory, flagged: report.flaggedHosts)
+                        }
+
                         if let score = report.score, search.isEmpty, level == nil {
                             PassingSection(score: score)
                         }
@@ -621,45 +631,133 @@ private struct PassingSection: View {
         }
     }
 
-    /// One collapsible card. The whole row is the hit target, not the chevron —
-    /// a disclosure triangle is a four-point target on a full-width row.
-    private struct Panel<Content: View>: View {
-        @Binding var open: Bool
-        let symbol: String
-        let tint: AnyShapeStyle
-        let title: String
-        let note: String
-        @ViewBuilder var content: () -> Content
+}
 
-        var body: some View {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(systemName: symbol).foregroundStyle(tint)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.system(.headline, design: .rounded))
-                        Text(note).font(.caption).foregroundStyle(.secondary)
+/// What else is on the domain, when the run was asked to look.
+///
+/// A card rather than a list of findings, because most of these rows are a
+/// healthy domain going about its business — a mail server, a CDN name, the
+/// `www` that redirects. Drawing them as findings would make an ordinary domain
+/// read as a broken one. The two or three that *are* findings take the colour
+/// of the finding above, so the eye connects them without the row claiming to
+/// be one.
+private struct HostsSection: View {
+    let inventory: HostInventory
+    /// Hosts a finding is actually about, read back out of the findings rather
+    /// than worked out again here — a second arithmetic over the same facts is
+    /// a second chance to disagree with the list printed above it.
+    let flagged: [String: Finding.Level]
+
+    @State private var open = false
+
+    private var headline: String {
+        let resolving = "\(inventory.resolved) of them resolving"
+        return inventory.capped > 0
+            ? "\(resolving), \(inventory.capped) not looked up"
+            : resolving
+    }
+
+    private func tint(for host: String) -> Color {
+        switch flagged[host] {
+        case .error: .red
+        case .warn: .orange
+        default: .secondary
+        }
+    }
+
+    var body: some View {
+        Panel(
+            open: $open,
+            symbol: "point.3.connected.trianglepath.dotted",
+            tint: AnyShapeStyle(.teal),
+            title: "\(inventory.rows.count) hosts on \(inventory.apex)",
+            note: "\(inventory.found) in certificate transparency\(inventory.source.map { " (\($0))" } ?? ""), \(headline)."
+        ) {
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(inventory.rows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: flagged[row.host] == nil ? "circle.dotted" : "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(tint(for: row.host))
+                            .frame(width: 14)
+                        Text(row.host)
+                            .font(.callout.weight(flagged[row.host] == nil ? .regular : .semibold))
+                            .textSelection(.enabled)
+                        Spacer(minLength: 8)
+                        Text(row.addresses.first ?? "")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                        Text(row.summary)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(minWidth: 150, alignment: .leading)
                     }
-                    Spacer(minLength: 8)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(open ? 90 : 0))
                 }
-                .padding(16)
-                .contentShape(.rect)
-                .onTapGesture { withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { open.toggle() } }
 
-                if open {
-                    VStack(alignment: .leading, spacing: 14) {
-                        content()
+                let facts: [(String, [String])] = [
+                    ("Nameservers", inventory.nameservers),
+                    ("Mail", inventory.mail),
+                    ("SPF and DMARC", inventory.policies),
+                ]
+                ForEach(facts.filter { !$0.1.isEmpty }, id: \.0) { label, values in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(label.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                        Text(values.prefix(4).joined(separator: "  "))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(.regular, in: .rect(cornerRadius: Radius.card))
         }
+    }
+}
+
+/// One collapsible card. The whole row is the hit target, not the chevron —
+/// a disclosure triangle is a four-point target on a full-width row.
+///
+/// File scope rather than nested, because two sections draw one: what passed,
+/// and what else is on the domain. A second copy of this would be a second
+/// card that drifts from the first.
+private struct Panel<Content: View>: View {
+    @Binding var open: Bool
+    let symbol: String
+    let tint: AnyShapeStyle
+    let title: String
+    let note: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(.headline, design: .rounded))
+                    Text(note).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .padding(16)
+            .contentShape(.rect)
+            .onTapGesture { withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { open.toggle() } }
+
+            if open {
+                VStack(alignment: .leading, spacing: 14) {
+                    content()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: Radius.card))
     }
 }

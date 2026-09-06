@@ -22,6 +22,7 @@ export interface CrawlOptions {
   limit: number;
   concurrency: number;
   checkExternal: boolean;
+  hosts: boolean;
 }
 
 /** A row in a preview: a fact, and the line under it. */
@@ -31,6 +32,9 @@ export interface Row {
   subtitle: string;
   tone: "error" | "warn" | "ok" | "plain";
 }
+
+export function hostRows(meta: unknown, findings?: unknown[]): Row[];
+export function hostLine(row: unknown): string;
 
 /** A row in a report — one thing to change, and the pages it is on. */
 export interface CauseRow {

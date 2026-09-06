@@ -4,7 +4,7 @@ import { bodyKind, parseHtml, parseSitemap } from './parse.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
 import { redirectChecks } from './redirects.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks } from './checks.mjs';
-import { certificateExpiry, siteChecks } from './site.mjs';
+import { certificateExpiry, siteChecks, hostChecks } from './site.mjs';
 import { linkGraph } from './graph.mjs';
 import { compareAgents } from './compare.mjs';
 import { scoreRun } from './score.mjs';
@@ -482,6 +482,18 @@ export async function audit(target, opts = {}) {
     ...(await siteChecks(origin, fetcher, pages, { ...opts, sitemapUrls: urls, bySitemap })),
   );
 
+  // What else is on this domain — a leaked staging copy, a subdomain whose
+  // CNAME points at a service that is gone, a second host serving the same
+  // site. Only when asked: it is a slow third-party lookup plus one per
+  // candidate host, and a crawl should not quietly spend that.
+  let hosts = null;
+  if (opts.hosts) {
+    onProgress?.({ phase: 'hosts', detail: 'asking certificate transparency what else is on this domain' });
+    const swept = await hostChecks(origin, fetcher, { ...opts, onProgress });
+    findings.push(...swept.findings);
+    hosts = swept.hosts;
+  }
+
   // A migration's redirect map, checked against the live site. Only when one
   // is handed over: there is nothing to infer here, and guessing at old URLs
   // would invent findings.
@@ -669,6 +681,11 @@ export async function audit(target, opts = {}) {
     redirects: Boolean(opts.redirects),
     external: Boolean(opts.checkExternal),
     compareAs: Boolean(opts.compareAs),
+    // Asked for and answered are different things. A run with --hosts whose
+    // certificate transparency lookup failed has not checked these, and
+    // `hosts-not-checked` says so in the report; scoring them as passed would
+    // hand out credit for a lookup that never happened.
+    hosts: Boolean(opts.hosts) && hosts !== null,
   };
 
   // The llms.txt this site should have had, from the same crawl and by the
@@ -704,6 +721,10 @@ export async function audit(target, opts = {}) {
       ms: Date.now() - started,
       date: new Date().toISOString().slice(0, 10),
       sitemap: source,
+      // The inventory behind the host findings. Absent unless --hosts asked
+      // for it, so a report that does not mention other hosts is one that was
+      // never asked to look rather than one that looked and found none.
+      ...(hosts ? { hosts } : {}),
     },
   };
 }

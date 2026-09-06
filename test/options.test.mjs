@@ -84,6 +84,17 @@ test('the app\'s own test knows which parameters every run sends', () => {
   const always = new Set([...block.matchAll(/name: "([a-zA-Z-]+)"/g)].map((m) => m[1]));
   assert.ok(always.size >= 3, 'expected to find the unconditional parameters');
 
+  // A setting that defaults to *on* is sent by a default run too, even though
+  // it is added conditionally rather than in the literal above. `hosts` is the
+  // first of those: the window audits the rest of the domain unless told not
+  // to, because it is a window somebody is watching. Read out of the Swift
+  // rather than listed here, so flipping a default in one file cannot leave
+  // this test describing the other one.
+  for (const [, name] of swift.matchAll(/@AppStorage\("seo-audit\.crawl\.(\w+)"\) var \w+ = true\b/g)) {
+    const sent = swift.match(new RegExp(`if ${name} \\{ items\\.append\\(\\.init\\(name: "([a-zA-Z-]+)"`));
+    if (sent) always.add(sent[1]);
+  }
+
   // What ModelTests.swift asserts a default run sends.
   const tests = read('mac/Tests/SeoAuditTests/ModelTests.swift');
   const expectation = tests.match(/#expect\(names == \[([^\]]+)\]\)/);

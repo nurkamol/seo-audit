@@ -46,6 +46,10 @@ export function crawlOptions(preferences = {}) {
     limit: count(preferences.limit, 25, 5000),
     concurrency: SPEEDS[preferences.speed] ?? SPEEDS.normal,
     checkExternal: preferences.checkExternal === true,
+    // Off unless asked for, like performance. It is one slow lookup to a free
+    // third party plus one per candidate host, and a launcher is the worst
+    // place of the three to wait out something nobody asked for.
+    hosts: preferences.hosts === true,
   };
 
   const sitemap = (preferences.sitemap ?? '').trim();
@@ -273,6 +277,47 @@ export function skippedRows(score) {
     subtitle: ids.join(', '),
     tone: 'plain',
   }));
+}
+
+/** The rest of the domain, one row per host.
+ *
+ *  The hosts a finding is about are marked from the findings themselves rather
+ *  than worked out again here — the engine decided what counts as a leaked
+ *  staging copy, and a second opinion in a launcher would be a second answer to
+ *  the same question.
+ *  @returns {Row[]} */
+export function hostRows(meta, findings = []) {
+  const inventory = meta?.hosts;
+  if (!inventory?.rows?.length) return [];
+
+  const flagged = new Map();
+  for (const finding of findings) {
+    if (!/^(subdomain-takeover|staging-indexable|duplicate-host)$/.test(finding.id)) continue;
+    try {
+      const host = new URL(finding.url).hostname;
+      if (finding.level === 'error' || !flagged.has(host)) flagged.set(host, finding.level);
+    } catch { /* a finding without a parseable URL marks nothing */ }
+  }
+
+  return inventory.rows.map((row) => ({
+    id: `host:${row.host}`,
+    title: row.host,
+    subtitle: hostLine(row),
+    tone: flagged.get(row.host) === 'error' ? 'error' : flagged.has(row.host) ? 'warn' : 'plain',
+  }));
+}
+
+/** What a host row says about itself, in one line — the same sentence the
+ *  terminal, the HTML and the macOS window print. */
+export function hostLine(row) {
+  if (row.dangling) return `CNAME → ${row.cname} (gone)`;
+  if (!row.addresses.length) return row.cname ? `CNAME → ${row.cname}` : 'does not resolve';
+  const where = row.addresses[0];
+  if (!row.checked) return `${where} · not fetched`;
+  if (row.redirectsHome) return `${where} · ${row.status} → the canonical host`;
+  if (row.noindex) return `${where} · ${row.status}, noindex`;
+  if (!row.status) return `${where} · no answer`;
+  return `${where} · ${row.status}${row.title ? `  ${row.title}` : ''}`;
 }
 
 // --- what the macOS app has already kept -----------------------------------

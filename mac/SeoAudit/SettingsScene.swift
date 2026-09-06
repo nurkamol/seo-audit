@@ -230,6 +230,15 @@ private struct CoveragePane: View {
                 Text("Follows links to other sites to see whether they still resolve. Slower, and "
                      + "only a 404, 410 or no answer is reported.").footnote()
             }
+
+            Section {
+                Toggle("Audit the rest of the domain", isOn: $settings.hosts)
+            } footer: {
+                Text("Asks certificate transparency what other hosts exist on this domain, then "
+                     + "resolves and fetches them: a staging copy open to the index, a subdomain "
+                     + "pointing at a service that is gone, a second host serving the same site. "
+                     + "Slower, and the lookup is a free third party that rate-limits.").footnote()
+            }
         }
     }
 }

@@ -166,10 +166,15 @@ extension Meta: Encodable {
         try box.encodeIfPresent(date, forKey: .date)
         try box.encodeIfPresent(notIndexable, forKey: .notIndexable)
         try box.encodeIfPresent(ignored, forKey: .ignored)
+        // The inventory travels with the report it belongs to. An export that
+        // dropped it would be a different document from the one on screen —
+        // and this enum is also what Decodable synthesises against, so a field
+        // missing here is a field the window cannot read back in either.
+        try box.encodeIfPresent(hosts, forKey: .hosts)
     }
 
     enum CodingKeys: String, CodingKey {
-        case origin, pages, requests, ms, date, notIndexable, ignored
+        case origin, pages, requests, ms, date, notIndexable, ignored, hosts
     }
 }
 

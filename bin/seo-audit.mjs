@@ -81,6 +81,14 @@ const HELP = `
     --check-external   also check links pointing off the site. Off by default:
                        other people's servers rate-limit and bot-block, so only
                        a 404, a 410 or no answer at all is ever reported
+    --hosts            also audit the rest of the domain. Asks certificate
+                       transparency what other hosts exist, resolves them and
+                       fetches the ones that are live: a staging copy open to
+                       the index, a subdomain whose CNAME points at a service
+                       that is gone, a second host serving the same site.
+                       Off by default here and on by default in the window and
+                       the Raycast extension — those are watched, this is a
+                       build step, and it calls a third party either way
     --no-open          with --serve, do not open a browser. It opens one when
                        a person ran the command and never when something else
                        did, so this is only for the person who wants neither
@@ -180,6 +188,7 @@ function parseArgs(argv) {
     else if (arg === '--sitemap') opts.sitemap = value();
     else if (arg === '--redirects') opts.redirects = value();
     else if (arg === '--check-external') opts.checkExternal = true;
+    else if (arg === '--hosts') opts.hosts = true;
     else if (arg === '--user-agent') opts.userAgent = value();
     else if (arg === '--serve') {
       // The port is optional: --serve on its own, or --serve 8080.

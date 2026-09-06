@@ -136,6 +136,37 @@ enum PDF {
                 ))))
             }
         }
+        // The rest of the domain, when the run was asked to look. Same rule as
+        // below: an export that shows less than the report it came from is a
+        // worse lie than no export, and this is a page a client reads instead
+        // of the window.
+        if let inventory = report.meta.hosts, !inventory.rows.isEmpty {
+            out.append(Block(AnyView(AreaHeading(name: "Hosts on \(inventory.apex)",
+                                                 count: inventory.rows.count)),
+                             keepWithNext: true))
+            let flagged = report.flaggedHosts
+            out.append(Block(AnyView(PassBlock(
+                area: "\(inventory.found) in certificate transparency"
+                    + (inventory.source.map { " (\($0))" } ?? "")
+                    + ", \(inventory.resolved) resolving",
+                lines: inventory.rows.map { row in
+                    // The hosts a finding is about are marked, so a printed
+                    // page says which rows the report was complaining about.
+                    let mark = flagged[row.host] == nil ? "  " : "! "
+                    let address = row.addresses.first ?? ""
+                    return "\(mark)\(row.host)   \(address)   \(row.summary)"
+                },
+                muted: true
+            ))))
+            for (label, values) in [("Nameservers", inventory.nameservers),
+                                    ("Mail", inventory.mail),
+                                    ("SPF and DMARC", inventory.policies)] where !values.isEmpty {
+                out.append(Block(AnyView(PassBlock(area: label,
+                                                   lines: [values.prefix(4).joined(separator: "   ")],
+                                                   muted: true))))
+            }
+        }
+
         // What passed, and what never came up. An export that shows less than
         // the report it came from is a worse lie than no export, and until this
         // was here a PDF sent to a client listed only faults — with no way to

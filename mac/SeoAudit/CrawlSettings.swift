@@ -48,6 +48,16 @@ final class CrawlSettings: ObservableObject {
     @AppStorage("seo-audit.crawl.speed") var speed: Speed = .normal
     @AppStorage("seo-audit.crawl.limit") var limit: Int = 200
     @AppStorage("seo-audit.crawl.checkExternal") var checkExternal = false
+    /// Whether a run also audits the rest of the domain — a leaked staging
+    /// copy, a subdomain pointing at a service that is gone, a second host
+    /// serving the same site.
+    ///
+    /// On by default here and in the Raycast extension, and off by default on
+    /// the command line. Not an inconsistency: this is a window somebody is
+    /// watching, where a few seconds buys a finding a crawl cannot otherwise
+    /// see. `npx` is a build step, where the same seconds are spent unasked
+    /// and a third party is called that nobody chose to call.
+    @AppStorage("seo-audit.crawl.hosts") var hosts = true
     /// Empty means "whatever this machine looks like", which is what the engine
     /// does when nothing is passed.
     @AppStorage("seo-audit.crawl.browser") var browser = ""
@@ -151,6 +161,7 @@ final class CrawlSettings: ObservableObject {
             items.append(.init(name: "concurrency", value: String(speed.connections)))
         }
         if checkExternal { items.append(.init(name: "external", value: "1")) }
+        if hosts { items.append(.init(name: "hosts", value: "1")) }
         let ownAgent = userAgent.trimmingCharacters(in: .whitespaces)
         if !ownAgent.isEmpty {
             items.append(.init(name: "userAgent", value: ownAgent))

@@ -31,6 +31,7 @@ import {
   crawlOptions,
   gainFor,
   normalise,
+  hostRows,
   passedRows,
   scoreLine,
   scoreTag,
@@ -262,6 +263,38 @@ export function Report({ site }: { site: string }) {
             ))}
         </List.Section>
       ))}
+
+      {/* The rest of the domain, when the run was asked to look. Not findings
+          and not filtered with them: most of these rows are a healthy domain
+          going about its business, and the two or three that are findings take
+          the colour of the finding above. */}
+      {!working &&
+        !failed &&
+        hostRows(report?.meta, report?.findings).length > 0 && (
+          <List.Section
+            title={`Hosts on ${report?.meta?.hosts?.apex ?? ""}`}
+            subtitle={`${report?.meta?.hosts?.found ?? 0} in certificate transparency, ${
+              report?.meta?.hosts?.resolved ?? 0
+            } resolving`}
+          >
+            {hostRows(report?.meta, report?.findings).map((row) => (
+              <List.Item
+                key={row.id}
+                icon={{
+                  source: row.tone === "plain" ? Icon.Dot : Icon.Warning,
+                  tintColor:
+                    row.tone === "error"
+                      ? Color.Red
+                      : row.tone === "warn"
+                        ? Color.Orange
+                        : Color.SecondaryText,
+                }}
+                title={row.title}
+                subtitle={row.subtitle}
+              />
+            ))}
+          </List.Section>
+        )}
 
       {/* What passed, and what never came up. A missing finding reads exactly
           like a passing one, so both are named and the second says why. */}

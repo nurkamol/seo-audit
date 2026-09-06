@@ -65,6 +65,10 @@ export const OPTIONS = [
   { flag: '--psi-strategy', query: 'psi-strategy', app: true, via: 'Settings → Performance',
     field: { type: 'select', label: 'Measured as', needs: 'ALLOW_PSI',
              choices: [['', 'A phone — what Google indexes with'], ['desktop', 'A desktop']] } },
+  { flag: '--hosts', query: 'hosts', app: true, via: 'Settings → Crawl',
+    field: { type: 'checkbox', label: 'Audit the rest of the domain too', value: '1',
+             needs: 'ALLOW_HOSTS', checked: true,
+             help: 'Asks certificate transparency what other hosts exist, then resolves and fetches them. Adds a few seconds, and more on a domain with hundreds of hosts.' } },
   { flag: '--since', query: null, app: 'not yet — it needs a date picker and a sense of when the last run was, which the window has in the library and does not offer yet' },
   { flag: '--exclude', query: null, app: 'not yet — a list of patterns needs somewhere to live in Settings, and one text field would be worse than nothing' },
 

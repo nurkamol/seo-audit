@@ -484,6 +484,85 @@ Rules with a `*` or a `:placeholder` match a shape rather than a URL, so asking
 for them literally proves nothing. They are counted and reported, never guessed
 at. A rule that works in one hop reports nothing at all.
 
+### The rest of the domain
+
+Every check above audits the site it was pointed at. `--hosts` asks a different
+question: what *else* is on this domain, and is any of it damaging the site that
+was.
+
+```bash
+node bin/seo-audit.mjs https://example.com --hosts
+```
+
+Discovery is [certificate transparency](https://certificate.transparency.dev) —
+the public log of every certificate ever issued, which is the only free, keyless
+source of hostnames there is. Two logs are asked, certspotter first and crt.sh
+second, because one is not dependable enough: asked five times in forty seconds,
+crt.sh answered twice. Verification is DNS and this tool's own fetcher, and that
+split is the whole design. The log is a *terrible* list of live hosts:
+it holds 3,425 distinct names for one large domain and roughly three thousand of
+them stopped existing years ago. So **nothing from the log is ever reported**. It
+produces candidates; a lookup and a request decide which of them are facts.
+
+Three things come out of it, and all three are invisible to a crawl of the site
+itself:
+
+- a **staging copy** nobody remembered to close — indexable, competing with
+  production for its own results, publishing whatever is being tested;
+- a **subdomain whose CNAME points at a service that is gone**, which anybody
+  can claim and then serve from a host on your domain;
+- a **second host serving the same site**, splitting every signal it earns.
+
+Plus an inventory, printed whether or not anything was wrong with it, because
+"what else is on this domain" is worth an answer on a healthy domain too:
+
+```
+  ── Hosts on example.com ──────────────────────────────────────
+  214 hostnames in certificate transparency, 9 of them resolving, 174 not looked up
+
+  ✗ staging.example.com   198.51.100.9    200  Example — Staging
+  ✗ blog.example.com                      CNAME → old-tenant.wpengine.net (gone)
+  · shop.example.com      198.51.100.20   200  Example Shop
+  · www.example.com       198.51.100.1    301 → the canonical host
+  · preview.example.com   198.51.100.31   200, noindex
+
+  Nameservers  ns1.cloudflare.com, ns2.cloudflare.com
+  Mail         aspmx.l.google.com
+  Policies     v=spf1 include:_spf.google.com ~all
+```
+
+It is off by default and stays that way. These logs are free, unauthenticated
+and rate-limited by IP, and gov.uk's 4,674 hostnames took 89 seconds to sweep —
+a crawl should not quietly spend that. When no log answers, the report says
+`hosts-not-checked` rather than showing a domain with nothing on it, for the same
+reason `tls-not-checked` exists: a missing finding reads exactly like a passing
+one. Across ten real domains that note fired twice, so it is not a rare branch.
+
+The staging check is also silent on any host that does not answer for **its own
+root**. Two real domains taught that one, in different disguises:
+`dev.gtm.github.com` answers 307 to `/login`, and that login page answers 200
+with HTML and no `noindex`; `dev.jquery.com` 301s to `bugs.jquery.com`, a
+different sibling entirely. In both cases every other clause passed and a host
+serving nothing was reported as a leaked copy of the site. One condition covers
+both, and it needs no vocabulary of login paths — which would only ever be the
+paths somebody thought of. The trade is a staging site redirecting `/` to `/en/`
+that goes unreported, which is the right way round to be wrong.
+
+It is **on by default in the macOS window and the Raycast extension, and off by
+default on the command line**. That is deliberate rather than an inconsistency:
+those two are watched by a person, where a few seconds buys a finding a crawl
+cannot otherwise see, and `npx` is a build step, where the same seconds are spent
+unasked and a third party gets called that nobody chose to call.
+
+The inventory travels with every format the engine writes — terminal, Markdown,
+HTML, JSON, the baseline, the macOS window and its PDF export. In CSV it arrives
+as rows at level `host`, the same way passing and not-checked rows already do,
+because a CSV holding two shapes is a CSV nothing can read in one go.
+
+The window reaches it from **Settings → Crawl**, and the Raycast extension from
+its preferences. The hosted deployment leaves it off unless `ALLOW_HOSTS` is set,
+because there a stranger would be spending one shared address's allowance.
+
 ### Sites without a sitemap
 
 If no sitemap can be found, the crawl follows links from the homepage instead
@@ -536,6 +615,7 @@ reason.
 | `--reports [date]` | — | List the runs kept on this machine and stop. With a date, only those finished on or after it |
 | `--since <date>` | — | Crawl only URLs the sitemap says changed on or after this date. Refuses when `lastmod` cannot answer it |
 | `--exclude <glob>` | — | Leave URLs out of the crawl. Repeatable; `*` stops at a slash, `**` does not |
+| `--hosts` | — | Also audit the rest of the domain: what other hosts exist, which resolve, and what they serve. Off by default — one slow third-party lookup plus one per candidate host |
 | `--dry-run` | — | Say what would be crawled and stop. A handful of requests instead of hundreds |
 | `--write-sitemap <file>` | — | Write the sitemap this site should have had. Refuses on a crawl that did not see the whole site |
 | `--write-llms <file>` | — | Write the `llms.txt` this site should have had, in the [llmstxt.org](https://llmstxt.org) format, from the site's own titles and descriptions. Nothing is generated or rewritten. Refuses on a partial crawl, for the same reason |
@@ -861,6 +941,10 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | The link and image sweeps say so when they stop at their cap rather than implying they checked everything | note |
 | Every `og:image` actually loads, and isn't too heavy to scrape | error / warning |
 | A declared `twitter:image` loads, when it differs from `og:image` — its *absence* is fine, X falls back to Open Graph | error |
+| **A subdomain pointing at a service that is gone**, with `--hosts` — a CNAME whose target does not resolve. Anybody can register that name at the provider and serve from a host on your domain | error |
+| **A staging copy open to the index**, with `--hosts` — a host whose leftmost label names an environment (`staging`, `dev`, `uat`, `qa`, `preview`, `sandbox`…), answering 200 with HTML. Silent on one that says `noindex`, disallows crawling in its own robots.txt, canonicalises to production, or redirects there. `beta.` and `demo.` are deliberately not environments: companies ship both | warning |
+| **A second host serving the same site again**, with `--hosts` — bodies compared, not titles, and silent when its canonical points back at the canonical host | warning |
+| The host sweep says when the certificate log did not answer, and when it stopped at its cap — never silence in either case | note |
 
 ---
 

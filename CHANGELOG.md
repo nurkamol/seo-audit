@@ -3,6 +3,92 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.0] — 2026-09-07
+
+### Added
+- **`--hosts`: the rest of the domain.** Every check until now audited the site
+  it was pointed at. This asks a different question — what *else* is on this
+  domain, and is any of it damaging the site that was. Three findings, all of
+  them invisible to a crawl of the site itself:
+
+  - `staging-indexable` (warning) — a host whose leftmost label names an
+    environment, answering 200 with HTML, with nothing keeping it out of the
+    index. A staging copy Google can reach competes with production for its own
+    results and publishes whatever is being tested on it.
+  - `subdomain-takeover` (error) — a CNAME whose target does not resolve. The
+    provider released the name; anybody can register it and serve from a host on
+    the domain, which inherits its reputation.
+  - `duplicate-host` (warning) — a second host serving the same site again,
+    bodies compared rather than titles, splitting every signal the site earns.
+
+  Discovery is certificate transparency and verification is DNS plus a request,
+  and that split is the whole design. The log is the only free, keyless source of
+  hostnames and a terrible list of live ones — 3,425 names for one large domain,
+  roughly three thousand of them dead for years. So nothing from the log is ever
+  reported: it produces candidates, and a lookup and a fetch decide which are
+  facts. Names are collapsed by *shape* — every run of digits becomes `#`, at
+  most two per shape — which empties a numbered fleet without a hand-written
+  blocklist of somebody's naming convention.
+
+  The staging check is deliberately narrow, and every clause earns its place. It
+  is silent on a host that says `noindex`, disallows crawling in its own
+  robots.txt, canonicalises to production, or redirects there — all four are
+  somebody having thought about this. `beta.` and `demo.` are not in the
+  environment list: companies ship both as products, and reporting somebody's
+  live beta as a leak is the false positive that gets a whole report closed.
+
+  A run also carries an **inventory** — every host, its address, and what it
+  serves, with the nameservers, mail and SPF/DMARC records — printed whether or
+  not anything was wrong with it, in the terminal, the Markdown, the HTML, the
+  macOS window and Raycast. When the log does not answer, the report says
+  `hosts-not-checked` rather than showing a domain with nothing on it; when the
+  sweep stops at its cap it says `host-sweep-capped`. Same rule as
+  `tls-not-checked`: a missing finding reads exactly like a passing one.
+
+  Two logs are asked, certspotter first and crt.sh second. One is not enough:
+  asked five times in forty seconds, crt.sh answered twice — a 502, two
+  successes at 6.9s and 20.9s, and two thirty-second timeouts — while
+  certspotter answered the same question in 1.8. Across a sample of ten real
+  domains `hosts-not-checked` still fired twice, so the honest-failure path is
+  ordinary rather than exceptional, and the report names which log answered.
+
+  The staging and duplicate checks require a host to answer for **its own
+  root**. A sweep of twenty-two real domains produced exactly two false
+  positives and both were this, in different disguises:
+  `dev.gtm.github.com` answers 307 to `/login`, and that login page answers 200
+  with HTML and no `noindex`; `dev.jquery.com` 301s to `bugs.jquery.com`, a
+  different sibling, which the first guard missed because it only knew about the
+  canonical host and the landing path was `/`. Both hosts serve nothing, and
+  both were reported as leaked copies of the site. One condition covers them,
+  and it needs no vocabulary of `/login`, `/signin`, `/sso` — which would only
+  ever be the paths somebody thought of. The trade is a staging site redirecting
+  `/` to `/en/` that goes unreported, which is the right way round to be wrong.
+
+  On by default in the macOS window, the Raycast extension and the desktop
+  shells; off by default on the command line. Those are watched by a person,
+  where a few seconds buys a finding a crawl cannot otherwise see; `npx` is a
+  build step, where the same seconds are spent unasked. The served form carries
+  the default too, because the Tauri shell draws nothing of its own and a
+  default expressed only in the macOS window would be one Windows silently did
+  not have.
+
+  The inventory travels with every format the engine writes. In CSV it is rows
+  at level `host`, extending the column the passing and not-checked rows already
+  extend, rather than a second table with its own header — a CSV holding two
+  shapes is a CSV that nothing can read in one go.
+
+  Off by default, and staying that way — these logs are free, unauthenticated
+  and rate-limited by IP, and gov.uk's 4,674 hostnames took 89 seconds to
+  sweep. The window reaches it from **Settings → Crawl** and the Raycast
+  extension from its preferences; a hosted deployment leaves it off unless
+  `ALLOW_HOSTS` is set, where a stranger would be spending one shared address's
+  allowance.
+
+  DNS is asked over HTTPS rather than through `node:dns`, which is the reason
+  these checks work in the hosted Worker when the certificate checks do not:
+  DoH is a `fetch` and a JSON body, so every runtime this engine runs in asks
+  the same resolver the same question.
+
 ## [1.38.2] — 2026-08-30
 
 ### Fixed

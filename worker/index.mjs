@@ -139,6 +139,20 @@ export function psiOptions(params, env) {
   };
 }
 
+/** Whether a run may enumerate the rest of the domain, off unless the
+ *  deployment allows it.
+ *
+ *  Gated for the same reason as PageSpeed and for one more of its own. It is a
+ *  call to a free, unauthenticated third party — crt.sh — which rate-limits by
+ *  IP, and every request from a deployed Worker leaves the same handful of
+ *  addresses. A stranger passing `?hosts=1` would spend a budget that is shared
+ *  with everybody else using that deployment, and would mostly get
+ *  `hosts-not-checked` back for their trouble. `--serve` sets it because the
+ *  window it serves is the person running it, on their own address.
+ */
+export const hostOptions = (params, env) =>
+  env.ALLOW_HOSTS === '1' && params.get('hosts') === '1' ? { hosts: true } : {};
+
 /** The Search Console property a run should be ordered by.
  *
  *  Gated for a sharper reason than PageSpeed: the credentials belong to
@@ -283,8 +297,13 @@ function controls(env) {
     const help = field.help ? `<p class="fine">${esc(field.help)}</p>` : '';
 
     if (field.type === 'checkbox') {
+      // `checked` so a box the desktop shells should start with ticked starts
+      // ticked. The Tauri shell draws nothing of its own — it points a webview
+      // at this form — so a default expressed only in the macOS window would be
+      // a default Windows and Linux silently did not have.
       return `<div class="check"><input id="${esc(id)}" name="${esc(field.query)}" type="checkbox" ` +
-        `value="${esc(field.value ?? '1')}"><label for="${esc(id)}">${esc(field.label)}</label></div>${help}`;
+        `value="${esc(field.value ?? '1')}"${field.checked ? ' checked' : ''}>` +
+        `<label for="${esc(id)}">${esc(field.label)}</label></div>${help}`;
     }
     if (field.type === 'select') {
       const options = field.choices
@@ -1296,6 +1315,7 @@ export async function handle(request, env, ctx, deps = {}) {
           // that passed.
           ignore: idList(url.searchParams.get('ignore')),
           ...psiOptions(url.searchParams, env),
+          ...hostOptions(url.searchParams, env),
           ...searchConsoleProperty(url.searchParams, env),
           sitemap: sitemapOverride(url.searchParams.get('sitemap'), target.url),
           userAgent: agentFor(url.searchParams, env),

@@ -3,6 +3,7 @@
 
 import { byCause, causeScope, sectionOf } from './causes.mjs';
 import { CATEGORIES, categoryOf } from './areas.mjs';
+import { plural } from './text.mjs';
 
 const COLOR = process.env.NO_COLOR === undefined && process.stdout.isTTY;
 const c = (code, s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -122,6 +123,9 @@ export function terminal(findings, meta, { score } = {}) {
   if (!findings.length) {
     lines.push(`  ${c('32', '✓')} nothing to report`);
     lines.push('');
+    // The inventory is not a finding and does not belong to the list above, so
+    // a clean site that was asked about its domain still gets the answer.
+    lines.push(...hostBlock(findings, meta, rule));
     if (score?.passed?.length) lines.push(...passingBlock(score, rule));
     return lines.join('\n');
   }
@@ -189,6 +193,7 @@ export function terminal(findings, meta, { score } = {}) {
     lines.push(...listing(notes));
   }
 
+  lines.push(...hostBlock(findings, meta, rule));
   lines.push(...passingBlock(score, rule));
 
   lines.push(
@@ -196,6 +201,88 @@ export function terminal(findings, meta, { score } = {}) {
   );
   lines.push('');
   return lines.join('\n');
+}
+
+/** The hosts a finding is actually about, so the inventory can mark them.
+ *
+ *  Read back out of the findings rather than recomputed, because a second
+ *  arithmetic over the same facts is a second chance to disagree with the
+ *  report printed six lines above it. */
+export function flaggedHosts(findings) {
+  const out = new Map();
+  for (const finding of findings) {
+    if (!/^(subdomain-takeover|staging-indexable|duplicate-host)$/.test(finding.id)) continue;
+    try {
+      const host = new URL(finding.url).hostname;
+      // An error outranks a warning on the same host, so a row that is both a
+      // takeover and a duplicate is coloured by the worse of the two.
+      if (finding.level === 'error' || !out.has(host)) out.set(host, finding.level);
+    } catch { /* a finding without a parseable URL marks nothing */ }
+  }
+  return out;
+}
+
+/** What a host row says about itself, in one column.
+ *
+ *  A dangling alias is named rather than reduced to a status, because the name
+ *  it points at is the thing somebody has to go and delete. */
+export function hostSummary(row) {
+  if (row.dangling) return `CNAME → ${row.cname} (gone)`;
+  if (!row.addresses.length) return row.cname ? `CNAME → ${row.cname}` : 'does not resolve';
+  if (!row.checked) return 'not fetched';
+  if (row.redirectsHome) return `${row.status} → the canonical host`;
+  // Where a request for this host's root actually ended up, when it was not
+  // this host's root — another sibling, or a login page. It is the reason the
+  // staging check stayed quiet, so it is said rather than left to be guessed.
+  if (row.landed && row.landed !== row.host) return `${row.status} → ${row.landed}`;
+  if (row.landedPath && row.landedPath !== '/') return `${row.status} → ${row.landedPath}`;
+  if (row.noindex) return `${row.status}, noindex`;
+  if (row.status) return `${row.status}${row.title ? `  ${row.title}` : ''}`;
+  return 'no answer';
+}
+
+/** The rest of the domain, as a table.
+ *
+ *  Printed whether or not anything was wrong with it. "What else is on this
+ *  domain" is worth an answer on a healthy domain too, and it is the answer
+ *  that lets somebody check the findings above rather than take them. */
+function hostBlock(findings, meta, rule) {
+  const inventory = meta?.hosts;
+  if (!inventory?.rows?.length) return [];
+  const flagged = flaggedHosts(findings);
+  const out = [];
+
+  out.push(rule(`Hosts on ${inventory.apex}`));
+  out.push(
+    dim(
+      `  ${plural(inventory.found, 'hostname')} in certificate transparency` +
+        (inventory.source ? ` (${inventory.source})` : '') +
+        `, ${inventory.resolved} of them resolving` +
+        (inventory.capped ? `, ${inventory.capped} not looked up` : ''),
+    ),
+  );
+  out.push('');
+
+  const width = Math.min(38, Math.max(...inventory.rows.map((r) => r.host.length)));
+  for (const row of inventory.rows) {
+    const mark = flagged.has(row.host) ? red('✗') : dim('·');
+    const address = row.addresses[0] ?? '';
+    out.push(
+      `  ${mark} ${row.host.padEnd(width)}  ${dim(address.padEnd(15))} ${hostSummary(row)}`,
+    );
+  }
+  out.push('');
+
+  const facts = [
+    ['Nameservers', inventory.nameservers],
+    ['Mail', inventory.mail],
+    ['Policies', inventory.policies],
+  ];
+  for (const [label, values] of facts) {
+    if (values?.length) out.push(dim(`  ${label.padEnd(12)} ${values.slice(0, 4).join(', ')}`));
+  }
+  out.push('');
+  return out;
 }
 
 /** What passed, and what never came up.
@@ -320,6 +407,7 @@ export function markdown(findings, meta, { score } = {}) {
     out.push(...listing(notes));
   }
 
+  out.push(...hostMarkdown(findings, meta));
   out.push(...passingMarkdown(score));
 
   out.push('---');
@@ -331,6 +419,48 @@ export function markdown(findings, meta, { score } = {}) {
   );
   out.push('');
   return out.join('\n');
+}
+
+/** The rest of the domain, in a file somebody sends to a client.
+ *
+ *  A table rather than prose, because the useful thing to do with it is read
+ *  down the first column and recognise a name nobody meant to leave running. */
+function hostMarkdown(findings, meta) {
+  const inventory = meta?.hosts;
+  if (!inventory?.rows?.length) return [];
+  const flagged = flaggedHosts(findings);
+  const out = [];
+
+  out.push(`## Hosts on ${inventory.apex}`);
+  out.push('');
+  out.push(
+    `${plural(inventory.found, 'hostname')} in certificate transparency` +
+      (inventory.source ? ` (${inventory.source})` : '') +
+      `, ${inventory.resolved} of them resolving` +
+      (inventory.capped ? `, ${inventory.capped} not looked up` : '') +
+      '. Discovered from the log and then verified — every row below was resolved, and every row ' +
+      'with a status was fetched.',
+  );
+  out.push('');
+  out.push('| Host | Address | What it serves |');
+  out.push('|---|---|---|');
+  for (const row of inventory.rows) {
+    const name = flagged.has(row.host) ? `**${row.host}**` : row.host;
+    out.push(`| ${name} | ${row.addresses[0] ?? '—'} | ${hostSummary(row)} |`);
+  }
+  out.push('');
+
+  const facts = [
+    ['Nameservers', inventory.nameservers],
+    ['Mail', inventory.mail],
+    ['Policies', inventory.policies],
+  ];
+  const shown = facts.filter(([, values]) => values?.length);
+  if (shown.length) {
+    for (const [label, values] of shown) out.push(`**${label}** — ${values.slice(0, 4).join(', ')}`);
+    out.push('');
+  }
+  return out;
 }
 
 /** The score, in a file somebody sends to a client. */
@@ -731,6 +861,20 @@ export function csv(findings, meta, { score } = {}) {
     rows.push(['not-checked', check.id, check.pass, '', '', 'yes', '', '', '', '', check.why, '']);
   }
 
+  // The rest of the domain, when the run was asked to look. A new level rather
+  // than a second table with its own header: a CSV holding two shapes is a CSV
+  // that no spreadsheet and no script can read in one go, and this file already
+  // answers "what else did the run see" the same way for passed and skipped
+  // checks. Filtering on error/warn/info is still untouched.
+  for (const row of meta?.hosts?.rows ?? []) {
+    rows.push([
+      'host', 'host', row.host, `https://${row.host}/`, '',
+      row.noindex ? 'no' : 'yes', '', '', '', '',
+      [row.addresses.join(' '), hostSummary(row)].filter(Boolean).join(' · '),
+      '',
+    ]);
+  }
+
   return `\uFEFF${[columns, ...rows].map((row) => row.map(cell).join(',')).join('\r\n')}\r\n`;
 }
 
@@ -832,6 +976,53 @@ export function reportParts(findings, meta, { backHref, backLabel = 'New audit',
   <ul class="skipped">${[...byReason]
     .map(([why, ids]) => `<li><b>${esc(why)}</b><span>${ids.map((i) => `<code>${esc(i)}</code>`).join(' ')}</span></li>`)
     .join('')}</ul>`
+      : ''
+  }`;
+  };
+
+  // --- The rest of the domain ---------------------------------------------
+  // A list rather than the findings table, because these rows are not findings:
+  // most of them are a healthy domain going about its business, and rendering
+  // them in the table that means "something is wrong" would make a mail server
+  // look like a problem. The two or three that *are* findings borrow the pill
+  // and the colour from the section above, so the eye connects them.
+  const hostTable = () => {
+    const inventory = meta?.hosts;
+    if (!inventory?.rows?.length) return '';
+    const flagged = flaggedHosts(findings);
+    const facts = [
+      ['Nameservers', inventory.nameservers],
+      ['Mail', inventory.mail],
+      ['SPF and DMARC', inventory.policies],
+    ].filter(([, values]) => values?.length);
+
+    const row = (host) => {
+      const level = flagged.get(host.host);
+      const address = host.addresses[0] ?? '';
+      return `<li class="${level ?? 'quiet'}">
+      <span class="pill ${level ?? 'none'}">${level ? LABEL[level] : '·'}</span>
+      <b>${esc(host.host)}</b>
+      <span class="addr">${esc(address)}</span>
+      <span class="detail">${esc(hostSummary(host))}</span>
+    </li>`;
+    };
+
+    return `
+  <h2 id="hosts"><span>Hosts on ${esc(inventory.apex)}</span><span class="rule"></span><span class="tick">${inventory.rows.length}</span></h2>
+  <p class="lede">${plural(inventory.found, 'hostname')} in certificate transparency${
+    inventory.source ? ` (${esc(inventory.source)})` : ''
+  }, ${inventory.resolved} of them resolving${
+    inventory.capped ? `, ${inventory.capped} not looked up` : ''
+  }. The log is only where the names came from — every row below was resolved, and every row with a status was fetched.</p>
+  <ul class="hosts">${inventory.rows.map(row).join('')}</ul>
+  ${
+    facts.length
+      ? `<ul class="dnsfacts">${facts
+          .map(
+            ([label, values]) =>
+              `<li><b>${esc(label)}</b><span>${values.slice(0, 4).map((v) => `<code>${esc(v)}</code>`).join(' ')}</span></li>`,
+          )
+          .join('')}</ul>`
       : ''
   }`;
   };
@@ -1046,6 +1237,47 @@ export function reportParts(findings, meta, { backHref, backLabel = 'New audit',
   .skipped b { font-weight: 500; font-size: .88rem; }
   .skipped code { font: 400 11.5px/1.7 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; color: var(--faint); margin-right: .45rem; }
 
+  /* --- Hosts ---------------------------------------------------------- */
+  /* One row per host, on a grid so the names, the addresses and what each one
+     serves line up into three columns somebody can read down. It collapses to
+     a stack on a phone rather than scrolling sideways: a hostname is the thing
+     being looked for and it must never be the column that goes off the edge. */
+  .hosts { list-style: none; margin: 0 0 1.6rem; padding: 0; display: grid; gap: .4rem; }
+  .hosts li {
+    display: grid; align-items: baseline; gap: .3rem .75rem;
+    grid-template-columns: 5.25rem minmax(0, 15rem) minmax(0, 9.5rem) minmax(0, 1fr);
+    padding: .6rem .85rem; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel);
+  }
+  .hosts li.error { border-color: var(--error); background: var(--error-bg); }
+  .hosts li.warn { border-color: var(--warn); background: var(--warn-bg); }
+  .hosts b { font-weight: 550; font-size: .9rem; word-break: break-all; }
+  .hosts .addr, .hosts .detail {
+    font: 400 12px/1.6 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--muted);
+  }
+  .hosts .addr { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .hosts .pill.none {
+    background: transparent; border-color: transparent;
+    color: var(--faint); padding-left: 0; padding-right: 0;
+  }
+  .dnsfacts { list-style: none; margin: 0 0 2.5rem; padding: 0; display: grid; gap: .45rem; }
+  .dnsfacts li { display: grid; grid-template-columns: minmax(7.5rem, auto) 1fr; gap: .3rem .75rem; align-items: baseline; }
+  .dnsfacts b {
+    font-size: .715rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .075em; color: var(--muted);
+  }
+  .dnsfacts code {
+    font: 400 11.5px/1.7 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--faint); word-break: break-all; margin-right: .5rem;
+  }
+  @media (max-width: 640px) {
+    .hosts li { grid-template-columns: 5.25rem minmax(0, 1fr); }
+    .hosts .addr { grid-column: 2; }
+    .hosts .detail { grid-column: 1 / -1; }
+    .dnsfacts li { grid-template-columns: 1fr; }
+  }
+
   /* --- Tally ---------------------------------------------------------- */
   .tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; margin: 0 0 3rem; }
   .tally div {
@@ -1247,6 +1479,8 @@ export function reportParts(findings, meta, { backHref, backLabel = 'New audit',
   ${groups.map(section).join('')}`
       : `<div class="clean"><b>Nothing to report</b><span>Every check passed on all ${meta.pages ?? 0} pages.</span></div>`
   }
+
+  ${hostTable()}
 
   ${passing()}
 

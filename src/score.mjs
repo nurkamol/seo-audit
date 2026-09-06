@@ -193,6 +193,12 @@ const CHECKLIST = {
   'tls-expired': { worst: 'error', scope: 'site', needs: 'tls', pass: 'The TLS certificate is valid' },
   'tls-expiring': { worst: 'warn', scope: 'site', needs: 'tls', pass: 'The TLS certificate is not about to expire' },
   'header-strict-transport-security': { worst: 'warn', scope: 'site', needs: 'https', pass: 'HSTS is set' },
+  // The domain rather than the site. All three need --hosts, and all three are
+  // one yes or no for the whole domain rather than a share of the crawl: a
+  // leaked staging copy is not more wrong because the site has more pages.
+  'subdomain-takeover': { worst: 'error', scope: 'site', needs: 'hosts', pass: 'No subdomain points at a service that is gone' },
+  'staging-indexable': { worst: 'warn', scope: 'site', needs: 'hosts', pass: 'No staging copy is open to the index' },
+  'duplicate-host': { worst: 'warn', scope: 'site', needs: 'hosts', pass: 'No other host serves the same site again' },
   'url-uppercase': { worst: 'warn', scope: 'page', pass: 'No URL has uppercase in its path' },
   'url-space': { worst: 'warn', scope: 'page', pass: 'No URL has a space in it' },
   uncompressed: { worst: 'warn', scope: 'page', pass: 'HTML arrives compressed' },
@@ -385,6 +391,7 @@ const WHY_SKIPPED = {
   ogImage: 'No page declares an og:image.',
   twitterImage: 'No page declares a twitter:image of its own.',
   compareAs: 'The pages were not fetched a second time — run with --compare-as.',
+  hosts: 'The rest of the domain was not enumerated — run with --hosts.',
 };
 
 /** The same sum, once per area, so "where is this site weak" is answerable

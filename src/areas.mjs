@@ -127,6 +127,9 @@ const CATEGORY_OF = {
   // The note the hosted Worker leaves where the certificate checks would
   // have been. It belongs beside them, not in Other.
   'tls-expiring': 'Site & security',
+  'subdomain-takeover': 'Site & security', 'staging-indexable': 'Site & security',
+  'duplicate-host': 'Site & security', 'hosts-not-checked': 'Site & security',
+  'host-sweep-capped': 'Site & security',
   'tls-expired': 'Site & security', 'url-uppercase': 'Site & security',
   'url-underscore': 'Site & security', 'url-space': 'Site & security',
   'header-strict-transport-security': 'Site & security',

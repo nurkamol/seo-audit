@@ -44,6 +44,11 @@ export async function serve({ port = 4321, host = '127.0.0.1', maxPages, allowed
     // person whose account it is; a deployed Worker leaves this unset, where
     // `?search-console=` would hand a stranger somebody else's traffic data.
     ALLOW_SEARCH_CONSOLE: '1',
+    // Same reasoning again: enumerating the domain calls crt.sh, which is free,
+    // unauthenticated and rate-limited by IP. On the loopback address that
+    // budget is the caller's own to spend. A deployed Worker leaves this unset,
+    // where every visitor would be spending one shared address's allowance.
+    ALLOW_HOSTS: '1',
     // This is Node, so `node:tls` works and the certificate checks are real.
     // Cloudflare leaves this unset and gets the `tls-not-checked` note instead.
     // The macOS window talks to this server, and was being handed a hosted

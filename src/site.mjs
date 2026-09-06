@@ -6,6 +6,10 @@ import { parseRobots, robotsVerdict } from './robots.mjs';
 import { aiAccess, describeAccess } from './agents-ai.mjs';
 import { parseHtml } from './parse.mjs';
 import { schemaNodes, seriesOf, paginatedCanonical } from './checks.mjs';
+import { similarity } from './dupes.mjs';
+import {
+  resolve as resolveDns, certificateNames, collapseFleets, rankHosts, looksLikeStaging, NXDOMAIN,
+} from './dns.mjs';
 import { plural } from './text.mjs';
 
 // Two weeks is enough to renew by hand if the automation has quietly stopped,
@@ -776,4 +780,293 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   }
 
   return out;
+}
+
+// --- Every other host on the domain -----------------------------------------
+//
+// The rest of this file audits the site it was pointed at. This asks a
+// different question: what *else* is on this domain, and is any of it damaging
+// the site that was.
+//
+// Three things come out of it, and all three are invisible to a crawl of the
+// site itself, which is the reason it exists at all:
+//
+//   * a staging copy nobody remembered to close, indexable, competing with
+//     production for its own results and publishing whatever was being tested;
+//   * a subdomain whose CNAME points at a service that is gone, which anybody
+//     can claim and then serve from the client's own domain;
+//   * a second host serving the same site again, splitting its signals.
+//
+// The discovery is certificate transparency and the verification is this tool's
+// own fetcher, and that split is the whole design. CT is a log of every
+// certificate ever issued: it is the only free, keyless, complete source of
+// hostnames, and it is a terrible list of *live* ones — three quarters of what
+// it returns for a large domain stopped existing years ago. So nothing from the
+// log is ever reported. It produces candidates; DNS and an HTTP request decide
+// which of them are facts. A finding here has been resolved and fetched.
+//
+// Off by default. It is one slow third-party lookup plus a lookup per candidate,
+// and a crawl should not quietly spend that.
+
+/** Names that are the site itself rather than a sibling. */
+const canonicalNames = (base) => new Set([base.hostname, base.hostname.replace(/^www\./, ''),
+  `www.${base.hostname.replace(/^www\./, '')}`]);
+
+/** Whether a response forbids indexing, by either of the two routes Google
+ *  reads it from. The same test the soft-404 check makes, for the same reason:
+ *  a noindexed copy is a mistake somebody already mitigated. */
+function noindexed(res) {
+  const meta = res.body?.match(/<meta[^>]+name=["']robots["'][^>]*>/i)?.[0] ?? '';
+  return /noindex/i.test(meta) || /noindex/i.test(res.headers?.get?.('x-robots-tag') ?? '');
+}
+
+/**
+ * Sibling hosts, and what is wrong with them.
+ *
+ * Returns findings *and* the inventory behind them, because a reader who is
+ * told a domain has a leaked staging host is owed the list the tool actually
+ * looked at — including the part it did not reach.
+ *
+ * @returns {Promise<{findings: object[], hosts: object|null}>}
+ */
+export async function hostChecks(origin, fetcher, opts = {}) {
+  const out = [];
+  const base = new URL(origin);
+  const apex = base.hostname.replace(/^www\./, '');
+
+  // An IP address and a bare hostname have no domain to enumerate, and asking
+  // the log about one is a question with no sensible answer. The same guard the
+  // www variants use, for the same reason.
+  const isAddress = /^\[?[\d.:]+\]?$/.test(base.hostname);
+  if (isAddress || !apex.includes('.')) return { findings: out, hosts: null };
+
+  // Injectable so the tests never touch the network, and so a network that
+  // blocks either service can be pointed somewhere that answers.
+  const lookup = opts.resolveDns ?? resolveDns;
+  const fromLog = opts.certificateNames ?? certificateNames;
+  const dnsOpts = opts.dnsOptions ?? {};
+
+  const log = await fromLog(apex, dnsOpts);
+  if (log === null) {
+    // A log that did not answer is not a domain with no other hosts. Saying so
+    // is the same rule `tls-not-checked` and `sitemap-not-checked` follow: a
+    // check that could not run says it could not run, because a missing finding
+    // reads exactly like a passing one.
+    out.push(f('info', 'hosts-not-checked', 'Other hosts on this domain were not enumerated',
+      'No certificate transparency log answered, so this run cannot say whether the domain serves ' +
+        'anything besides the site that was audited. Nothing about the site itself is affected. Try ' +
+        'again — these logs are free and unauthenticated, and they rate-limit and time out ' +
+        'accordingly.', origin));
+    return { findings: out, hosts: null };
+  }
+
+  const mine = canonicalNames(base);
+  const ranked = rankHosts(collapseFleets(log.names), apex);
+  const limit = opts.maxHostChecks ?? 40;
+  const targets = ranked.slice(0, limit);
+  opts.onProgress?.({ phase: 'hosts', detail: `${targets.length} of ${ranked.length} hostnames to resolve` });
+
+  if (ranked.length > targets.length) {
+    out.push(f('info', 'host-sweep-capped', `${ranked.length - targets.length} hostnames were not looked up`,
+      `The log named ${ranked.length} distinct hosts for this domain and the sweep stops at ${limit}, ` +
+        'environment names first. Raise it with maxHostChecks in the config — the rest of this section ' +
+        'describes only what was actually resolved.', origin));
+  }
+
+  // --- Resolve ------------------------------------------------------------
+  const resolved = await mapLimit(targets, 8, async (host) => {
+    const a = await lookup(host, 'A', dnsOpts);
+    const alias = a.cname.at(-1) ?? null;
+
+    // A dangling CNAME: the alias is there and what it points at is not.
+    //
+    // Most resolvers answer NXDOMAIN for the whole query when the chain ends in
+    // a name that does not exist, so usually one lookup settles it. Some answer
+    // NOERROR with no address instead, so that case is chased explicitly rather
+    // than guessed at — this is the finding that accuses somebody's live domain
+    // of being claimable, and it is not allowed to be approximate.
+    let dangling = false;
+    if (alias) {
+      if (a.ok && a.status === NXDOMAIN) dangling = true;
+      else if (a.ok && !a.records.length) {
+        const chased = await lookup(alias, 'A', dnsOpts);
+        dangling = chased.ok && chased.status === NXDOMAIN;
+      }
+    }
+    opts.onProgress?.({ phase: 'hosts', url: host, detail: a.records.length ? a.records[0] : 'no address' });
+    return { host, addresses: a.records, cname: alias, dangling, live: a.ok && a.records.length > 0 };
+  });
+
+  for (const row of resolved) {
+    if (!row.dangling) continue;
+    out.push(f('error', 'subdomain-takeover', `${row.host} points at a service that no longer exists`,
+      `It is a CNAME to ${row.cname}, and that name does not resolve — the provider it was hosted on has ` +
+        'released it. Anybody can register the same name at that provider and serve whatever they like ' +
+        `from ${row.host}, which is a host on this domain and inherits its reputation. Delete the DNS ` +
+        'record, or point it back at something you own.', `https://${row.host}/`));
+  }
+
+  // --- Fetch what resolves ------------------------------------------------
+  // Only live hosts, and only their home page. The point is to establish what a
+  // search engine would find at each one, which the first page answers.
+  const live = resolved.filter((r) => r.live && !mine.has(r.host));
+  const fetchLimit = opts.maxHostFetches ?? 25;
+  const probed = await mapLimit(live.slice(0, fetchLimit), 4, async (row) => {
+    const { final } = await fetcher.chain(`https://${row.host}/`);
+    const type = final.headers?.get?.('content-type') ?? '';
+    const isHtml = /text\/html/i.test(type);
+    let landed = null;
+    let landedPath = null;
+    try {
+      const at = new URL(final.url);
+      landed = at.hostname;
+      landedPath = at.pathname;
+    } catch { /* an unparseable final URL is not a host to compare */ }
+    const doc = final.ok && isHtml && final.body ? parseHtml(final.body, final.url) : null;
+    return {
+      ...row,
+      status: final.status,
+      error: final.error ?? null,
+      isHtml,
+      // A sibling that redirects to the canonical host is the correct
+      // arrangement, not a finding — it is how a company parks an old name.
+      redirectsHome: Boolean(landed && mine.has(landed)),
+      // Where asking for this host's home page actually ended up.
+      landed,
+      landedPath,
+      // The one condition the staging and duplicate checks actually need: this
+      // host answered for its own root. Anything else — a redirect off to
+      // another host, or a bounce to a login page — means the host is not
+      // serving a copy of anything, whatever the final response says.
+      //
+      // Both real false positives this check has had were this, in different
+      // disguises. `dev.gtm.github.com` bounces to `/login`, which answers 200
+      // with HTML and no noindex. `dev.jquery.com` 301s to `bugs.jquery.com`,
+      // a different sibling, so the old redirectsHome test — which only knew
+      // about the canonical host — let it through and the landing path was `/`.
+      // One condition covers both and needs no vocabulary of login paths.
+      servesOwnRoot: landed === row.host && landedPath === '/',
+      noindex: final.ok ? noindexed(final) : false,
+      title: doc?.title ?? null,
+      canonical: doc?.canonical?.[0] ?? null,
+      fingerprint: doc?.fingerprint ?? null,
+    };
+  });
+
+  // --- A staging copy that is open to the index ---------------------------
+  //
+  // Narrow on purpose, and every clause is doing work. The name has to be an
+  // environment rather than a product — `beta.` and `demo.` are deliberately
+  // not in that list, because companies ship both. It has to actually serve a
+  // page. It must not already be handled: a `noindex`, a canonical pointing at
+  // production, or a robots.txt that disallows crawling are all somebody having
+  // thought about this, and reporting them would be the cry-wolf that gets a
+  // whole report ignored.
+  const staged = new Set();
+  for (const row of probed) {
+    if (!looksLikeStaging(row.host) || row.status !== 200 || !row.isHtml) continue;
+    if (row.noindex || !row.servesOwnRoot) continue;
+    // Its own robots.txt, not the site's. A staging host that blocks crawlers
+    // is a staging host somebody closed.
+    const robots = await fetcher.get(`https://${row.host}/robots.txt`);
+    if (robots.ok && !robotsVerdict(parseRobots(robots.body), '/').allowed) continue;
+    // A canonical pointing at production is the other legitimate arrangement.
+    let canonicalHost = null;
+    try {
+      canonicalHost = row.canonical ? new URL(row.canonical, `https://${row.host}/`).hostname : null;
+    } catch { /* a malformed canonical is not a defence */ }
+    if (canonicalHost && mine.has(canonicalHost)) continue;
+
+    staged.add(row.host);
+    out.push(f('warn', 'staging-indexable', `${row.host} is a live, indexable copy of the site`,
+      `It answers 200 with HTML${row.title ? ` and is titled “${row.title}”` : ''}, carries no noindex, ` +
+        'and nothing in its robots.txt or its canonical keeps it out of the index. A staging host that ' +
+        'Google can reach competes with production for its own results and publishes whatever is being ' +
+        'tested on it. Add a noindex, disallow it in robots.txt, or put it behind authentication.',
+      `https://${row.host}/`));
+  }
+
+  // --- The same site again, on another host -------------------------------
+  //
+  // Compared body to body rather than by title, for the same reason
+  // `duplicate-content` is: two hosts serving one site is a real split of the
+  // signals, and two hosts that happen to share a title is a coincidence.
+  // Silent when the sibling has already been reported as staging — one fault
+  // gets one finding.
+  const home = await fetcher.get(`${origin}/`);
+  const homeDoc = home.ok && /text\/html/i.test(home.headers.get('content-type') ?? '')
+    ? parseHtml(home.body, `${origin}/`)
+    : null;
+  if (homeDoc?.fingerprint) {
+    for (const row of probed) {
+      if (staged.has(row.host) || row.noindex || !row.servesOwnRoot) continue;
+      if (row.status !== 200 || !row.fingerprint) continue;
+      let canonicalHost = null;
+      try {
+        canonicalHost = row.canonical ? new URL(row.canonical, `https://${row.host}/`).hostname : null;
+      } catch { /* as above */ }
+      if (canonicalHost && mine.has(canonicalHost)) continue;
+      if (similarity(homeDoc.fingerprint, row.fingerprint) < 0.9) continue;
+
+      out.push(f('warn', 'duplicate-host', `${row.host} serves the same site again`,
+        `Its home page is the same page as ${origin}/, it is indexable, and its canonical does not point ` +
+          'back. Two hosts serving one site split every signal the site earns between them, and Google ' +
+          'picks which one to show. Redirect it to the canonical host, or make it say so with a canonical.',
+        `https://${row.host}/`));
+    }
+  }
+
+  // --- The inventory ------------------------------------------------------
+  // Shipped whether or not anything was wrong, because "what else is on this
+  // domain" is a question worth an answer on a healthy domain too.
+  const [ns, mx, txt] = await Promise.all([
+    lookup(apex, 'NS', dnsOpts), lookup(apex, 'MX', dnsOpts), lookup(apex, 'TXT', dnsOpts),
+  ]);
+  const byHost = new Map(probed.map((p) => [p.host, p]));
+
+  return {
+    findings: out,
+    hosts: {
+      apex,
+      // Which log answered. Two runs of one domain can list different hosts
+      // because different sources answered them, and a reader comparing those
+      // two runs is owed the reason rather than left to suspect the domain
+      // changed.
+      source: log.source,
+      found: ranked.length,
+      resolved: resolved.filter((r) => r.live).length,
+      capped: Math.max(0, ranked.length - targets.length),
+      nameservers: ns.records,
+      // An MX record's data is a preference and a host — "10 mx.example.net" —
+      // and the number is a mail-routing detail nobody reads an SEO report for.
+      mail: mx.records.map((r) => r.replace(/^\d+\s+/, '')),
+      // Only the TXT records that say something about who the domain talks to.
+      // The rest are verification strings for a dozen SaaS products and are
+      // nobody's business in an SEO report.
+      // TXT records arrive quoted, and a long one arrives as several quoted
+      // chunks that are one string joined — which is the wire format, not
+      // something to print at somebody.
+      policies: txt.records
+        .map((r) => r.replace(/"\s*"/g, '').replace(/^"|"$/g, ''))
+        .filter((r) => /^v=(spf1|DMARC1)/i.test(r)),
+      rows: resolved.map((row) => {
+        const seen = byHost.get(row.host);
+        return {
+          host: row.host,
+          addresses: row.addresses,
+          cname: row.cname,
+          dangling: row.dangling,
+          status: seen?.status ?? null,
+          title: seen?.title ?? null,
+          landedPath: seen?.landedPath ?? null,
+          landed: seen?.landed ?? null,
+          redirectsHome: seen?.redirectsHome ?? false,
+          noindex: seen?.noindex ?? false,
+          // Said explicitly rather than inferred from a null status, which
+          // would read as "did not answer" for a host nobody asked.
+          checked: Boolean(seen),
+        };
+      }),
+    },
+  };
 }

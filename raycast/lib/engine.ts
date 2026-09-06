@@ -52,6 +52,43 @@ export interface Meta {
   ignored?: number;
   notIndexable?: number;
   sitemap?: string;
+  /** The rest of the domain, when the run was asked to look. Absent rather than
+   *  empty when it was not: a report showing no other hosts must not be
+   *  readable as a domain that has none. */
+  hosts?: HostInventory;
+}
+
+/** One host on the domain, as DNS and one request found it. */
+export interface HostRow {
+  host: string;
+  addresses: string[];
+  cname: string | null;
+  dangling: boolean;
+  status: number | null;
+  title: string | null;
+  redirectsHome: boolean;
+  noindex: boolean;
+  /** Where a request for `/` actually landed on this host. Anywhere but `/` is
+   *  overwhelmingly a login page, and the reason the staging check stayed
+   *  quiet. */
+  landedPath: string | null;
+  checked: boolean;
+}
+
+/** What else is on the domain. Discovery is certificate transparency and
+ *  verification is DNS plus a request, which is why `found` and `resolved` are
+ *  different numbers and both are worth showing. `source` names the log that
+ *  answered — two runs can list different hosts because different logs did. */
+export interface HostInventory {
+  apex: string;
+  source: string;
+  found: number;
+  resolved: number;
+  capped: number;
+  nameservers: string[];
+  mail: string[];
+  policies: string[];
+  rows: HostRow[];
 }
 
 /** The corrected sitemap, when a run asked for one. `xml` is null when the
