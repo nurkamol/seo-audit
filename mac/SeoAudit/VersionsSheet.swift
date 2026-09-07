@@ -152,6 +152,35 @@ private struct Detail: View {
                     }
 
                     HStack(spacing: 10) {
+                        // The zip route reports through `downloadState`, and
+                        // this sheet used to render only `upgradeState` — so
+                        // pressing **Download** on an older release started a
+                        // download whose progress, failure and finish were all
+                        // invisible here, and the button read as dead. Homebrew
+                        // upgrades were fine because those go through
+                        // `upgradeState`, which is why only *downgrades* looked
+                        // broken.
+                        if case .downloading(let fraction, _, _) = updates.downloadState {
+                            Group {
+                                if let fraction { ProgressView(value: min(max(fraction, 0), 1)) }
+                                else { ProgressView() }
+                            }
+                            .frame(width: 120)
+                            Text("Downloading…").font(.caption).foregroundStyle(.secondary)
+                        } else if case .unpacking = updates.downloadState {
+                            ProgressView().controlSize(.small)
+                            Text("Unpacking…").font(.caption).foregroundStyle(.secondary)
+                        } else if case .ready(let app) = updates.downloadState {
+                            // Shown rather than installed: the last step is a
+                            // drag somebody makes deliberately, which is also
+                            // where macOS asks whether they meant to replace a
+                            // running application.
+                            Label("Downloaded", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.callout)
+                            Button("Show in Finder") { updates.reveal(app) }
+                                .buttonStyle(.glassProminent)
+                        } else {
                         switch updates.upgradeState {
                         case .running(let line):
                             ProgressView().controlSize(.small)
@@ -187,8 +216,20 @@ private struct Detail: View {
                                 .buttonStyle(.glass)
                             }
                         }
+                        }
                         Spacer(minLength: 0)
                         Button("Release notes") { updates.open(release) }.buttonStyle(.glass)
+                    }
+
+                    // Both routes can fail and each keeps its own reason, so
+                    // both are read. A download that failed silently is what
+                    // made this look like a button that did nothing.
+                    if case .failed(let why) = updates.downloadState {
+                        Text(why)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     if case .failed(let why) = updates.upgradeState {

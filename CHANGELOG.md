@@ -22,6 +22,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stand up. The change is a no-op on the path that already worked, which has no
   sheet to end.
 
+- **Downloading an older version from the versions window looked like a dead
+  button.** It was not dead: the download ran, unpacked and finished, and the
+  window said nothing about any of it. The zip route reports through
+  `downloadState` and that sheet rendered only `upgradeState`, so progress,
+  failure and completion all landed in a state nothing there was watching — and
+  because the sheet covers the main window, the one place that *does* render it
+  was hidden behind the sheet.
+
+  Only downgrades looked broken, and that is the tell: a Homebrew upgrade goes
+  through `upgradeState`, which the sheet did render. The derived asset URL was
+  never at fault — `seo-audit-1.39.0-macos.zip` answers 200.
+
+  The sheet now shows the download the way the main window does: a progress
+  bar, *Unpacking…*, then **Downloaded** with a **Show in Finder** button. Both
+  states' failures are read, since each keeps its own reason.
+
 ## [1.40.0] — 2026-09-07
 
 ### Added
