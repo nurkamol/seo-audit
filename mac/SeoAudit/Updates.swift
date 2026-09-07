@@ -496,7 +496,24 @@ extension Updates {
         case .neverStarted(let why):
             upgradeState = .failed(why)
         case .finished(0, _):
-            upgradeState = .done
+            // Exit 0 is not the same as "it upgraded". `brew upgrade` succeeds
+            // by doing nothing when it believes the cask is already current,
+            // which is exactly what a stale tap produces — and the window then
+            // said **Installed**, and Relaunch faithfully reopened the version
+            // that was already there. An updater that reports a success it did
+            // not have is worse than one that fails loudly.
+            //
+            // So brew is asked what it actually has now, rather than trusted.
+            let installed = await Updates.installedCaskVersion(
+                brew: brew, environment: environment)
+            if let installed, installed != release.version {
+                upgradeState = .failed(
+                    "Homebrew finished without errors and still has \(installed.description). "
+                    + "That is what a stale tap does — it upgraded nothing and said nothing was "
+                    + "wrong. Run `brew update` and try again, or download this release instead.")
+            } else {
+                upgradeState = .done
+            }
         case .finished(let status, let transcript):
             // Homebrew explains itself in its last few lines, and a failure
             // that shows only "exit 1" is a failure nobody can act on.
@@ -512,6 +529,46 @@ extension Updates {
     /// line handler that never fires — and none of that is testable through a
     /// button. `onLine` gets every non-empty line as it arrives; the transcript
     /// comes back whole for the failure message.
+    /// What Homebrew says is installed for this cask, or nil when it cannot be
+    /// asked.
+    ///
+    /// Read from `brew list --cask --versions` rather than from the bundle on
+    /// disk, because the app doing the asking is not necessarily the one the
+    /// cask installed — somebody running a build from a checkout would
+    /// otherwise be told every upgrade had failed.
+    ///
+    /// nil means the question could not be answered, and a question that could
+    /// not be answered is never reported as a failed upgrade.
+    nonisolated static func installedCaskVersion(
+        brew: String, environment: [String: String]
+    ) async -> Version? {
+        let result = await stream(
+            executable: brew,
+            arguments: ["list", "--cask", "--versions", "seo-audit"],
+            environment: environment,
+            onLine: { _ in },
+        )
+        guard case .finished(0, let transcript) = result else { return nil }
+        return caskVersion(in: transcript)
+    }
+
+    /// The version out of `brew list --cask --versions` output.
+    ///
+    /// Its own function so it can be tested without Homebrew: the line is
+    /// `seo-audit 1.40.1`, and brew prints deprecation notices around it that
+    /// must not be mistaken for one.
+    nonisolated static func caskVersion(in transcript: [String]) -> Version? {
+        for line in transcript {
+            let parts = line.split(separator: " ").map(String.init)
+            guard parts.count >= 2, parts[0] == "seo-audit" else { continue }
+            // The last field: brew lists every installed version, oldest first.
+            if let last = parts.last, last.first?.isNumber == true {
+                return Version(last)
+            }
+        }
+        return nil
+    }
+
     nonisolated static func stream(
         executable: String,
         arguments: [String],

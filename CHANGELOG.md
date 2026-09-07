@@ -3,6 +3,35 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **The updater reported "Installed" for an upgrade that upgraded nothing.**
+  `brew upgrade --cask` exits 0 when it believes the cask is already current,
+  and the window took that as success: it said **Installed**, offered
+  **Relaunch**, and Relaunch faithfully reopened the version that was already
+  there. An updater that reports a success it did not have is worse than one
+  that fails loudly, and this one sent somebody round the same loop twice.
+
+  Homebrew is now asked what it actually has once the steps finish, and a
+  version that has not moved is reported as the stale tap it almost always is.
+  Read from `brew list --cask --versions` rather than from the bundle on disk,
+  because the app doing the asking is not necessarily the one the cask
+  installed — somebody running a build from a checkout would otherwise be told
+  every upgrade had failed. A question that cannot be answered is never
+  reported as a failure.
+
+- **The cask printed a deprecation warning on every `brew` command.** The `url`
+  stanza carried `verified:`, which Homebrew now works out for itself. Removed,
+  along with two stanza-ordering complaints from `brew style`.
+
+  `postflight` stays as it is, and that is a decision rather than an oversight:
+  Homebrew deprecates the block form, but its own `brew style` reports this one
+  as *not* autocorrectable — the declarative steps model file operations and
+  this runs a command. The legacy form still works for a third-party tap, so
+  the choice was a warning on `brew` output or a cask that might not install at
+  all. It is written down in the cask beside the block.
+
 ## [1.40.1] — 2026-09-07
 
 ### Fixed

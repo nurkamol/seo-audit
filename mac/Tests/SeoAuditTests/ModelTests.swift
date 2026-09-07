@@ -711,6 +711,41 @@ struct PreviewTests {
     }
 }
 
+@Suite("An upgrade that upgraded nothing")
+struct UpgradeVerificationTests {
+    @Test("the installed version is read out of what brew actually prints")
+    func reads() {
+        // The real shape, deprecation notices and all — brew prints those to
+        // the same stream, and a parser that took the first line would read a
+        // tap path as a version.
+        let transcript = [
+            "Warning: Calling the `verified` parameter in the `url` stanza is deprecated!",
+            "/opt/homebrew/Library/Taps/nurkamol/homebrew-seo-audit/Casks/seo-audit.rb:16",
+            "",
+            "seo-audit 1.40.0",
+        ]
+        #expect(Updates.caskVersion(in: transcript)?.description == "1.40.0")
+    }
+
+    @Test("several installed versions read as the newest")
+    func several() {
+        // brew lists every version it kept, oldest first.
+        #expect(Updates.caskVersion(in: ["seo-audit 1.39.0 1.40.1"])?.description == "1.40.1")
+    }
+
+    @Test("nothing to read is nil, never a version")
+    func nothing() {
+        // nil means the question could not be answered, and an unanswered
+        // question must never be reported as a failed upgrade.
+        #expect(Updates.caskVersion(in: []) == nil)
+        #expect(Updates.caskVersion(in: ["Error: Cask 'seo-audit' is not installed."]) == nil)
+        // A cask that is not ours is not an answer about ours.
+        #expect(Updates.caskVersion(in: ["something-else 2.0.0"]) == nil)
+        // A name with no version behind it is not a version.
+        #expect(Updates.caskVersion(in: ["seo-audit"]) == nil)
+    }
+}
+
 @Suite("The rest of the domain, carried with the report")
 struct HostInventoryTests {
     private func report(_ json: String) throws -> Report {

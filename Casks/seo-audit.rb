@@ -10,11 +10,12 @@ cask "seo-audit" do
   version "1.40.1"
   sha256 "fa209b7cb1cbc2c1fe6b0dc3c209ded63fa587c613b304583c3139f0d06c648e"
 
-  # `verified` says the download really does come from this project's own
-  # repository, which is what stops Homebrew warning that the URL and the
-  # homepage are different hosts.
-  url "https://github.com/nurkamol/seo-audit/releases/download/v#{version}/seo-audit-#{version}-macos.zip",
-      verified: "github.com/nurkamol/seo-audit/"
+  # No `verified:`. It used to be here to stop Homebrew warning that the URL and
+  # the homepage were different hosts, and Homebrew now deprecates the parameter
+  # and works that out itself — so keeping it printed a deprecation notice on
+  # every `brew` command touching this tap, which is noise on somebody else's
+  # terminal for a warning that no longer happens.
+  url "https://github.com/nurkamol/seo-audit/releases/download/v#{version}/seo-audit-#{version}-macos.zip"
   name "SEO Audit"
   desc "Crawl a site's sitemap and check every page, from a window"
   homepage "https://github.com/nurkamol/seo-audit"
@@ -35,11 +36,23 @@ cask "seo-audit" do
   # Homebrew has verified the checksum in this file before this runs, and that
   # checksum was written by the workflow that built the app. That chain is the
   # reason this is reasonable rather than reckless.
+  # Still `postflight` and not `postflight_steps`, deliberately. Homebrew
+  # deprecates the block form and its own `brew style` reports this one as *not*
+  # autocorrectable — the declarative steps model file operations, and this runs
+  # a command. The legacy form still works for a third-party tap, so the choice
+  # is a warning on `brew` output or a cask that might not install at all, and
+  # the second is not a trade worth making to quieten the first. Revisit when
+  # the steps DSL can express a `system_command`.
   postflight do
     system_command "/usr/bin/xattr",
                    args: ["-dr", "com.apple.quarantine", "#{appdir}/SEO Audit.app"],
                    sudo: false
   end
+
+  zap trash: [
+    "~/Library/Preferences/com.nurkamol.seo-audit.plist",
+    "~/Library/Saved Application State/com.nurkamol.seo-audit.savedState",
+  ]
 
   caveats <<~EOS
     seo-audit is ad-hoc signed rather than notarised, so macOS would normally
@@ -50,9 +63,4 @@ cask "seo-audit" do
     Notarising it needs an Apple Developer account, which this project does not
     have. Building it yourself is the alternative: ./mac/build.sh
   EOS
-
-  zap trash: [
-    "~/Library/Preferences/com.nurkamol.seo-audit.plist",
-    "~/Library/Saved Application State/com.nurkamol.seo-audit.savedState",
-  ]
 end
