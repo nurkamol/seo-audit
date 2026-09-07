@@ -267,7 +267,7 @@
     }
   ],
   "dependencies": {
-    "@nurkamol/seo-audit": "^1.39.0",
+    "@nurkamol/seo-audit": "^1.40.0",
     "@raycast/api": "^1.77.0"
   },
   "devDependencies": {
