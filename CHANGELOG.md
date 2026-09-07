@@ -3,7 +3,7 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.40.1] — 2026-09-07
 
 ### Fixed
 - **Relaunch did nothing in the versions window.** The same button in the
