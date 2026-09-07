@@ -28,6 +28,11 @@ const count = (raw, fallback, ceiling) => {
   return Number.isFinite(asked) && asked > 0 ? Math.min(asked, ceiling) : fallback;
 };
 
+/** The most pages a run can crawl inside a Raycast command before its worker
+ *  runs out of heap. Exported so the test that pins it can read the number
+ *  rather than repeat it. */
+export const MAX_PAGES = 40;
+
 /** A comma or newline separated list, trimmed, with the blanks dropped. */
 const list = (raw) =>
   (raw ?? '')
@@ -43,7 +48,21 @@ const list = (raw) =>
  *  chose. */
 export function crawlOptions(preferences = {}) {
   const options = {
-    limit: count(preferences.limit, 25, 5000),
+    // The ceiling is the worker's, not an opinion. A Raycast command gets a
+    // 100MB JS heap, and a crawl holds every page it has read until the
+    // cross-page checks are done — measured at roughly 0.8MB of live heap per
+    // page on a content-heavy site, on top of about 16MB of fixed cost. A
+    // hundred pages peaked at 95.6MB live and the command was killed with
+    // "Command Out of Memory" before it could report anything.
+    //
+    // 40 measured at 48MB live on the same site, which leaves room for React,
+    // the Raycast API and the finished report in the same heap. 60 was tried
+    // first and reached 72MB live — survivable on a good day and not worth
+    // shipping a good day as a requirement. The
+    // engine itself has no such limit — the terminal and the macOS app run the
+    // same crawl with the whole machine behind it, which is what the preference
+    // text has always said big sites are for.
+    limit: count(preferences.limit, 25, MAX_PAGES),
     concurrency: SPEEDS[preferences.speed] ?? SPEEDS.normal,
     checkExternal: preferences.checkExternal === true,
     // Off unless asked for, like performance. It is one slow lookup to a free
@@ -271,12 +290,40 @@ export function skippedRows(score) {
   for (const check of score?.skipped ?? []) {
     byReason.set(check.why, [...(byReason.get(check.why) ?? []), check.id]);
   }
+  // Grouped by reason, so the flag that would fix them travels with the group.
+  // Every check under one reason is skipped for that one reason, so they either
+  // all become runnable or none of them do.
+  const flagFor = new Map();
+  for (const check of score?.skipped ?? []) {
+    if (check.enabledBy) flagFor.set(check.why, check.enabledBy);
+  }
+
   return [...byReason].map(([why, ids]) => ({
     id: `skip:${ids[0]}`,
     title: why,
     subtitle: ids.join(', '),
     tone: 'plain',
+    // The flag that would let this run, when the engine says there is one.
+    // Absent for a skip that is a fact about the site rather than a choice
+    // about the crawl — there is nothing to press for "no page declares
+    // hreflang".
+    ...(flagFor.has(why) ? { enabledBy: flagFor.get(why) } : {}),
   }));
+}
+
+/** The run options a flag turns on, for a front end offering to run it again.
+ *
+ *  Only the three the engine says are worth offering, and each one supplies the
+ *  value the flag needs rather than asking: `--psi` without targets measures
+ *  nothing, so the sampled form is what "measure performance" has to mean here.
+ *  A launcher has no good place to ask a follow-up question. */
+export function optionsForFlag(flag) {
+  switch (flag) {
+    case '--check-external': return { checkExternal: true };
+    case '--hosts': return { hosts: true };
+    case '--psi': return { psi: ['/**'], psiSample: 3, psiStrategy: 'mobile' };
+    default: return null;
+  }
 }
 
 /** The rest of the domain, one row per host.

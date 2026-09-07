@@ -5,7 +5,58 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The "Not checked" rows you can press.** A skipped check has two very
+  different causes and only one of them is anybody's to fix: *"No page declares
+  hreflang"* is a fact about the site, and *"Outbound links were not checked"*
+  is a run that was not asked to. The engine now says which is which — a skipped
+  check carries `enabledBy` naming the flag that would let it run, where one
+  exists — and the Raycast extension turns those rows into a **Run Again with
+  This Check** action that re-runs with it switched on.
+
+  Only three qualify: `--check-external`, `--hosts` and `--psi`. `--redirects`
+  and `--compare-as` are deliberately absent even though both are flags: one
+  needs a file only the person who did the migration has, and the other needs a
+  second identity to fetch as. A button that cannot be pressed without an
+  argument is worse than no button.
+
+  The engine names the flag rather than each front end parsing it out of the
+  prose in the skip reason, and a test asserts every flag it offers is one the
+  CLI actually parses.
+
 ### Fixed
+- **Raycast commands were dying with "Command Out of Memory".** A Raycast
+  command gets a 100MB JS heap, and the extension let the pages-per-run
+  preference go to 5,000. A crawl holds every page it has read until the
+  cross-page checks are done: measured on a content-heavy site, 25 pages peaked
+  at 36MB of live heap, 40 at 60MB, and 100 at **95.6MB** — killed mid-run
+  before it could report anything. The setting offered a range the worker could
+  not survive.
+
+  The ceiling is now 40, which measured at 60MB live on that same worst-case
+  site and leaves room for React, the Raycast API and the finished report in the
+  same heap. 60 was tried first and reached 72MB — survivable on a good day, and
+  a good day is not worth shipping as a requirement. The engine has no such
+  limit; the terminal and the macOS app run the same crawl with the whole
+  machine behind it, which is what that preference has always said big sites are
+  for.
+
+- **The fetcher cached a response body for every request, including the ones
+  nothing reads twice.** The cache is there so a URL is never fetched twice
+  across checks, and for the link sweep, the image sweep and the social-image
+  sweeps that means remembering a status and a content-type. Keeping the bodies
+  as well made the cache the largest live object in the process. Sweeps now ask
+  for `keepBody: false` and the body is dropped on the way *into* the cache,
+  never on the way out — whoever fetched it reads it in full, and only a second
+  reader of the same URL sees an empty one. Resident memory on a 403-request run
+  went from 103MB to 66MB.
+
+  Not the whole story, and the rest is written down rather than left implied:
+  the largest remaining retainer is the raw HTML of every crawled page, which
+  `mixed-content` scans and which therefore cannot simply be dropped after
+  parsing. Moving that scan into `parseHtml` would let it go, and would raise
+  the ceiling above 40. That is a change to the parser and is not being made in
+  the same breath as this one.
 - **The desktop app saved every export as a file called `export`, with no
   extension.** ([#2](https://github.com/nurkamol/seo-audit/issues/2)) The
   reporter noticed the web version was fine, and that is the whole diagnosis:

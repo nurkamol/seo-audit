@@ -12,6 +12,8 @@ import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agen
 import { terminal, markdown, html, counts, group, portfolio, portfolioRows, portfolioMarkdown, portfolioHtml, progressLine, byCategory, categoryOf } from '../src/report.mjs';
 import { psiTargets } from '../src/psi.mjs';
 import { siteChecks, hostChecks } from '../src/site.mjs';
+import { scoreRun, ENABLED_BY } from '../src/score.mjs';
+import { readFileSync } from 'node:fs';
 import {
   resolve as resolveDns, certificateNames, collapseFleets, rankHosts, looksLikeStaging, NXDOMAIN,
 } from '../src/dns.mjs';
@@ -5311,4 +5313,34 @@ test('a run that never asked about the domain shows no host section', async () =
   assert.ok(!terminal([], meta, {}).includes('Hosts on'));
   assert.ok(!markdown([], meta, {}).includes('## Hosts on'));
   assert.ok(!html([], meta, {}).includes('id="hosts"'));
+});
+
+test('the engine says which skipped checks a run could have enabled', () => {
+  // A front end offering "run it again with this" must not parse an English
+  // sentence for a flag name, so the engine names the flag.
+  const score = scoreRun(
+    [{ level: 'warn', id: 'title-long', title: 't', detail: 'd', url: 'https://x.test/a' }],
+    { pages: 1, applicable: { external: false, hosts: false, psi: false, hreflang: false } },
+  );
+  const by = new Map(score.skipped.map((s) => [s.id, s.enabledBy]));
+
+  // Skipped because the run was not asked. One flag away.
+  assert.equal(by.get('external-broken'), '--check-external');
+  assert.equal(by.get('staging-indexable'), '--hosts');
+  assert.equal(by.get('psi-score'), '--psi');
+
+  // Skipped because of what the site is. Nothing to press, and saying
+  // otherwise would offer a button that changes nothing.
+  assert.equal(by.get('hreflang-dead'), undefined);
+  assert.equal(by.get('redirect-dead'), undefined, 'a redirect map is a file only the caller has');
+  assert.equal(by.get('serves-differently'), undefined, '--compare-as needs a second identity');
+});
+
+test('every flag the engine offers to enable is a flag the CLI parses', () => {
+  // The table names flags as text. A renamed flag would leave a front end
+  // offering to run something that no longer exists.
+  const cli = readFileSync(new URL('../bin/seo-audit.mjs', import.meta.url), 'utf8');
+  for (const flag of Object.values(ENABLED_BY)) {
+    assert.ok(cli.includes(`arg === '${flag}'`), `${flag} is offered and the CLI does not parse it`);
+  }
 });

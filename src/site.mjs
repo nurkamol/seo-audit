@@ -379,7 +379,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   const targets = all.slice(0, limit);
   opts.onProgress?.({ phase: 'links', detail: `${targets.length} distinct targets to check` });
   const results = await mapLimit(targets, 6, async (target) => {
-    const res = await fetcher.get(target);
+    const res = await fetcher.get(target, { keepBody: false });
     opts.onProgress?.({ phase: 'links', status: res.status, ms: res.ms, url: target });
     const type = res.headers.get('content-type') ?? '';
     // A third question the same response answers — and the only place it can be
@@ -499,9 +499,9 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   const imageTargets = [...imageSources.values()].slice(0, imageLimit).map((entry) => entry.src);
   opts.onProgress?.({ phase: 'images', detail: `${imageTargets.length} distinct images to check` });
   const imageResults = await mapLimit(imageTargets, 6, async (src) => {
-    let res = await fetcher.get(src, { method: 'HEAD' });
+    let res = await fetcher.get(src, { method: 'HEAD', keepBody: false });
     // Some hosts answer HEAD with 405 or 501 and serve the file perfectly well.
-    if (res.status === 405 || res.status === 501) res = await fetcher.get(src);
+    if (res.status === 405 || res.status === 501) res = await fetcher.get(src, { keepBody: false });
     opts.onProgress?.({ phase: 'images', status: res.status, ms: res.ms, url: src });
     return { src, status: res.status, error: res.error };
   });
@@ -590,8 +590,8 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   }
   const schemaTargets = [...schemaImages.keys()].slice(0, opts.maxImageChecks ?? 200);
   const schemaResults = await mapLimit(schemaTargets, 4, async (href) => {
-    let res = await fetcher.get(href, { method: 'HEAD' });
-    if (res.status === 405 || res.status === 501) res = await fetcher.get(href);
+    let res = await fetcher.get(href, { method: 'HEAD', keepBody: false });
+    if (res.status === 405 || res.status === 501) res = await fetcher.get(href, { keepBody: false });
     return { href, status: res.status, error: res.error };
   });
   const deadSchemaImages = schemaResults.filter(
@@ -733,7 +733,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   // Conservative about what counts as broken, for the same reason as the image
   // sweep: 403 is hotlink protection working, not a missing file.
   const ogResults = await mapLimit([...ogImages.keys()], 4, async (src) => {
-    const { final } = await fetcher.chain(src);
+    const { final } = await fetcher.chain(src, 5, { keepBody: false });
     return { src, final };
   });
   for (const { src, final } of ogResults) {
@@ -768,7 +768,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
     twitterImages.set(src, page.url);
   }
   const twitterResults = await mapLimit([...twitterImages.keys()], 4, async (src) => {
-    const { final } = await fetcher.chain(src);
+    const { final } = await fetcher.chain(src, 5, { keepBody: false });
     return { src, final };
   });
   for (const { src, final } of twitterResults) {

@@ -81,7 +81,7 @@ export class Fetcher {
    * @returns {Promise<{url: string, status: number, ok: boolean, headers: Headers,
    *                    body: string, location: string|null, ms: number, error?: string}>}
    */
-  async get(url, { method = 'GET', retries = 2 } = {}) {
+  async get(url, { method = 'GET', retries = 2, keepBody = true } = {}) {
     const key = `${method} ${url}`;
     if (this.cache.has(key)) return this.cache.get(key);
 
@@ -171,7 +171,24 @@ export class Fetcher {
       return last;
     });
 
-    this.cache.set(key, promise);
+    // The caller is handed the whole response; the cache may keep less.
+    //
+    // The cache is here so a URL is never fetched twice across checks, and for
+    // most of what a run fetches that means remembering a status and a
+    // content-type — the link sweep, the image sweep and the social-image
+    // sweeps all judge on those alone. Keeping every body as well made the
+    // cache the largest live object in the process: 403 requests on one 25-page
+    // site held 65MB, of which 18MB was still reachable once the run let go.
+    // That is under Node's default heap and over Raycast's, whose commands get
+    // 100MB and were dying on sites this tool audits comfortably from a
+    // terminal.
+    //
+    // So a sweep asks for `keepBody: false` and the body is dropped on the way
+    // into the cache, never on the way out — whoever fetched it reads it in
+    // full, and only a *second* reader of the same URL sees an empty body. The
+    // page crawl, robots.txt, the home page and the host checks all keep
+    // theirs, because something does read those twice.
+    this.cache.set(key, keepBody ? promise : promise.then((res) => ({ ...res, body: '' })));
     return promise;
   }
 
@@ -200,16 +217,16 @@ export class Fetcher {
   }
 
   /** Follow a chain by hand so the number of hops can be reported. */
-  async chain(url, max = 5) {
+  async chain(url, max = 5, { keepBody = true } = {}) {
     const hops = [];
     let current = url;
     for (let i = 0; i < max; i++) {
-      const res = await this.get(current);
+      const res = await this.get(current, { keepBody });
       hops.push({ url: current, status: res.status });
       if (res.status < 300 || res.status >= 400 || !res.location) return { hops, final: res };
       current = new URL(res.location, current).toString();
     }
-    return { hops, final: await this.get(current) };
+    return { hops, final: await this.get(current, { keepBody }) };
   }
 }
 

@@ -31,9 +31,17 @@ export interface Row {
   title: string;
   subtitle: string;
   tone: "error" | "warn" | "ok" | "plain";
+  /** The flag that would let a skipped check actually run, when the engine says
+   *  there is one. Absent for a skip that is a fact about the site rather than
+   *  a choice about the crawl. */
+  enabledBy?: string;
 }
 
 export function hostRows(meta: unknown, findings?: unknown[]): Row[];
+export function optionsForFlag(flag: string): Record<string, unknown> | null;
+/** The most pages a run can crawl inside a Raycast command before its worker
+ *  runs out of heap. */
+export const MAX_PAGES: number;
 export function hostLine(row: unknown): string;
 
 /** A row in a report — one thing to change, and the pages it is on. */

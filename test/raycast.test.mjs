@@ -22,7 +22,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 import {
   SPEEDS, crawlOptions, normalise, previewRows, causeRows, summaryLine, keptReports, readReport,
-  scoreTag, scoreLine, gainFor, passedRows, skippedRows, hostRows, hostLine,
+  scoreTag, scoreLine, gainFor, passedRows, skippedRows, hostRows, hostLine, optionsForFlag, MAX_PAGES,
 } from '../raycast/lib/present.mjs';
 import { FORMATS, filenameFor, render } from '../raycast/lib/exports.mjs';
 import { BROWSER_NAMES, OS_NAMES } from '../src/agents.mjs';
@@ -37,9 +37,16 @@ test('preferences arrive as strings, and nonsense is the default rather than NaN
   assert.equal(crawlOptions({ limit: '' }).limit, 25);
   assert.equal(crawlOptions({ limit: 'banana' }).limit, 25);
   assert.equal(crawlOptions({ limit: '-5' }).limit, 25);
-  // A launcher is a poor place to wait out a crawl, but the ceiling is the
-  // engine's, not an opinion invented here.
-  assert.equal(crawlOptions({ limit: '99999' }).limit, 5000);
+  // The ceiling is the worker's. A Raycast command gets a 100MB JS heap, and a
+  // crawl holds every page until the cross-page checks are done — 100 pages
+  // peaked at 95.6MB live and was killed with "Command Out of Memory" before it
+  // could report anything. A setting whose range cannot complete is worse than
+  // a lower setting that can.
+  assert.equal(crawlOptions({ limit: '99999' }).limit, MAX_PAGES);
+  assert.equal(crawlOptions({ limit: '200' }).limit, MAX_PAGES);
+  assert.ok(MAX_PAGES <= 40, 'the cap has to stay under what the worker survives');
+  // Under the cap, what was asked for is what runs.
+  assert.equal(crawlOptions({ limit: '40' }).limit, 40);
 
   assert.equal(crawlOptions({}).concurrency, SPEEDS.normal);
   assert.equal(crawlOptions({ speed: 'nonsense' }).concurrency, SPEEDS.normal);
@@ -674,4 +681,50 @@ test('a host that redirects to the canonical host says so rather than looking br
                status: 200, title: null, redirectsHome: false, noindex: true, checked: true }),
     '198.51.100.2 \u00b7 200, noindex',
   );
+});
+
+test('a skip a run controls can be pressed; a fact about the site cannot', () => {
+  const score = {
+    skipped: [
+      // Skipped because nobody asked. One flag away.
+      { id: 'external-broken', pass: 'Every outbound link resolves',
+        why: 'Outbound links were not checked — run with --check-external.',
+        enabledBy: '--check-external' },
+      { id: 'staging-indexable', pass: 'No staging copy is open to the index',
+        why: 'The rest of the domain was not enumerated — run with --hosts.',
+        enabledBy: '--hosts' },
+      // Skipped because of what the site is. There is nothing to press.
+      { id: 'hreflang-dead', pass: 'Every hreflang alternate loads',
+        why: 'No page declares hreflang.' },
+    ],
+  };
+  const rows = skippedRows(score);
+  assert.deepEqual(rows.map((r) => r.enabledBy),
+    ['--check-external', '--hosts', undefined]);
+
+  // And each flag knows the options it turns on, so a launcher never has to
+  // ask a follow-up question it has nowhere to put.
+  assert.deepEqual(optionsForFlag('--check-external'), { checkExternal: true });
+  assert.deepEqual(optionsForFlag('--hosts'), { hosts: true });
+  assert.deepEqual(optionsForFlag('--psi'), { psi: ['/**'], psiSample: 3, psiStrategy: 'mobile' });
+  // `--psi` without targets measures nothing, so the sampled form is what it
+  // has to mean here — a flag with no usable default is not offered at all.
+  assert.equal(optionsForFlag('--redirects'), null);
+  assert.equal(optionsForFlag('--compare-as'), null);
+});
+
+test('checks sharing one reason share its flag, and are grouped once', () => {
+  // The reason is the row, not the check: five hreflang checks under one
+  // sentence is one row, and the same is true of the ones that can be pressed.
+  const score = {
+    skipped: [
+      { id: 'psi-score', pass: 'a', why: 'PageSpeed was not asked — run with --psi.', enabledBy: '--psi' },
+      { id: 'psi-lcp', pass: 'b', why: 'PageSpeed was not asked — run with --psi.', enabledBy: '--psi' },
+      { id: 'psi-cls', pass: 'c', why: 'PageSpeed was not asked — run with --psi.', enabledBy: '--psi' },
+    ],
+  };
+  const rows = skippedRows(score);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].enabledBy, '--psi');
+  assert.equal(rows[0].subtitle, 'psi-score, psi-lcp, psi-cls');
 });

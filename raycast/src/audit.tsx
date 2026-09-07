@@ -32,6 +32,7 @@ import {
   gainFor,
   normalise,
   hostRows,
+  optionsForFlag,
   passedRows,
   scoreLine,
   scoreTag,
@@ -96,7 +97,15 @@ export function Report({ site }: { site: string }) {
   const [working, setWorking] = useState(true);
   const [failed, setFailed] = useState<string | null>(null);
 
-  const options = crawlOptions(getPreferenceValues<Preferences>());
+  // Options the person asked for *after* seeing the report, by pressing one of
+  // the "Not checked" rows. Kept apart from the preferences so a re-run is
+  // plainly this run plus one thing, and so the preference itself is not
+  // quietly rewritten by a one-off.
+  const [added, setAdded] = useState<Record<string, unknown>>({});
+  const options = {
+    ...crawlOptions(getPreferenceValues<Preferences>()),
+    ...added,
+  };
 
   useEffect(() => {
     if (!site) {
@@ -153,7 +162,11 @@ export function Report({ site }: { site: string }) {
     return () => {
       cancelled = true;
     };
-  }, [site]);
+    // `added` is in here on purpose: pressing a "Not checked" row is a request
+    // to run again with that switched on, and the crawl is the only thing that
+    // can answer it. A check that was skipped was never measured, so there is
+    // nothing cached to reveal.
+  }, [site, added]);
 
   const rows = causeRows(report);
   const areas = [...new Set(rows.map((row) => row.area))];
@@ -319,17 +332,54 @@ export function Report({ site }: { site: string }) {
           title="Not Checked"
           subtitle="Counted neither for nor against the score"
         >
-          {skippedRows(score).map((row) => (
-            <List.Item
-              key={row.id}
-              icon={{
-                source: Icon.MinusCircle,
-                tintColor: Color.SecondaryText,
-              }}
-              title={row.title}
-              subtitle={row.subtitle}
-            />
-          ))}
+          {skippedRows(score).map((row) => {
+            // Two kinds of skip, and only one is anybody's to fix. "No page
+            // declares hreflang" is a fact about the site. "Outbound links were
+            // not checked" is a run that was not asked to, and asking is one
+            // flag away — so that row becomes something you can press, and the
+            // rest stay exactly as they were. The engine decides which is which,
+            // because the engine is what skipped the check.
+            const patch = row.enabledBy ? optionsForFlag(row.enabledBy) : null;
+            const already = patch
+              ? Object.keys(patch).every((key) => key in added)
+              : false;
+            return (
+              <List.Item
+                key={row.id}
+                icon={{
+                  source: patch ? Icon.Play : Icon.MinusCircle,
+                  tintColor: patch ? Color.Blue : Color.SecondaryText,
+                }}
+                title={row.title}
+                subtitle={row.subtitle}
+                accessories={
+                  patch && !already
+                    ? [
+                        {
+                          tag: {
+                            value: row.enabledBy ?? "",
+                            color: Color.Blue,
+                          },
+                        },
+                      ]
+                    : undefined
+                }
+                actions={
+                  patch && !already ? (
+                    <ActionPanel>
+                      <Action
+                        title="Run Again with This Check"
+                        icon={Icon.Play}
+                        onAction={() =>
+                          setAdded((was) => ({ ...was, ...patch }))
+                        }
+                      />
+                    </ActionPanel>
+                  ) : undefined
+                }
+              />
+            );
+          })}
         </List.Section>
       )}
     </List>

@@ -349,6 +349,8 @@ export function scoreRun(findings, { pages = 0, applicable = {} } = {}) {
       area: categoryOf(r.id),
       pass: r.check.pass,
       why: WHY_SKIPPED[r.check.needs] ?? 'Not applicable to this run.',
+      // Absent when nothing can be pressed, which is most of them.
+      ...(ENABLED_BY[r.check.needs] ? { enabledBy: ENABLED_BY[r.check.needs] } : {}),
     }));
 
   return {
@@ -392,6 +394,30 @@ const WHY_SKIPPED = {
   twitterImage: 'No page declares a twitter:image of its own.',
   compareAs: 'The pages were not fetched a second time — run with --compare-as.',
   hosts: 'The rest of the domain was not enumerated — run with --hosts.',
+};
+
+/** The option that would have let a skipped check run, where one exists.
+ *
+ *  A skip has two very different causes and only one of them is anybody's to
+ *  fix. "No page declares hreflang" is a fact about the site — there is nothing
+ *  to press. "Outbound links were not checked" is a run that was not asked to,
+ *  and asking is one flag away.
+ *
+ *  Saying which is which here rather than in each front end, because the engine
+ *  is what decided the check was skipped and a client re-deriving that from the
+ *  prose in WHY_SKIPPED would be parsing an English sentence for a flag name.
+ *  A front end that can offer the re-run offers it; one that cannot ignores
+ *  this, and nothing about the report changes.
+ *
+ *  Only the reasons a *run* controls appear. `redirects` and `compareAs` are
+ *  deliberately absent even though both are flags: one needs a file that only
+ *  the person who did the migration has, and the other needs a second identity
+ *  to fetch as. Offering a button that cannot be pressed without an argument
+ *  is worse than offering nothing. */
+export const ENABLED_BY = {
+  external: '--check-external',
+  hosts: '--hosts',
+  psi: '--psi',
 };
 
 /** The same sum, once per area, so "where is this site weak" is answerable

@@ -42,7 +42,7 @@
     {
       "name": "limit",
       "title": "Pages per run",
-      "description": "A launcher is a poor place to wait out a crawl of a thousand pages. Big sites belong in the app or the terminal.",
+      "description": "Capped at 40. A Raycast command gets a 100MB heap and a crawl holds every page until the cross-page checks are done, so more than that is killed mid-run rather than reported. Big sites belong in the app or the terminal.",
       "type": "textfield",
       "default": "25",
       "required": false
