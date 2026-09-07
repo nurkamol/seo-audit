@@ -3,6 +3,25 @@
 Notable changes. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Relaunch did nothing in the versions window.** The same button in the
+  update notice worked, and the two call the identical `relaunch()` — the only
+  difference is that one is inside a `.sheet`. A sheet holds its parent window,
+  and the terminate asked for from inside one never took effect, so the app sat
+  there having already scheduled a `sleep 1.5; open` that would have brought the
+  *old* bundle forward if it ever had.
+
+  `relaunch()` now ends any open sheet and asks for the terminate a turn of the
+  run loop later, since `endSheet` finishes asynchronously. Done in the one
+  place rather than at the two call sites, so a third cannot reintroduce it.
+
+  Reported from the window; the mechanism is AppKit's and is reasoned rather
+  than reproduced in a test — a modal session is not something `swift test` can
+  stand up. The change is a no-op on the path that already worked, which has no
+  sheet to end.
+
 ## [1.40.0] — 2026-09-07
 
 ### Added

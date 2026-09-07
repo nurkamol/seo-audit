@@ -561,13 +561,29 @@ extension Updates {
     /// points at the new one, so opening it after this process is gone is what
     /// makes the swap visible. The sleep is for the quit to finish — `open` on
     /// a path an app still occupies would just bring the old one forward.
+    ///
+    /// The sheets are dismissed first, and that is not tidiness. A sheet holds
+    /// its parent window in a modal session, and a terminate asked for from
+    /// inside one is refused — so **Relaunch** in the versions sheet did
+    /// nothing at all, while the identical button in the update notice worked,
+    /// because only the first is inside a sheet. The reopen had already been
+    /// scheduled by then, so the app also sat there with a `sleep 1.5; open`
+    /// waiting to bring the *old* bundle forward.
+    ///
+    /// Done here rather than at the two call sites so a third one cannot
+    /// reintroduce it, and the terminate waits a turn of the run loop because
+    /// `endSheet` finishes asynchronously.
     func relaunch() {
         let path = Bundle.main.bundlePath
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
         task.arguments = ["-c", "sleep 1.5; open \"\(path)\""]
         try? task.run()
-        NSApp.terminate(nil)
+
+        for window in NSApp.windows where window.isSheet {
+            window.sheetParent?.endSheet(window)
+        }
+        DispatchQueue.main.async { NSApp.terminate(nil) }
     }
 }
 
