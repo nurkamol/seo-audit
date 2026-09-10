@@ -279,13 +279,17 @@ change to anything above it.
 ```
 Preview a Site     how big is this, and is it the right one — ~1s, 3 requests
 Audit a Site       crawl it and list what to change, worst first
-Recent Reports     runs the macOS app has already kept
+Recent Reports     runs the desktop app has already kept
 ```
 
-`raycast/` is a Raycast extension that imports the engine the same way the
-Worker does — `import { preview } from "../../src/audit.mjs"` — so it
-re-implements nothing and its reports match the terminal's. Raycast runs Node,
-so unlike the hosted version the certificate checks work there.
+`raycast/` is a Raycast extension for macOS and Windows. It imports the engine
+as the published `@nurkamol/seo-audit` package, so it re-implements nothing and
+its reports match the terminal's. Raycast runs Node, so unlike the hosted
+version the certificate checks work there.
+
+It is waiting for review in the Raycast Store. Until it is listed,
+[docs/raycast.md](docs/raycast.md) explains how to run it from this repository
+in about two minutes, on either platform.
 
 **Preview is the command it exists for.** A crawl takes minutes and a launcher
 is built for the second you spend in it, so the headline command is the engine's

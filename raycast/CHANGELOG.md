@@ -47,4 +47,8 @@ them.
 `⌘E` exports HTML, Markdown, CSV, JSON or a corrected sitemap through the
 engine's own writers.
 
+Runs on macOS and on Raycast for Windows. The shortcuts are `Ctrl` there
+rather than `⌘`, and **Recent Reports** reads `%APPDATA%\seo-audit`, where the
+Windows desktop app keeps its runs.
+
 Nothing leaves the machine. There is no account, no upload and no server.

@@ -10,7 +10,7 @@
 // threshold come from the engine; this arranges them into rows.
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 
 import { categoryOf } from '@nurkamol/seo-audit/areas';
@@ -367,12 +367,26 @@ export function hostLine(row) {
   return `${where} · ${row.status}${row.title ? `  ${row.title}` : ''}`;
 }
 
-// --- what the macOS app has already kept -----------------------------------
+// --- what the desktop app has already kept ---------------------------------
 
-/** The folder both front-ends use. Named for the bundle id rather than the
- *  display name, which is what `Support.directory()` does on the Swift side. */
-export const libraryRoot = (root) =>
-  root ?? join(homedir(), 'Library', 'Application Support', 'seo-audit');
+/** The folder every front end on this machine uses: the macOS app, the Windows
+ *  and Linux shell, `--serve`, and this.
+ *
+ *  **A copy of `libraryRoot()` in the engine's `src/library.mjs`**, which is not
+ *  an exported subpath — and exporting it would tie this extension to an engine
+ *  release it otherwise does not need. `test/raycast.test.mjs` compares the two
+ *  on every platform, so a change to one fails until the other follows. It was
+ *  `~/Library/Application Support` unconditionally until Raycast ran on Windows,
+ *  where that folder does not exist and Recent Reports would have been empty
+ *  beside a desktop app full of runs. */
+export function libraryRoot(root, env = process.env, os = platform()) {
+  if (root) return root;
+  if (env.SEO_AUDIT_HOME) return env.SEO_AUDIT_HOME;
+  const home = homedir();
+  if (os === 'darwin') return join(home, 'Library', 'Application Support', 'seo-audit');
+  if (os === 'win32') return join(env.APPDATA || join(home, 'AppData', 'Roaming'), 'seo-audit');
+  return join(env.XDG_DATA_HOME || join(home, '.local', 'share'), 'seo-audit');
+}
 
 /** Runs the macOS app has kept, newest first.
  *
@@ -411,10 +425,36 @@ export function readReport(path) {
   }
 }
 
-/** Whether the macOS app is installed, so a row can offer to open there. */
-export const appIsInstalled = () =>
-  ['/Applications/SEO Audit.app', join(homedir(), 'Applications', 'SEO Audit.app')]
-    .some((path) => existsSync(path));
+/** Where the desktop app is installed, or `null`, so a row can offer to open
+ *  it — and open *that* copy, rather than a path that is only right on one
+ *  platform.
+ *
+ *  On Windows it is the Tauri shell's NSIS installer: per-user under
+ *  `%LOCALAPPDATA%` by default, which is also where winget puts it, and under
+ *  Program Files when somebody chose to install it for every user. The binary is
+ *  named for the Cargo package, not the product — `desktop.yml` looks for the
+ *  same `seo-audit.exe` after installing it. */
+export function appPath(os = platform(), env = process.env, exists = existsSync) {
+  const home = homedir();
+  const candidates = os === 'win32'
+    ? [
+        join(env.LOCALAPPDATA || join(home, 'AppData', 'Local'), 'SEO Audit', 'seo-audit.exe'),
+        ...[env.ProgramFiles, env['ProgramFiles(x86)']]
+          .filter(Boolean)
+          .map((base) => join(base, 'SEO Audit', 'seo-audit.exe')),
+      ]
+    : os === 'darwin'
+      ? ['/Applications/SEO Audit.app', join(home, 'Applications', 'SEO Audit.app')]
+      : [];
+  return candidates.find((path) => exists(path)) ?? null;
+}
+
+export const appIsInstalled = () => appPath() !== null;
+
+/** What the platform calls the thing that shows a file in its folder. A toast
+ *  offering "Show in Finder" on Windows is a small lie, and it is on every
+ *  export. */
+export const fileManager = (os = platform()) => (os === 'win32' ? 'Explorer' : 'Finder');
 
 /** Used by the tests to prove a stray file in the folder is not a report. */
 export const reportFiles = (root) => {

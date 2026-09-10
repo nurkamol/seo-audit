@@ -225,6 +225,62 @@ test('a library that is missing, empty or corrupt is no reports rather than a cr
   }
 });
 
+// Raycast runs on Windows too, and the desktop shell there keeps its runs in
+// %APPDATA%. The extension carries its own copy of the engine's `libraryRoot()`
+// rather than importing a subpath the engine does not export, and this is what
+// stops the copy wandering off: a Recent Reports reading one folder while the
+// app writes another is an empty list beside a full library.
+test('Recent Reports reads the folder the engine writes, on every platform', async () => {
+  const { libraryRoot: engine } = await import('../src/library.mjs');
+  const { libraryRoot: extension } = await import('../raycast/lib/present.mjs');
+  const envs = [
+    {},
+    { APPDATA: 'C:\\Roaming', XDG_DATA_HOME: '/xdg' },
+    { SEO_AUDIT_HOME: '/somewhere/else', APPDATA: 'C:\\Roaming' },
+  ];
+  for (const os of ['darwin', 'win32', 'linux']) {
+    for (const env of envs) {
+      assert.equal(extension(undefined, env, os), engine(env, os),
+        `the two disagree on ${os} with ${JSON.stringify(env)}`);
+    }
+  }
+  assert.match(extension(undefined, {}, 'win32'), /AppData[\\/]Roaming[\\/]seo-audit$/);
+  assert.equal(extension('/given', { SEO_AUDIT_HOME: '/ignored' }, 'darwin'), '/given',
+    'a root handed in by a test still wins');
+});
+
+test('the desktop app is found where each platform installs it, and nowhere else', async () => {
+  const { appPath } = await import('../raycast/lib/present.mjs');
+  const env = { LOCALAPPDATA: 'C:\\Local', ProgramFiles: 'C:\\Program Files' };
+  const only = (wanted) => (path) => path === wanted;
+
+  const perUser = join('C:\\Local', 'SEO Audit', 'seo-audit.exe');
+  assert.equal(appPath('win32', env, only(perUser)), perUser,
+    'NSIS installs per user by default, and so does winget');
+  const perMachine = join('C:\\Program Files', 'SEO Audit', 'seo-audit.exe');
+  assert.equal(appPath('win32', env, only(perMachine)), perMachine);
+
+  assert.equal(appPath('darwin', env, only('/Applications/SEO Audit.app')), '/Applications/SEO Audit.app');
+  // A macOS path is never an answer on Windows, which is what the old check was.
+  assert.equal(appPath('win32', env, only('/Applications/SEO Audit.app')), null);
+  assert.equal(appPath('win32', env, () => false), null);
+});
+
+// Raycast ignores a shortcut written with `cmd` on Windows, without a warning:
+// the action stays and the key the README taught does nothing. Every shortcut
+// goes through `primary()` in src/keys.ts or is one of Raycast's Common ones.
+test('no shortcut in the extension is macOS-only', () => {
+  const manifest = JSON.parse(read('raycast/package.json'));
+  assert.deepEqual(manifest.platforms, ['macOS', 'Windows']);
+
+  const folder = join(root, 'raycast', 'src');
+  for (const file of readdirSync(folder).filter((f) => /\.tsx?$/.test(f))) {
+    const source = readFileSync(join(folder, file), 'utf8');
+    assert.doesNotMatch(source, /shortcut=\{\{\s*modifiers/,
+      `${file} has a shortcut Windows will silently drop — use primary() from ./keys`);
+  }
+});
+
 test('Gentle means the same number of connections in both windows', () => {
   // The one thing this extension duplicates. `CrawlSettings.Speed` in Swift and
   // `SPEEDS` here are two lists of the same three numbers, and two people

@@ -34,7 +34,7 @@
     {
       "name": "reports",
       "title": "Recent Reports",
-      "description": "Runs kept by the macOS app and by this extension.",
+      "description": "Runs the SEO Audit desktop app has kept on this machine.",
       "mode": "view"
     }
   ],
@@ -259,7 +259,7 @@
     {
       "name": "ignore",
       "title": "Silenced checks",
-      "description": "Check ids to leave out, comma separated. Copy one from any finding with ⌘. — a report still says how many were silenced.",
+      "description": "Check ids to leave out, comma separated. Copy one from any finding with ⌘. (Ctrl+. on Windows) — a report still says how many were silenced.",
       "type": "textfield",
       "placeholder": "thin-content, img-srcset",
       "default": "",
@@ -268,12 +268,12 @@
   ],
   "dependencies": {
     "@nurkamol/seo-audit": "^1.40.1",
-    "@raycast/api": "^1.77.0"
+    "@raycast/api": "^1.104.25"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.11",
-    "@types/node": "^20.11.0",
-    "@types/react": "^18.2.0",
+    "@types/node": "^22.19.17",
+    "@types/react": "^19.0.10",
     "typescript": "^5.4.0"
   },
   "scripts": {
@@ -285,6 +285,7 @@
     "pull-contributions": "npx @raycast/api@latest pull-contributions"
   },
   "platforms": [
-    "macOS"
+    "macOS",
+    "Windows"
   ]
 }

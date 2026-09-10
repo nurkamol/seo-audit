@@ -5,6 +5,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The Raycast extension runs on Raycast for Windows.** Nothing in it needed
+  native code, so this was three macOS assumptions rather than a port:
+  - **Recent Reports read `~/Library/Application Support` on every platform.**
+    That folder does not exist on Windows, so the list would have been empty
+    beside a desktop app full of runs in `%APPDATA%\seo-audit`. The extension
+    now carries its own copy of the engine's `libraryRoot()`, and a test
+    compares the two on macOS, Windows and Linux. A copy rather than an import
+    because `src/library.mjs` is not an exported subpath, and exporting it would
+    have made this wait for an engine release.
+  - **Every shortcut was written with `cmd`.** Raycast drops those on Windows
+    with no warning. The action is still in the menu, but the shortcut in the
+    README does nothing. They now go through one helper that says `⌘` on a Mac
+    and `Ctrl` on Windows, and a test fails on a bare one.
+  - **"Open the SEO Audit App" launched `/Applications/SEO Audit.app`** even when
+    the app it had found was in `~/Applications`. It now opens whichever copy it
+    found, including the Windows shell's `seo-audit.exe`, per user or per machine.
+
+  `@raycast/api` moves to 1.104, the first line with Windows in it, and the
+  React and Node types to the versions it names as peers.
+  [docs/raycast.md](docs/raycast.md) explains how to run the extension from a
+  checkout on either platform while the Store listing is in review.
+
 ### Fixed
 - **The updater reported "Installed" for an upgrade that upgraded nothing.**
   `brew upgrade --cask` exits 0 when it believes the cask is already current,

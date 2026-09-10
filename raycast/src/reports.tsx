@@ -1,8 +1,9 @@
-// Runs the macOS app has already kept.
+// Runs the desktop app has already kept.
 //
-// Both front-ends read the same folder — `~/Library/Application Support/
-// seo-audit` — so a crawl run in the window is here a second later without
-// anything being synchronised, exported or copied. A seven-minute crawl should
+// Every front end on this machine reads the same folder — `~/Library/
+// Application Support/seo-audit` on a Mac, `%APPDATA%\seo-audit` on Windows —
+// so a crawl run in the window is here a second later without anything being
+// synchronised, exported or copied. A seven-minute crawl should
 // only ever happen once.
 //
 // Read-only on purpose. Deleting a report is the app's job, where the
@@ -22,9 +23,10 @@ import {
 
 import { causePayload, type Report } from "../lib/engine";
 import { ExportActions } from "./exports";
+import { primary } from "./keys";
 import type { KeptReport } from "../lib/present.mjs";
 import {
-  appIsInstalled,
+  appPath,
   causeRows,
   gainFor,
   keptReports,
@@ -39,6 +41,9 @@ import {
 export default function Command() {
   const [rows, setRows] = useState<KeptReport[]>([]);
   const [loading, setLoading] = useState(true);
+  // Looked up once rather than on every row: it is a handful of `existsSync`
+  // calls, and the answer does not change while the list is open.
+  const [app] = useState(appPath);
 
   useEffect(() => {
     setRows(keptReports());
@@ -52,9 +57,9 @@ export default function Command() {
           icon={Icon.Tray}
           title="Nothing kept yet"
           description={
-            appIsInstalled()
+            app
               ? "Runs finished in the SEO Audit app are kept here. So are runs from Audit Site."
-              : "The macOS app keeps every finished run. Install it, or use Audit a Site."
+              : "The SEO Audit desktop app keeps every finished run. Install it, or use Audit a Site."
           }
         />
       )}
@@ -96,7 +101,7 @@ export default function Command() {
                 icon={Icon.Eye}
                 target={<Kept row={row} />}
               />
-              {appIsInstalled() && (
+              {app && (
                 <Action
                   // "Open in" would be a lie: the app cannot be told which
                   // report to show, so this only launches it. A control that
@@ -104,7 +109,7 @@ export default function Command() {
                   // eslint-disable-next-line @raycast/prefer-title-case
                   title="Open the SEO Audit App"
                   icon={Icon.Window}
-                  onAction={() => open("/Applications/SEO Audit.app")}
+                  onAction={() => open(app)}
                 />
               )}
               <Action.ShowInFinder title="Show the JSON" path={row.path} />
@@ -112,7 +117,7 @@ export default function Command() {
               <Action
                 title="Open Extension Preferences"
                 icon={Icon.Gear}
-                shortcut={{ modifiers: ["cmd"], key: "," }}
+                shortcut={primary(",")}
                 onAction={openExtensionPreferences}
               />
             </ActionPanel>

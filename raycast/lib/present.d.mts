@@ -55,7 +55,7 @@ export interface CauseRow {
   checkId: string;
 }
 
-/** A run the macOS app kept, plus where it is and when it happened. */
+/** A run the desktop app kept, plus where it is and when it happened. */
 export interface KeptReport {
   id: string;
   host: string;
@@ -98,8 +98,18 @@ export function gainFor(
 export function passedRows(score: Score | null | undefined): Row[];
 export function skippedRows(score: Score | null | undefined): Row[];
 
-export function libraryRoot(root?: string): string;
+export function libraryRoot(
+  root?: string,
+  env?: Record<string, string | undefined>,
+  os?: string,
+): string;
 export function keptReports(root?: string): KeptReport[];
 export function readReport(path: string): StoredReport | null;
+export function appPath(
+  os?: string,
+  env?: Record<string, string | undefined>,
+  exists?: (path: string) => boolean,
+): string | null;
 export function appIsInstalled(): boolean;
+export function fileManager(os?: string): "Finder" | "Explorer";
 export function reportFiles(root?: string): string[];

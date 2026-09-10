@@ -15,7 +15,7 @@ none of them could see, because it was only wrong on pages they never opened.
 |---|---|
 | **Preview Site** | How big is this, and is it the right one — about a second, three requests, no page fetched |
 | **Audit Site** | Crawl it and list what to change, worst first |
-| **Recent Reports** | Every run the macOS app has already finished |
+| **Recent Reports** | Every run the desktop app has already finished |
 
 ### Preview comes first on purpose
 
@@ -67,8 +67,8 @@ forty, not forty rows.
 
 ## Export
 
-`⌘E` on any result writes **HTML**, **Markdown**, **CSV**, **JSON** or a
-**corrected sitemap** to `~/Downloads`.
+`⌘E` (`Ctrl+E` on Windows) on any result writes **HTML**, **Markdown**,
+**CSV**, **JSON** or a **corrected sitemap** to your Downloads folder.
 
 The corrected sitemap is the one worth knowing about: it lists what the site
 should actually be advertising, with the dead and redirected and non-indexable
@@ -78,7 +78,7 @@ somebody's index.
 
 ## Settings
 
-`⌘,` reaches every flag that shapes a run:
+`⌘,` (`Ctrl+,` on Windows) reaches every flag that shapes a run:
 
 | | |
 |---|---|
@@ -91,18 +91,19 @@ somebody's index.
 | Identify as | Which browser and system to send, or your own user agent |
 | Performance | Which pages to measure, how many, mobile or desktop |
 | Search Console | Ask Google for impressions per page, and which property to ask about |
-| Silenced checks | Ids to ignore — copy one off any finding with `⌘.` |
+| Silenced checks | Ids to ignore — copy one off any finding with `⌘.` (`Ctrl+.`) |
 
 Anything left at its default is not sent, so the defaults stay written down in
 one place: the engine.
 
 ![Every flag that shapes a run](media/seo-audit-3.png)
 
-## It shares a library with the macOS app
+## It shares a library with the desktop app
 
-Both read `~/Library/Application Support/seo-audit`, so a crawl you ran in the
-app window is in **Recent Reports** a second later, with nothing synchronised or
-copied. A seven-minute crawl should only ever happen once.
+Both read the same folder — `~/Library/Application Support/seo-audit` on a
+Mac, `%APPDATA%\seo-audit` on Windows — so a crawl you ran in the app window is
+in **Recent Reports** a second later, with nothing synchronised or copied. A
+seven-minute crawl should only ever happen once.
 
 Reading only, deliberately: deleting somebody's seven minutes behind a single
 Return is not a trade worth offering. That stays in the app, where the

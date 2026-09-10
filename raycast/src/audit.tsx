@@ -14,6 +14,7 @@ import {
   ActionPanel,
   Color,
   Icon,
+  Keyboard,
   List,
   LaunchProps,
   getPreferenceValues,
@@ -40,6 +41,7 @@ import {
   summaryLine,
 } from "../lib/present.mjs";
 import { ExportActions } from "./exports";
+import { primary } from "./keys";
 
 const TONE: Record<string, { icon: Icon; tint: Color }> = {
   error: { icon: Icon.XMarkCircle, tint: Color.Red },
@@ -263,12 +265,12 @@ export function Report({ site }: { site: string }) {
                     <Action.CopyToClipboard
                       title="Copy Check Id"
                       content={row.checkId}
-                      shortcut={{ modifiers: ["cmd"], key: "." }}
+                      shortcut={primary(".")}
                     />
                     <Action.CopyToClipboard
                       title="Copy Whole Report as JSON"
                       content={JSON.stringify(report, null, 2)}
-                      shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
+                      shortcut={Keyboard.Shortcut.Common.Copy}
                     />
                   </ActionPanel>
                 }

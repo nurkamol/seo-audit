@@ -1,5 +1,5 @@
 // The export actions, shared by the report a run just produced and a report the
-// macOS app kept. One list, so the two never drift into offering different
+// desktop app kept. One list, so the two never drift into offering different
 // formats for the same data.
 
 import {
@@ -13,6 +13,8 @@ import {
 } from "@raycast/api";
 
 import { FORMATS, writeReport } from "../lib/exports.mjs";
+import { fileManager } from "../lib/present.mjs";
+import { primary } from "./keys";
 import type { Report } from "../lib/engine";
 
 const ICON: Record<string, Icon> = {
@@ -34,7 +36,7 @@ export function ExportActions({
     <ActionPanel.Submenu
       title="Export…"
       icon={Icon.Download}
-      shortcut={{ modifiers: ["cmd"], key: "e" }}
+      shortcut={primary("e")}
     >
       {FORMATS.map((format) => (
         <Action
@@ -59,7 +61,7 @@ export function ExportActions({
               title: `Wrote ${format.label}`,
               message: path,
               primaryAction: {
-                title: "Show in Finder",
+                title: `Show in ${fileManager()}`,
                 onAction: () => showInFinder(path),
               },
               secondaryAction: { title: "Open", onAction: () => open(path) },
