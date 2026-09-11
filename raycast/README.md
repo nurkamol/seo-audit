@@ -169,7 +169,7 @@ components are thin over it on purpose: what goes wrong quietly is a preference
 that parses to `NaN` pages, a library row pointing at a file that is gone, or a
 refusal drawn as a result, and all three are in the tested half.
 
-`lib/engine.ts` is the one place that says what the engine returns, and
+`src/engine.ts` is the one place that says what the engine returns, and
 `lib/engine-package.d.ts` is why it has to: the engine ships plain ESM with no
 type declarations and stays that way, because the command line's premise is
 that it runs under `npx` with nothing installed and emitting types would mean a

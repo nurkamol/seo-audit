@@ -472,19 +472,44 @@ test('every engine subpath the extension imports is exported', async () => {
   );
 
   const used = new Set();
-  const dir = new URL('../raycast/lib/', import.meta.url);
-  for (const name of readdirSync(dir)) {
-    const source = readFileSync(new URL(name, dir), 'utf8');
-    for (const [, specifier] of source.matchAll(/from\s+['"]([^'".][^'"]*)['"]/g)) {
-      if (specifier === engine.name || specifier.startsWith(engine.name + '/')) used.add(specifier);
+  // Both folders: the typed wrapper moved from lib/ to src/ for the Store's
+  // sake, and a scan of one folder would have stopped checking its imports.
+  for (const dir of ['lib', 'src'].map((d) => new URL(`../raycast/${d}/`, import.meta.url))) {
+    for (const name of readdirSync(dir)) {
+      const source = readFileSync(new URL(name, dir), 'utf8');
+      for (const [, specifier] of source.matchAll(/from\s+['"]([^'".][^'"]*)['"]/g)) {
+        if (specifier === engine.name || specifier.startsWith(engine.name + '/')) used.add(specifier);
+      }
     }
   }
 
-  assert.ok(used.size > 0, 'found no engine imports at all');
+  assert.ok(used.has(engine.name), 'found no import of the engine itself');
   for (const specifier of used) {
     assert.ok(exported.has(specifier), `${specifier} is imported but not in "exports"`);
     // Exported is not the same as resolvable — a path can be listed and gone.
     await import(specifier);
+  }
+});
+
+// The Store's rule, not this project's: every dependency the manifest declares
+// must be imported by a file under src/. A package used only from lib/ builds
+// and runs fine, and the review bot holds the merge over it. The first
+// submission was held on exactly this.
+test('every dependency the extension declares is imported from src/', () => {
+  const manifest = JSON.parse(read('raycast/package.json'));
+  const folder = join(root, 'raycast', 'src');
+  const imported = new Set();
+  for (const file of readdirSync(folder).filter((f) => /\.tsx?$/.test(f))) {
+    const source = readFileSync(join(folder, file), 'utf8');
+    for (const [, specifier] of source.matchAll(/from\s+['"]([^'".][^'"]*)['"]/g)) {
+      // `@scope/name/sub` and `name/sub` both count as the package.
+      const parts = specifier.split('/');
+      imported.add(specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]);
+    }
+  }
+  for (const name of Object.keys(manifest.dependencies)) {
+    assert.ok(imported.has(name),
+      `${name} is a dependency but nothing under raycast/src imports it`);
   }
 });
 

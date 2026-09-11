@@ -21,7 +21,7 @@ import {
   openExtensionPreferences,
 } from "@raycast/api";
 
-import { causePayload, type Report } from "../lib/engine";
+import { causePayload, type Report } from "./engine";
 import { ExportActions } from "./exports";
 import { primary } from "./keys";
 import type { KeptReport } from "../lib/present.mjs";

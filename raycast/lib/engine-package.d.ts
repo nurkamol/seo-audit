@@ -7,7 +7,7 @@
 // so without this the extension does not compile once the engine is a
 // dependency rather than a relative path.
 //
-// These are intentionally untyped. `lib/engine.ts` is the one place that says
+// These are intentionally untyped. `src/engine.ts` is the one place that says
 // what the engine returns, and it says so with assertions it explains. Two
 // files describing the same shapes would be two files to keep in step.
 

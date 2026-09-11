@@ -26,7 +26,7 @@ import {
   type CrawlOptions,
   type Report,
   type Score,
-} from "../lib/engine";
+} from "./engine";
 import {
   causeRows,
   crawlOptions,

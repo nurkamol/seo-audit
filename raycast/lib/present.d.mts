@@ -5,7 +5,7 @@
 // shapes so the components get real types instead of `any`, which is not a
 // second implementation of anything: it is the same functions, described.
 
-import type { Cause, Finding, Level, Meta, Plan, Score } from "./engine";
+import type { Cause, Finding, Level, Meta, Plan, Score } from "../src/engine";
 
 /**
  * The preferences, as the manifest declares them.

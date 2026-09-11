@@ -15,6 +15,11 @@
 // narrower than the truth — it sees the three options the engine happens to
 // destructure and none of the ones it reads off `opts` later. The annotations
 // below widen it deliberately.
+//
+// It lives in `src/` rather than beside `present.mjs` in `lib/` for a reason
+// that is the Store's, not this project's: every dependency the manifest
+// declares has to be imported by a file under `src/`, and the review bot holds
+// the merge until one is. This is the file that imports it.
 
 import { audit as rawAudit, preview as rawPreview } from "@nurkamol/seo-audit";
 import { causePayload as rawCausePayload } from "@nurkamol/seo-audit/causes";
@@ -147,7 +152,13 @@ export interface Score {
   checks?: { passed: number; failed: number; skipped: number };
   passed?: { id: string; area: string; pass: string }[];
   skipped?: { id: string; area: string; pass: string; why: string }[];
-  failed?: { id: string; area: string; level: Level; pages: number; cost: number }[];
+  failed?: {
+    id: string;
+    area: string;
+    level: Level;
+    pages: number;
+    cost: number;
+  }[];
   areas?: { name: string; lost: number; passed: number; failed: number }[];
 }
 
@@ -186,7 +197,12 @@ export interface CrawlOptions {
   userAgent?: string;
   // `true` asks about the site being crawled; a string names the property.
   searchConsole?: string | boolean;
-  onProgress?: (event: { phase?: string; url?: string; detail?: string; status?: number }) => void;
+  onProgress?: (event: {
+    phase?: string;
+    url?: string;
+    detail?: string;
+    status?: number;
+  }) => void;
 }
 
 // Assertions rather than annotations, and the reason is worth writing down.
@@ -200,19 +216,24 @@ export interface CrawlOptions {
 // The thing that keeps this from rotting is `test/raycast.test.mjs`, which
 // exercises these against the real engine rather than against the types.
 
-export const audit = rawAudit as unknown as
-  (target: string, options?: CrawlOptions) =>
-    Promise<{
-      findings: Finding[];
-      meta: Meta;
-      sitemap?: RebuiltSitemap;
-      llms?: RebuiltLlms;
-      schema?: GeneratedSchema;
-      score?: Score;
-    }>;
+export const audit = rawAudit as unknown as (
+  target: string,
+  options?: CrawlOptions,
+) => Promise<{
+  findings: Finding[];
+  meta: Meta;
+  sitemap?: RebuiltSitemap;
+  llms?: RebuiltLlms;
+  schema?: GeneratedSchema;
+  score?: Score;
+}>;
 
-export const preview = rawPreview as unknown as
-  (target: string, options?: CrawlOptions) => Promise<Plan>;
+export const preview = rawPreview as unknown as (
+  target: string,
+  options?: CrawlOptions,
+) => Promise<Plan>;
 
-export const causePayload = rawCausePayload as unknown as
-  (findings: Finding[], totalPages: number) => Cause[];
+export const causePayload = rawCausePayload as unknown as (
+  findings: Finding[],
+  totalPages: number,
+) => Cause[];

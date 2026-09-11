@@ -19,7 +19,7 @@ import {
 
 // The engine itself. Not a copy of it, not a description of it — the same
 // module `bin/seo-audit.mjs` and `worker/index.mjs` import.
-import { preview, type Plan } from "../lib/engine";
+import { preview, type Plan } from "./engine";
 import { Report as AuditReport } from "./audit";
 import { crawlOptions, normalise, previewRows } from "../lib/present.mjs";
 import { primary } from "./keys";

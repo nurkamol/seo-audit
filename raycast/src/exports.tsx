@@ -15,7 +15,7 @@ import {
 import { FORMATS, writeReport } from "../lib/exports.mjs";
 import { fileManager } from "../lib/present.mjs";
 import { primary } from "./keys";
-import type { Report } from "../lib/engine";
+import type { Report } from "./engine";
 
 const ICON: Record<string, Icon> = {
   html: Icon.Globe,

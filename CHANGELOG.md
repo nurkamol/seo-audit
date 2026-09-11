@@ -29,6 +29,15 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checkout on either platform while the Store listing is in review.
 
 ### Fixed
+- **The Store submission was held on a dependency nothing in `src/` imported.**
+  Raycast requires every dependency the manifest declares to be imported by a
+  file under `src/`, and `@nurkamol/seo-audit` was only reached through
+  `lib/engine.ts`. It built and ran, and the review bot marked it a merge
+  blocker anyway. The typed wrapper is now `src/engine.ts`, and a test fails on
+  any declared dependency `src/` never imports. The test that engine subpaths
+  are really exported used to scan only `lib/`, so it now covers `src/` too;
+  otherwise the move would have quietly taken two imports out of it.
+
 - **The updater reported "Installed" for an upgrade that upgraded nothing.**
   `brew upgrade --cask` exits 0 when it believes the cask is already current,
   and the window took that as success: it said **Installed**, offered
