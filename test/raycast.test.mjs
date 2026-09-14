@@ -281,6 +281,24 @@ test('no shortcut in the extension is macOS-only', () => {
   }
 });
 
+// Raycast for Windows keeps Ctrl+, for its own settings, so an action bound to
+// it never fires — found by the first person to test the extension on Windows,
+// who reached the preferences through Ctrl+K instead. ⌘, still works on a Mac,
+// so `preferences` in src/keys.ts keeps it there and binds nothing on Windows.
+test('nothing is bound to Ctrl+, on Windows, where Raycast keeps it', () => {
+  const folder = join(root, 'raycast', 'src');
+  for (const file of readdirSync(folder).filter((f) => /\.tsx$/.test(f))) {
+    const source = readFileSync(join(folder, file), 'utf8');
+    assert.doesNotMatch(source, /primary\(\s*["'],["']\s*\)/,
+      `${file} binds Ctrl+, on Windows — use \`preferences\` from ./keys`);
+    assert.doesNotMatch(source, /"ctrl"[^}]*key:\s*","/,
+      `${file} binds Ctrl+, on Windows directly`);
+  }
+  const keys = readFileSync(join(folder, 'keys.ts'), 'utf8');
+  assert.match(keys, /export const preferences[^=]*=\s*process\.platform === "win32"\s*\?\s*undefined/,
+    'the preferences shortcut has to be absent on Windows');
+});
+
 test('Gentle means the same number of connections in both windows', () => {
   // The one thing this extension duplicates. `CrawlSettings.Speed` in Swift and
   // `SPEEDS` here are two lists of the same three numbers, and two people

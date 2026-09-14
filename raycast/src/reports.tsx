@@ -23,7 +23,7 @@ import {
 
 import { causePayload, type Report } from "./engine";
 import { ExportActions } from "./exports";
-import { primary } from "./keys";
+import { preferences } from "./keys";
 import type { KeptReport } from "../lib/present.mjs";
 import {
   appPath,
@@ -117,7 +117,7 @@ export default function Command() {
               <Action
                 title="Open Extension Preferences"
                 icon={Icon.Gear}
-                shortcut={primary(",")}
+                shortcut={preferences}
                 onAction={openExtensionPreferences}
               />
             </ActionPanel>

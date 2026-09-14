@@ -64,14 +64,16 @@ folder you cloned.
 
 ## On Windows
 
-It is the same extension with the same commands. A few things are different:
+It is the same extension with the same commands. A few things are different.
+Extension preferences have no shortcut of their own on Windows, because Raycast
+keeps `Ctrl+,` for its own settings; they are in the `Ctrl+K` action menu.
 
 | | macOS | Windows |
 |---|---|---|
 | Export (HTML, Markdown, CSV, JSON, sitemap) | `⌘E` | `Ctrl+E` |
 | Copy a finding's check id | `⌘.` | `Ctrl+.` |
 | Copy the whole report as JSON | `⌘⇧C` | `Ctrl+Shift+C` |
-| Extension preferences | `⌘,` | `Ctrl+,` |
+| Extension preferences | `⌘,` | `Ctrl+K`, then **Open Extension Preferences** |
 | Where exports are written | `~/Downloads` | `%USERPROFILE%\Downloads` |
 | Where **Recent Reports** reads from | `~/Library/Application Support/seo-audit` | `%APPDATA%\seo-audit` |
 | The desktop app it can open | `SEO Audit.app` | `SEO Audit`, from the [releases page](https://github.com/nurkamol/seo-audit/releases) |

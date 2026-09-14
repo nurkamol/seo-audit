@@ -78,7 +78,9 @@ somebody's index.
 
 ## Settings
 
-`⌘,` (`Ctrl+,` on Windows) reaches every flag that shapes a run:
+`⌘,` reaches every flag that shapes a run. On Windows, where Raycast keeps
+`Ctrl+,` for its own settings, it is **Open Extension Preferences** in the
+`Ctrl+K` menu:
 
 | | |
 |---|---|

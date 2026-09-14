@@ -18,7 +18,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - **Every shortcut was written with `cmd`.** Raycast drops those on Windows
     with no warning. The action is still in the menu, but the shortcut in the
     README does nothing. They now go through one helper that says `⌘` on a Mac
-    and `Ctrl` on Windows, and a test fails on a bare one.
+    and `Ctrl` on Windows, and a test fails on a bare one. The exception is
+    **Open Extension Preferences**, which keeps `⌘,` on a Mac and has no
+    shortcut on Windows: Raycast keeps `Ctrl+,` for its own settings, so the
+    action never fired. The first Windows tester found that, and reached the
+    preferences through `Ctrl+K` instead. A test fails if `Ctrl+,` is bound
+    again.
   - **"Open the SEO Audit App" launched `/Applications/SEO Audit.app`** even when
     the app it had found was in `~/Applications`. It now opens whichever copy it
     found, including the Windows shell's `seo-audit.exe`, per user or per machine.

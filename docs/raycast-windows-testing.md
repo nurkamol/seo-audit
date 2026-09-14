@@ -1,9 +1,9 @@
 # Testing the Raycast extension on Windows
 
 Thank you for trying this. The SEO Audit extension for Raycast was built on a
-Mac, and it has now been changed to run on Raycast for Windows too. **Nobody has
-run it on Windows yet.** You would be the first, and anything that looks wrong
-is worth reporting, even if it seems small.
+Mac, and it has since been changed to run on Raycast for Windows too. It has
+been through one test pass on Windows so far, so another is still worth having,
+and anything that looks wrong is worth reporting, even if it seems small.
 
 It takes about 30 minutes. You need no SEO knowledge. Each test says what to do
 and what you should see. When what you see is different, write it down.
@@ -111,16 +111,18 @@ from the home page instead.
 **You should see** a message saying it could not look, or that nothing
 answered. It should not look like a normal result, and it should not crash.
 
-### 5. Ctrl+, opens the extension's preferences
+### 5. The extension's preferences open from the action menu
 
 1. Type `fitculturepilates.com` again and wait for the rows.
-2. Press `Ctrl+,`.
+2. Press `Ctrl+K` and choose **Open Extension Preferences**.
 
 **You should see** the extension's preferences open, starting with **Pages per
 run**. Close them without changing anything.
 
-> This is one of the things most likely to be broken. The shortcut used to
-> exist only on the Mac. If `Ctrl+,` does nothing, say so.
+> There is deliberately no shortcut for this on Windows. Raycast keeps `Ctrl+,`
+> for its own settings, so `Ctrl+,` does not open this extension's preferences.
+> That is expected, not a bug. The action should show no shortcut next to it in
+> the menu.
 
 ### 6. Run an audit
 
@@ -190,7 +192,8 @@ gone from **Not Checked**.
 
 ### 10. Change a preference
 
-1. Open **Preview Site**, type `fitculturepilates.com`, press `Ctrl+,`.
+1. Open **Preview Site**, type `fitculturepilates.com`, then press `Ctrl+K` and
+   choose **Open Extension Preferences**.
 2. Set **Pages per run** to `5` and **Speed** to **Gentle — 1 connection**.
 3. Run an audit again (from Preview, **Audit This Site**).
 
@@ -289,7 +292,7 @@ Node version:
 | 2  Preview with sitemap    | pass / fail | |
 | 3  Preview, no sitemap     | pass / fail | |
 | 4  Preview, not a site     | pass / fail | |
-| 5  Ctrl+, preferences      | pass / fail | |
+| 5  Preferences (Ctrl+K)    | pass / fail | |
 | 6  Audit                   | pass / fail | score: , took: |
 | 7  Shortcuts               | pass / fail | Ctrl+. / Ctrl+Shift+C / Ctrl+E |
 | 8  Export                  | pass / fail | Show in Explorer? Sitemap reason: |

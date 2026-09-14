@@ -22,7 +22,7 @@ import {
 import { preview, type Plan } from "./engine";
 import { Report as AuditReport } from "./audit";
 import { crawlOptions, normalise, previewRows } from "../lib/present.mjs";
-import { primary } from "./keys";
+import { preferences } from "./keys";
 
 const TONE: Record<string, { icon: Icon; tint: Color }> = {
   error: { icon: Icon.XMarkCircle, tint: Color.Red },
@@ -133,7 +133,7 @@ export default function Command() {
                     // it.
                     title="Open Extension Preferences"
                     icon={Icon.Gear}
-                    shortcut={primary(",")}
+                    shortcut={preferences}
                     onAction={openExtensionPreferences}
                   />
                   <Action.CopyToClipboard

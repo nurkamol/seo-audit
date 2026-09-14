@@ -48,7 +48,8 @@ them.
 engine's own writers.
 
 Runs on macOS and on Raycast for Windows. The shortcuts are `Ctrl` there
-rather than `⌘`, and **Recent Reports** reads `%APPDATA%\seo-audit`, where the
-Windows desktop app keeps its runs.
+rather than `⌘`, except extension preferences, which are in the `Ctrl+K` menu
+because Raycast keeps `Ctrl+,` for its own settings. **Recent Reports** reads
+`%APPDATA%\seo-audit`, where the Windows desktop app keeps its runs.
 
 Nothing leaves the machine. There is no account, no upload and no server.
