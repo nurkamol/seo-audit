@@ -21,6 +21,7 @@ import {
 import { BROWSER_NAMES, OS_NAMES, userAgentFor } from '../src/agents.mjs';
 import { runParameters, notInApp, formFields } from '../src/options.mjs';
 import { FORMATS, formatById, filenameFor, renderExport } from '../src/exports.mjs';
+import { esc } from '../src/text.mjs';
 
 // The CPU ceiling is what really bounds a run — roughly 25ms per page, against
 // 30 seconds per invocation on the Paid plan. 150 pages is about four seconds
@@ -29,13 +30,6 @@ import { FORMATS, formatById, filenameFor, renderExport } from '../src/exports.m
 const MAX_PAGES = 150;
 
 const COOKIE = 'seo_audit_token';
-
-const esc = (s) =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 /** Compare without leaking the answer in how long it took. */
 export function sameSecret(a, b) {

@@ -19,3 +19,19 @@ export function plural(n, one, many = `${one}s`) {
 export function noun(n, one, many = `${one}s`) {
   return n === 1 ? one : many;
 }
+
+/** Text that came off an audited site, safe to put inside markup.
+ *
+ *  Here rather than in each renderer because there were three identical copies
+ *  and a fourth that differed — and the value being escaped is a stranger's
+ *  `<title>`. `&` first, or the others get their ampersands escaped twice.
+ *  `apos` is XML's fifth character, which HTML does not need and the sitemap
+ *  writer does. Web-standard: the Worker imports this too. */
+export function esc(text, { apos = false } = {}) {
+  const out = String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  return apos ? out.replace(/'/g, '&apos;') : out;
+}

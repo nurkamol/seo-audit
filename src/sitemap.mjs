@@ -11,17 +11,11 @@
 // So this refuses to write anything from a run that did not see the whole site,
 // and says which run would.
 
-import { plural } from './text.mjs';
+import { plural, esc } from './text.mjs';
 
-/** The five characters XML cannot carry raw. `&` first, or the others get
- *  their own ampersands escaped a second time. */
-const escape = (text) =>
-  text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+/** The five characters XML cannot carry raw — the shared escaper plus the
+ *  apostrophe, which HTML does not need and XML does. */
+const escape = (text) => esc(text, { apos: true });
 
 const same = (a, b) => a.replace(/\/$/, '') === b.replace(/\/$/, '');
 

@@ -10,23 +10,21 @@
 // are read the way the PageSpeed key is — the environment first, then
 // ~/.config/seo-audit/.env — and never from the repository.
 import { readSecret } from './config.mjs';
+import { openUrl as openBrowser } from './open-url.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://searchconsole.googleapis.com/webmasters/v3/sites';
 
 const f = (level, id, title, detail, url) => ({ level, id, title, detail, url });
 
-/** One credential, environment first. The loader is shared with the PageSpeed
- *  key: this file had its own copy, and its copy could not read the dotfile at
- *  all. */
-export const findCredential = readSecret;
-
-/** All three, or a sentence saying which is missing. */
+/** All three, or a sentence saying which is missing. `readSecret` is the same
+ *  loader the PageSpeed key uses — environment first, then the dotfile; this
+ *  file had its own copy and its copy could not read the dotfile at all. */
 export function credentials(env = process.env) {
   const found = {
-    clientId: findCredential('GSC_CLIENT_ID', env),
-    clientSecret: findCredential('GSC_CLIENT_SECRET', env),
-    refreshToken: findCredential('GSC_REFRESH_TOKEN', env),
+    clientId: readSecret('GSC_CLIENT_ID', env),
+    clientSecret: readSecret('GSC_CLIENT_SECRET', env),
+    refreshToken: readSecret('GSC_REFRESH_TOKEN', env),
   };
   const missing = Object.entries({
     GSC_CLIENT_ID: found.clientId,
@@ -318,7 +316,6 @@ export async function searchConsole(origin, findings, opts = {}) {
 // a refresh token in a terminal is a refresh token in a scrollback buffer.
 
 import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -390,16 +387,6 @@ export function upsertSecret(text, name, value) {
   const pattern = new RegExp(`^\\s*${name}\\s*=.*$`, 'm');
   if (pattern.test(text)) return text.replace(pattern, line);
   return text.length && !text.endsWith('\n') ? `${text}\n${line}\n` : `${text}${line}\n`;
-}
-
-function openBrowser(url) {
-  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  try {
-    spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 const donePage = (heading, body) =>

@@ -173,7 +173,7 @@ C:\Users\<you>\Downloads\seo-audit-fitculturepilates.com-2026-09-11.html
      **If the button says "Show in Finder", that is a bug.**
    - **Open** should open the report in your browser.
 
-3. Do the same for **Markdown**, **Spreadsheet (CSV)**, **JSON**, **llms.txt**
+3. Do the same for **Markdown**, **Spreadsheet**, **JSON**, **llms.txt**
    and **Structured data**. Each should write a file to Downloads.
 
 4. Try **Corrected sitemap**. This one will probably say **Not written**, with a

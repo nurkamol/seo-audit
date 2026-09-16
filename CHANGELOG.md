@@ -34,6 +34,18 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checkout on either platform while the Store listing is in review.
 
 ### Fixed
+- **`--search-console-login` opened nothing on Windows.** The flow had its own
+  four-line browser launcher that ran `start` directly, and `start` is a `cmd`
+  builtin rather than a program — the classic form of this bug, which
+  `src/open-url.mjs` was written to get right and documents in a comment. The
+  login now calls that module like everything else does, so it is one launcher
+  on three platforms rather than two launchers disagreeing about one.
+- **`npm test` died on a broken `raycast/node_modules` symlink instead of
+  replacing it.** `scripts/link-engine.mjs` removes a link pointing somewhere
+  else, but `rmSync` follows the path before deleting and with `force` quietly
+  does nothing when the link is *dangling* — so the link survived and
+  `symlinkSync` failed `EEXIST` on the next line. It unlinks the link itself
+  now, and falls back to `rmSync` for a real directory.
 - **The Store submission was held on a dependency nothing in `src/` imported.**
   Raycast requires every dependency the manifest declares to be imported by a
   file under `src/`, and `@nurkamol/seo-audit` was only reached through

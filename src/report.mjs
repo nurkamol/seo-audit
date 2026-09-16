@@ -3,7 +3,7 @@
 
 import { byCause, causeScope, sectionOf } from './causes.mjs';
 import { CATEGORIES, categoryOf } from './areas.mjs';
-import { plural } from './text.mjs';
+import { plural, esc } from './text.mjs';
 
 const COLOR = process.env.NO_COLOR === undefined && process.stdout.isTTY;
 const c = (code, s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -54,10 +54,15 @@ export function counts(findings) {
  *
  *  A bar, because 80 and 62 are two numbers and a bar is two lengths. Drawn in
  *  block characters rather than colour alone, so it survives NO_COLOR, a pipe
- *  into a file and a CI log. */
-export function scoreBar(score, width = 28) {
+ *  into a file and a CI log.
+ *
+ *  `plain` is the Markdown form: a viewer may render a block character at a
+ *  different width from the surrounding monospace, and an ANSI escape written
+ *  into a committed file is worse still. */
+export function scoreBar(score, width = 28, plain = false) {
   const filled = Math.round((score / 100) * width);
-  return '█'.repeat(filled) + dim('░'.repeat(width - filled));
+  const rest = (plain ? '.' : '░').repeat(width - filled);
+  return (plain ? '#' : '█').repeat(filled) + (plain ? rest : dim(rest));
 }
 
 const scorePaint = (score) => (score >= 80 ? (s) => c('32', s) : score >= 60 ? yellow : red);
@@ -472,7 +477,7 @@ function scoreMarkdown(score) {
   out.push(`## Score: ${score.score}/100 (${score.grade})`);
   out.push('');
   out.push(
-    `\`${scoreBarPlain(score.score)}\`  **${score.score}**`,
+    `\`${scoreBar(score.score, 28, true)}\`  **${score.score}**`,
   );
   out.push('');
   out.push(
@@ -529,13 +534,6 @@ function passingMarkdown(score) {
   }
   return out;
 }
-
-/** The bar again, without the block characters a Markdown viewer may render at
- *  a different width from the surrounding monospace. */
-const scoreBarPlain = (score, width = 28) => {
-  const filled = Math.round((score / 100) * width);
-  return '#'.repeat(filled) + '.'.repeat(width - filled);
-};
 
 // --- Categories -------------------------------------------------------------
 // Moved to areas.mjs, and re-exported here because this is where every caller
@@ -714,12 +712,6 @@ export function portfolioMarkdown(runs) {
 
 export function portfolioHtml(runs) {
   const rows = portfolioRows(runs);
-  const esc = (s) =>
-    String(s ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
 
   // Each site rendered by the existing single-site view, then spliced in below
   // the table — one file, and every section is the report that site would have
@@ -880,18 +872,10 @@ export function csv(findings, meta, { score } = {}) {
 
 export function reportParts(findings, meta, { backHref, backLabel = 'New audit', score } = {}) {
   const n = counts(findings);
-  const esc = (s) =>
-    String(s ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-
   const LABEL = { error: 'Error', warn: 'Warning', info: 'Note' };
   const HEADING = { error: 'Errors', warn: 'Warnings', info: 'Notes' };
   const groups = byCategory(findings);
   const costs = costsById(score);
-  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
   // --- The score, as a panel ----------------------------------------------
   // A dial rather than a bar: at a glance a report is either mostly full or
