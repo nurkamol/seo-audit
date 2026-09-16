@@ -20,6 +20,7 @@
   "files": [
     "bin",
     "src",
+    "worker",
     "action.yml",
     "README.md",
     "LICENSE"
