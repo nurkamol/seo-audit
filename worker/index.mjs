@@ -1316,8 +1316,17 @@ export async function handle(request, env, ctx, deps = {}) {
     const encoder = new TextEncoder();
     // JSON, so a URL containing a newline cannot end an event early and inject
     // one of its own.
+    //
+    // The write cannot be allowed to reject. `onProgress` and `onNote` below
+    // call this without awaiting it, so once the client has gone away every
+    // remaining progress line becomes an unhandled rejection — one per page
+    // left in the crawl. A reader that hung up is not an error condition: the
+    // crawl simply has nobody left to tell, and it still has a `waitUntil` to
+    // finish for.
     const send = (event, data) =>
-      writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      writer
+        .write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+        .catch(() => {});
 
     const origin = new URL(target.url).origin;
     const work = (async () => {
@@ -1407,7 +1416,10 @@ export async function handle(request, env, ctx, deps = {}) {
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);
       } finally {
-        await writer.close();
+        // Same reasoning as `send`, and the same consequence: closing a stream
+        // the client already cancelled throws "Invalid state: WritableStream is
+        // closed", and nothing awaits this function either.
+        await writer.close().catch(() => {});
       }
     })();
     // Keep the isolate alive for the crawl even if the browser goes away mid-run,

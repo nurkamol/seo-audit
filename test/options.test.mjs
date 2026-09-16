@@ -139,6 +139,41 @@ test('every file that carries the version agrees about it', () => {
     'start when its version and the engine\'s disagree, so this is not cosmetic.');
 });
 
+// `npm i -g @nurkamol/seo-audit` shipped a CLI whose `--serve` could not start:
+// `src/serve.mjs` imports `../worker/index.mjs`, and `files` listed `bin` and
+// `src` but not `worker`, so the tarball did not contain it. Nothing caught it
+// because the repository always has the file — the failure only exists in an
+// installed copy. Following the imports rather than naming `worker` catches the
+// next folder somebody forgets as well.
+test('everything the CLI imports is a file npm actually ships', () => {
+  const { files } = JSON.parse(read('package.json'));
+
+  const reached = new Set();
+  const queue = ['bin/seo-audit.mjs'];
+  while (queue.length) {
+    const file = queue.pop();
+    if (reached.has(file)) continue;
+    reached.add(file);
+    // Static and dynamic imports both; `--serve` is a dynamic one, which is
+    // exactly how this got missed.
+    const source = read(file);
+    const specifiers = [
+      ...source.matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+)['"]/g),
+    ].map((m) => m[1]);
+    for (const specifier of specifiers) {
+      queue.push(join(dirname(file), specifier).replaceAll('\\', '/'));
+    }
+  }
+
+  const missing = [...reached]
+    .filter((file) => !files.some((entry) => file === entry || file.startsWith(`${entry}/`)))
+    .sort();
+
+  assert.deepEqual(missing, [],
+    `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} imported by the CLI but not in ` +
+    'package.json "files", so a published install would fail with ERR_MODULE_NOT_FOUND.');
+});
+
 test('the winget identifier the workflow publishes is the one the shell looks for', () => {
   // Windows' update path runs `winget list --id <identifier>` to find out whether
   // this copy came from winget, and `winget upgrade --id <identifier>` to move
