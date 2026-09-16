@@ -12,7 +12,7 @@
 //
 // Run by `pretest`, so the tests can never quietly stop covering the extension.
 
-import { mkdirSync, symlinkSync, rmSync, statSync, readFileSync } from 'node:fs';
+import { mkdirSync, symlinkSync, rmSync, unlinkSync, statSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
@@ -26,13 +26,26 @@ const link = join(modules, ...name.split('/'));
 
 mkdirSync(dirname(link), { recursive: true });
 
+// `unlinkSync` rather than `rmSync`, because `rmSync` follows the path before
+// deleting and with `force` quietly does nothing when the link is *dangling* —
+// which is exactly the case this branch exists for, and `symlinkSync` then
+// fails EEXIST on a link that was never removed. `unlinkSync` removes the link
+// itself; the fallback is for a real directory, where it raises EISDIR.
+const drop = () => {
+  try {
+    unlinkSync(link);
+  } catch {
+    rmSync(link, { recursive: true, force: true });
+  }
+};
+
 try {
   // `statSync` follows the link: if it resolves to this repository already,
   // there is nothing to do. If it is broken or points elsewhere, replace it.
   if (statSync(link).ino === statSync(root).ino) process.exit(0);
-  rmSync(link, { recursive: true, force: true });
+  drop();
 } catch {
-  rmSync(link, { recursive: true, force: true });
+  drop();
 }
 
 symlinkSync(root, link, 'dir');

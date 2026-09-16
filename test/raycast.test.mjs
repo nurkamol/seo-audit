@@ -419,28 +419,10 @@ test('a report is written in every format the engine can write', () => {
   assert.match(filenameFor('html', 'a site/with slashes'), /^seo-audit-a-site-with-slashes-/);
 });
 
-test('a sitemap the engine refused to build carries the refusal, not an empty file', () => {
-  const base = { meta: { origin: 'https://x.test', pages: 2 }, findings: [], causes: [] };
-
-  // Never asked for.
-  assert.match(render('sitemap', base).refused, /did not build one/);
-
-  // Asked for and refused — a sitemap missing real pages is worse than one
-  // listing dead ones, so the reason travels instead of a file.
-  const refused = render('sitemap', {
-    ...base,
-    sitemap: { xml: null, urls: [], added: [], refused: 'The crawl stopped at its limit.' },
-  });
-  assert.equal(refused.text, null);
-  assert.match(refused.refused, /stopped at its limit/);
-
-  const written = render('sitemap', {
-    ...base,
-    sitemap: { xml: '<?xml version="1.0"?>', urls: ['https://x.test/'], added: [], refused: null },
-  });
-  assert.match(written.text, /^<\?xml/);
-  assert.equal(written.refused, null);
-});
+// What a run refused to build, and why, is the engine's answer and is tested
+// against the engine in test/unit.test.mjs. This file used to assert it a
+// second time, back when lib/exports.mjs held its own copy of the renderer —
+// and the two had already drifted to different wording.
 
 // A Store submission is `extensions/seo-audit/` and nothing above it. Every
 // import that climbs out of the folder builds here, because the repository is
@@ -686,48 +668,8 @@ test('an exported report carries the score the list is showing', () => {
   assert.ok(render('html', older).text.length > 0);
 });
 
-// The same arrangement as the sitemap, and the same reason: a file built from a
-// fraction of a site looks complete, so the refusal travels instead of a file.
-test('an llms.txt the engine refused to build carries the refusal', () => {
-  const base = { meta: { origin: 'https://x.test', pages: 2 }, findings: [], causes: [] };
-  assert.match(render('llms', base).refused, /did not build one/);
-
-  const refused = render('llms', {
-    ...base,
-    llms: { text: null, urls: [], sections: 0, refused: 'The crawl stopped at its limit.' },
-  });
-  assert.equal(refused.text, null);
-  assert.match(refused.refused, /stopped at its limit/);
-
-  const written = render('llms', {
-    ...base,
-    llms: { text: '# x.test\n\n- [Home](https://x.test/)\n', urls: ['https://x.test/'], sections: 1, refused: null },
-  });
-  assert.equal(written.refused, null);
-  assert.match(written.text, /^# x\.test/);
-  assert.equal(filenameFor('llms', 'x.test', new Date('2026-08-24T10:00:00Z')), 'seo-audit-x.test-2026-08-24.txt');
-});
-
-// The one format whose refusal can be the good answer.
-test('a site that already declares everything gets that as the answer', () => {
-  const base = { meta: { origin: 'https://x.test', pages: 2 }, findings: [], causes: [] };
-  assert.match(render('schema', base).refused, /did not build one/);
-
-  const covered = render('schema', {
-    ...base,
-    schema: { json: null, generated: [], skipped: { 'already-has-website': 1 },
-      refused: 'This site already declares everything that could be written for it.' },
-  });
-  assert.equal(covered.text, null);
-  assert.match(covered.refused, /already declares everything/);
-
-  const written = render('schema', {
-    ...base,
-    schema: { json: '{"generated":[]}\n', generated: [], skipped: {}, refused: null },
-  });
-  assert.equal(written.refused, null);
-  assert.equal(filenameFor('schema', 'x.test', new Date('2026-08-24T10:00:00Z')), 'seo-audit-x.test-2026-08-24.json');
-});
+// The llms.txt and structured-data refusals are the same arrangement, tested
+// once against the engine rather than a second time through this alias.
 
 test('the rest of the domain becomes rows, with the flagged hosts coloured', () => {
   const meta = {
