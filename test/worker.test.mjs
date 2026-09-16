@@ -389,6 +389,45 @@ test('a stream carries the progress and then the report', async () => {
   assert.equal(record.opts.limit, 25);
 });
 
+test('a client that hangs up mid-crawl leaves no unhandled rejection', async () => {
+  // `onProgress` calls the stream's `send` without awaiting it, so once the
+  // reader has gone away every remaining progress line rejects on its own —
+  // one per page left in the crawl — and `writer.close()` rejects after them.
+  // Nothing owns those promises: `ctx` is null everywhere except Cloudflare,
+  // and Node's default for an unhandled rejection is to end the process. The
+  // crawl that `waitUntil` exists to protect is what gets killed.
+  const rejections = [];
+  const note = (err) => rejections.push(err);
+  process.on('unhandledRejection', note);
+
+  // Progress that arrives after the reader is gone, which is the case under
+  // test; a fake rather than a fixture site so it is timing, not luck.
+  const trickle = async (url, opts) => {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      opts.onProgress?.({ phase: 'crawl', status: 200, ms: 1, url: `${url}p${i}` });
+    }
+    return {
+      findings: [],
+      meta: { origin: new URL(url).origin, pages: 5, requests: 5, ms: 50, date: '2026-08-21', ignored: 0 },
+    };
+  };
+
+  const res = await handle(
+    get('/stream?url=https://example.com', { token: SECRET }),
+    env(),
+    null,
+    { audit: trickle, report: () => '<!doctype html>done' },
+  );
+
+  // The tab closes.
+  await res.body.cancel();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  process.off('unhandledRejection', note);
+  assert.deepEqual(rejections, [], 'writing to a reader that hung up is not an error');
+});
+
 test('the report says the certificate was not checked, rather than dropping it', async () => {
   // A hosted report with two checks fewer than the CLI's, and no note saying
   // so, is a report that lies by omission: a missing finding reads exactly

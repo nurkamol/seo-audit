@@ -34,6 +34,24 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checkout on either platform while the Store listing is in review.
 
 ### Fixed
+- **`npm i -g @nurkamol/seo-audit` installed a CLI whose `--serve` could not
+  start.** `files` listed `bin` and `src` but not `worker`, and `src/serve.mjs`
+  imports `../worker/index.mjs`, so every published copy failed with
+  `ERR_MODULE_NOT_FOUND` the moment somebody typed the flag. A checkout always
+  has the file, which is why nothing caught it. A test now follows the CLI's
+  imports — static and dynamic — and fails on any file `files` would leave out
+  of the tarball, so the next folder somebody forgets fails here rather than on
+  a stranger's machine.
+- **A browser that closed mid-crawl left the stream writing into nothing, one
+  unhandled rejection per remaining page.** `/stream` calls `send` from
+  `onProgress` and `onNote` without awaiting it, and `writer.close()` runs in a
+  `finally` nothing awaits. Once the reader has gone every one of those rejects
+  — the writes with the reason the stream was cancelled with, the close with
+  "Invalid state: WritableStream is closed". Nothing owns the promises: `ctx` is
+  null everywhere except Cloudflare, and Node ends the process on an unhandled
+  rejection by default, so the crawl `waitUntil` exists to protect was the thing
+  at risk. A reader that hung up is not an error — the crawl simply has nobody
+  left to tell, and now says so quietly and finishes.
 - **The Store submission was held on a dependency nothing in `src/` imported.**
   Raycast requires every dependency the manifest declares to be imported by a
   file under `src/`, and `@nurkamol/seo-audit` was only reached through
