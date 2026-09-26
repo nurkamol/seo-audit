@@ -235,6 +235,17 @@ GITHUB_TOKEN=<the token> komac new Nurkamol.SeoAudit \
   --submit
 ```
 
+**komac needs a real terminal.** It reads the NSIS script and stops on any
+aborting entry it finds — ours says *"Failed to install WebView2!"*, which is
+the installer's own error path and not a problem — then asks whether to carry
+on. With no TTY it fails with *"The input device is not a TTY"*, and `--dry-run`
+stops in the same place. Run it yourself, or do what 1.41.0 did: take the
+manifests from the last submitted version, change the version, installer URL,
+SHA256, release date, release notes URL and description, and push them to a
+branch on your `winget-pkgs` fork through the API. Three files, and the SHA256
+is on the release in `SHA256SUMS.txt`. Quote the description if it contains a
+colon, or the YAML will not parse.
+
 Drop `--submit` to see the manifests without opening anything. Use the newest
 release's version and installer URL rather than the ones above if time has
 passed — the URL is on the release page, and `SHA256SUMS.txt` beside it is the
