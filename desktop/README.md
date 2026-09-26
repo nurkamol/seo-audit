@@ -181,6 +181,29 @@ No HTTP client crate: the Node this app already ships has `fetch`, and adding a
 TLS stack so a 110 MB bundle can make one request a year is the larger thing,
 not the smaller one.
 
+## Proving a bundle came from here
+
+Every bundle a tagged build attaches carries a signed [build provenance][ab]
+attestation: which workflow made it, from which commit, on which runner. The
+`Attest what was built` step in `.github/workflows/desktop.yml` writes it before
+the upload, so an attested file that failed to attach is a re-run rather than an
+attached file nobody can check.
+
+```bash
+gh attestation verify SEO.Audit_1.40.1_x64-setup.exe --repo nurkamol/seo-audit
+```
+
+That works on a downloaded installer, needs no trust in this README, and fails
+for a bundle built anywhere else. It exists because a winget moderator could not
+tie the 1.38.1 installer to the source at its tag and was right — it had been
+uploaded hours after the tagged build rather than by it. A timeline in a comment
+is an argument; this is an answer.
+
+Release builds only. Nothing downstream can verify a bundle that was never
+published, and the attestation is bound to the run that produced the file.
+
+[ab]: https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds
+
 ## Bootstrapping winget
 
 Every release after the first is automatic: the `winget` job in

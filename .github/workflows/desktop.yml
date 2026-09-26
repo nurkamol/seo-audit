@@ -72,11 +72,24 @@ jobs:
         include:
           - os: ubuntu-22.04
             bundles: appimage,deb
+            # What to attest on this runner. Per platform rather than one list
+            # of globs for both, because neither runner should be handed a
+            # pattern for bundles it does not build.
+            subjects: |
+              desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+              desktop/src-tauri/target/release/bundle/deb/*.deb
           - os: windows-latest
             bundles: nsis
+            subjects: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      # What `actions/attest` needs: an OIDC token to prove to Sigstore which
+      # workflow is asking, and write access to record the attestation against
+      # the repository. Not `artifact-metadata` — that is for the storage record
+      # a registry push creates, and this pushes files to a release.
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -283,6 +296,30 @@ jobs:
           exit 1
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # Signed provenance for exactly the files about to be attached: which
+      # workflow built them, from which commit, on which runner. `gh attestation
+      # verify <file> --repo nurkamol/seo-audit` checks it against Sigstore, and
+      # a bundle built anywhere else fails that check.
+      #
+      # This exists because a winget moderator could not tie the 1.38.1
+      # installer to the source at its tag, and was right: it had been uploaded
+      # hours after the tagged build rather than by it. A timeline in a comment
+      # is an argument; an attestation is an answer, and this is the cheapest
+      # place to produce one.
+      #
+      # Before the upload on purpose. An attested file that failed to attach is
+      # a re-run; an attached file with no attestation is the thing being fixed.
+      # Release builds only: nothing downstream can verify a bundle that was
+      # never published.
+      - name: Attest what was built
+        if: steps.release.outputs.tag != ''
+        # `actions/attest`, not `actions/attest-build-provenance`: as of v4 that
+        # one is a wrapper over this and says new workflows should come here.
+        # Build provenance is what it writes by default.
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ matrix.subjects }}
 
       - name: Attach the bundles
         if: steps.release.outputs.tag != ''

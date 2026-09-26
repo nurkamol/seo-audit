@@ -33,6 +33,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [docs/raycast.md](docs/raycast.md) explains how to run the extension from a
   checkout on either platform while the Store listing is in review.
 
+- **Every released bundle can be traced to the build that made it.** The
+  Windows and Linux bundles now carry a signed build provenance attestation,
+  written by `actions/attest` in the tagged build before the upload, so
+  `gh attestation verify <file> --repo nurkamol/seo-audit` answers "did this
+  come from that tag" without anybody being taken at their word. Subject paths
+  are per runner rather than one list of globs for both, because neither should
+  be handed a pattern for bundles it does not build. Release builds only: an
+  attestation for a file nobody can download proves nothing to anybody.
+
+  `actions/attest` rather than `actions/attest-build-provenance`, which as of
+  v4 is a wrapper over it and says new workflows should use it directly. The job
+  asks for `id-token` and `attestations` and not `artifact-metadata` — that one
+  is for the storage record a registry push creates, and this attaches files to
+  a release.
+
 ### Fixed
 - **"Nothing leaves the machine" was not true of the Windows app, and winget
   asked about it.** The sentence shipped in the installer's own metadata and in
