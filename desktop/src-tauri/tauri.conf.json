@@ -36,7 +36,7 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "Crawl a site's sitemap and check every page",
-    "longDescription": "Audits every page a sitemap lists, not just the homepage, and groups what it finds by the thing that has to change. Nothing leaves the machine.",
+    "longDescription": "Audits every page a sitemap lists, not just the homepage, and groups what it finds by the thing that has to change. The crawl runs on your machine and your results are never sent to the publisher.",
     "publisher": "Nurkamol Vakhidov",
     "homepage": "https://github.com/nurkamol/seo-audit",
     "license": "MIT",

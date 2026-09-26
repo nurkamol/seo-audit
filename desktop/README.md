@@ -198,8 +198,8 @@ account and open a pull request from it.
 brew install komac        # cross-platform; wingetcreate is Windows-only
 
 GITHUB_TOKEN=<the token> komac new Nurkamol.SeoAudit \
-  --version 1.38.1 \
-  --urls https://github.com/nurkamol/seo-audit/releases/download/v1.38.1/SEO.Audit_1.38.1_x64-setup.exe \
+  --version 1.40.1 \
+  --urls https://github.com/nurkamol/seo-audit/releases/download/v1.40.1/SEO.Audit_1.40.1_x64-setup.exe \
   --publisher "Nurkamol Vakhidov" \
   --publisher-url https://github.com/nurkamol \
   --package-name "SEO Audit" \
@@ -208,6 +208,7 @@ GITHUB_TOKEN=<the token> komac new Nurkamol.SeoAudit \
   --license-url https://github.com/nurkamol/seo-audit/blob/main/LICENSE \
   --moniker seo-audit \
   --short-description "Crawl a site's sitemap and check every page" \
+  --description "Audits every page a sitemap lists rather than only the homepage, and groups what it finds by the thing that has to change. Reports the checks that passed and the ones that did not apply, so a missing finding cannot be mistaken for a passing one. The crawl runs on your machine: it fetches the site you point it at, and your audit results are never sent to the publisher. Features you turn on yourself contact Google PageSpeed Insights and Search Console, and the app checks GitHub for new versions." \
   --submit
 ```
 
@@ -215,6 +216,22 @@ Drop `--submit` to see the manifests without opening anything. Use the newest
 release's version and installer URL rather than the ones above if time has
 passed — the URL is on the release page, and `SHA256SUMS.txt` beside it is the
 hash komac will compute for itself.
+
+**Submit a version whose installer the tagged build attached**, and never
+re-upload an installer to a release that is already out. The first attempt was
+1.38.1, whose `-setup.exe` was uploaded six hours after the rest of that
+release — a separate run — and a moderator refused it as untraceable to the
+source at the tag. `gh release view v<version> --json assets` prints each
+asset's `createdAt`: the Windows bundle should sit within a minute or two of
+the Linux ones.
+
+**The description is a claim somebody checks.** The first submission said
+"Nothing leaves the machine" and the moderator asked what the update check was
+doing, which was fair — the shell asks api.github.com for new versions, and
+PageSpeed Insights and Search Console are opt-in calls to Google. What is true
+is that results are never sent to the publisher, so that is what it says now.
+`winget-releaser` carries the locale manifest forward on every later release,
+so wording fixed here is wording fixed once.
 
 A maintainer reviews the pull request. First submissions take a few days and
 can come back with questions; the installer being unsigned is allowed and is

@@ -34,6 +34,20 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   checkout on either platform while the Store listing is in review.
 
 ### Fixed
+- **"Nothing leaves the machine" was not true of the Windows app, and winget
+  asked about it.** The sentence shipped in the installer's own metadata and in
+  the winget manifest, and the shell asks `api.github.com` for new versions;
+  PageSpeed Insights and Search Console are opt-in calls to Google, and `--hosts`
+  reads certificate transparency. A moderator on
+  [microsoft/winget-pkgs#426217](https://github.com/microsoft/winget-pkgs/pull/426217)
+  asked what the update check was doing, which was a fair question to ask of a
+  flat claim. What is actually true — the crawl runs on your machine and results
+  are never sent to the publisher — is what `longDescription` and the manifest
+  say now, and the outbound calls are named rather than implied. The same PR
+  also refused 1.38.1 as untraceable: its `-setup.exe` was uploaded six hours
+  after the rest of that release rather than by the tagged build, which
+  `desktop/README.md` now says to check before submitting.
+
 - **The Store submission was held on a dependency nothing in `src/` imported.**
   Raycast requires every dependency the manifest declares to be imported by a
   file under `src/`, and `@nurkamol/seo-audit` was only reached through
