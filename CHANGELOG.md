@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.41.0] — 2026-09-26
+
 ### Added
 - **The Raycast extension runs on Raycast for Windows.** Nothing in it needed
   native code, so this was three macOS assumptions rather than a port:
@@ -3512,7 +3514,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.38.2...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.41.0...HEAD
+[1.41.0]: https://github.com/nurkamol/seo-audit/compare/v1.40.1...v1.41.0
 [1.38.2]: https://github.com/nurkamol/seo-audit/compare/v1.38.1...v1.38.2
 [1.38.1]: https://github.com/nurkamol/seo-audit/compare/v1.38.0...v1.38.1
 [1.38.0]: https://github.com/nurkamol/seo-audit/compare/v1.37.0...v1.38.0
