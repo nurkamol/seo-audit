@@ -164,6 +164,18 @@ export const anchorPhrase = (name) =>
     .trim();
 
 // --- hreflang ---------------------------------------------------------------
+
+/** A sentence naming where a page's hreflang was declared, or nothing.
+ *
+ *  Only when it was not the page itself. `adoptSitemapHreflang()` in audit.mjs
+ *  gives a page the alternates its sitemap declared for it, because Google
+ *  reads both; a finding that then sends somebody to a template with no
+ *  annotation in it would be a correct finding with the wrong address on it. */
+export const hreflangSource = (doc) =>
+  doc?.hreflangFrom === 'sitemap'
+    ? ' This set is declared in the sitemap rather than in the page, so that is the file to fix.'
+    : '';
+
 // A language, optionally a script, optionally a region, joined by hyphens:
 // en, en-GB, zh-Hant, zh-Hant-TW, en-419. Case is not significant to Google.
 // Only the shape is checked, not whether the codes exist — that would mean
@@ -485,12 +497,16 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   // from the page alone is whether the annotation is well formed and whether
   // the page agrees with it about what the page is.
   if (doc.hreflang.length) {
+    // Where the set was declared, when it was not the page. Somebody sent to
+    // fix a malformed code should not be reading a template that never had one
+    // in it — the line to edit is in the sitemap.
+    const where = hreflangSource(doc);
     const malformed = doc.hreflang.filter((alt) => !isLanguageTag(alt.lang));
     for (const alt of malformed) {
       out.push(f('error', 'hreflang-invalid', `Malformed hreflang code: "${alt.lang}"`,
         'Google ignores an annotation it cannot parse, so this version is invisible to it. The form is ' +
           'a language, optionally a script and a region, joined by hyphens — en, en-GB, zh-Hant-TW. ' +
-          'An underscore instead of a hyphen is the usual cause.', url));
+          'An underscore instead of a hyphen is the usual cause.' + where, url));
     }
 
     // Every version has to list itself alongside the others, or the set is
@@ -499,14 +515,15 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
     if (!self) {
       out.push(f('warn', 'hreflang-no-self', 'hreflang does not list this page',
         `It points at ${doc.hreflang.map((a) => a.lang).join(', ')} but never at itself. A version that ` +
-          'omits its own self-reference leaves the set incomplete.', url));
+          'omits its own self-reference leaves the set incomplete.' + where, url));
     } else if (doc.lang && primaryLanguage(self.lang) !== primaryLanguage(doc.lang)) {
       // The page's two statements about its own language, disagreeing. This is
       // only ever visible on a translated page, which is the kind of page a
       // homepage grader never opens.
       out.push(f('warn', 'hreflang-lang-mismatch', 'The page disagrees with its own hreflang about its language',
         `<html lang="${doc.lang}"> but hreflang calls this page "${self.lang}". Google reads both, and one ` +
-          'of them is wrong — usually a template that hardcodes lang while the annotation is generated.', url));
+          'of them is wrong — usually a template that hardcodes lang while the annotation is generated.' + where,
+        url));
     }
   }
 
@@ -1259,7 +1276,8 @@ export function crossPageChecks(pages, opts = {}) {
     if (!hasDefault) {
       out.push(f('info', 'hreflang-no-x-default', 'No x-default in the hreflang set',
         `${translated.length} pages declare alternates and none names an x-default — the version to serve ` +
-          'a visitor whose language matches none of the others. Usually the English or the country selector.',
+          'a visitor whose language matches none of the others. Usually the English or the country selector.'
+          + hreflangSource(translated[0].doc),
         translated[0].url));
     }
   }
@@ -1276,7 +1294,8 @@ export function crossPageChecks(pages, opts = {}) {
       );
       if (!returns) {
         out.push(f('error', 'hreflang-one-way', 'hreflang is not reciprocal',
-          `${p.url} → ${alt.href} (${alt.lang}), but the target does not link back. Google drops one-way pairs.`, p.url));
+          `${p.url} → ${alt.href} (${alt.lang}), but the target does not link back. Google drops one-way pairs.`
+            + hreflangSource(p.doc), p.url));
       }
     }
   }

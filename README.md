@@ -871,6 +871,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `og:image` is not WebP — LinkedIn won't render it, WhatsApp is unreliable | warning |
 | `og:image` declares width and height | note |
 | `hreflang` codes are well formed — `en_US` with an underscore is the usual slip | error |
+| `hreflang` declared in the XML sitemap counts as declared — Google reads both places, and a finding says which file to fix | — |
 | `hreflang` lists the page itself, not only its translations | warning |
 | `<html lang>` agrees with what the page's own `hreflang` calls it | warning |
 | `<html lang>` agrees with the `Content-Language` header, compared by primary subtag — a header listing several languages agrees if the page's is one of them | warning |

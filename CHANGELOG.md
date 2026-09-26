@@ -49,6 +49,25 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a release.
 
 ### Fixed
+- **A site that declared hreflang in its sitemap was told it declared none.**
+  Google reads hreflang from the markup **or** from the XML sitemap and treats
+  them the same; this read only the markup. So all six hreflang checks were
+  reported as not applying, under the sentence "No page declares hreflang" —
+  stated as a fact about the site, on sites where it was false. A check that
+  could not run has to say why, and that reason has to be true.
+
+  `parseSitemap()` now reads the `<xhtml:link rel="alternate" hreflang>`
+  entries inside each `<url>` block, and `adoptSitemapHreflang()` gives them to
+  the page that `<loc>` names — only where the page's own markup declares none,
+  because a page that declares both is answering for itself and merging a
+  second set in would invent one neither source contains. Where a set was
+  adopted, the finding says so and names the sitemap as the file to fix: the
+  line to edit is not in the template somebody has open.
+
+  Found by reading the code rather than by a report, and confirmed against
+  deepl.com, whose pages carry no hreflang at all and whose sitemap carries all
+  of it. Before: five checks "did not apply". After: five checks pass.
+
 - **"Nothing leaves the machine" was not true of the Windows app, and winget
   asked about it.** The sentence shipped in the installer's own metadata and in
   the winget manifest, and the shell asks `api.github.com` for new versions;

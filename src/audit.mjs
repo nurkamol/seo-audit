@@ -165,6 +165,38 @@ async function crawlByLinks(origin, fetcher, { limit, concurrency, robotsGroups,
  * @param {string} target site origin, or a sitemap URL
  * @param {{limit?: number, concurrency?: number, sitemap?: string}} opts
  */
+/** Hreflang the sitemap declared, given to the pages it names.
+ *
+ *  Google reads hreflang from the markup **or** from the sitemap, and treats
+ *  them the same. This engine only ever read the markup, so a site that chose
+ *  the sitemap was told "No page declares hreflang" — stated as a fact about
+ *  the site, under checks reported as not applying. A check that could not run
+ *  must say so honestly, and that one was saying something false.
+ *
+ *  Only for a page whose own markup declares none. A page that declares both is
+ *  answering for itself, and quietly merging a second set into it would invent
+ *  a set neither source contains — which is how a reciprocity check starts
+ *  reporting pairs nobody wrote.
+ *
+ *  `from` travels with them so a finding can say where to go and fix it: the
+ *  line to edit is in an XML file, not in the page somebody has open.
+ */
+export function adoptSitemapHreflang(pages, entries = []) {
+  const bare = (url) => url.replace(/\/$/, '');
+  const declared = new Map(
+    entries.filter((e) => e.alternates?.length).map((e) => [bare(e.loc), e.alternates]),
+  );
+  if (!declared.size) return;
+
+  for (const page of pages) {
+    if (!page.doc || page.doc.hreflang.length) continue;
+    const alternates = declared.get(bare(page.url));
+    if (!alternates) continue;
+    page.doc.hreflang = alternates;
+    page.doc.hreflangFrom = 'sitemap';
+  }
+}
+
 export async function audit(target, opts = {}) {
   const started = Date.now();
   const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6, userAgent: opts.userAgent });
@@ -445,6 +477,8 @@ export async function audit(target, opts = {}) {
   }
 
   onProgress?.({ phase: 'crawl', detail: `${pages.length} pages in ${((Date.now() - started) / 1000).toFixed(1)}s` });
+
+  adoptSitemapHreflang(pages, entries);
 
   for (const page of pages) findings.push(...pageChecks(page, opts.limits));
   // Click depth is measured from the homepage, and a sitemap need not list it.

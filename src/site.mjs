@@ -5,7 +5,7 @@ import { mapLimit } from './http.mjs';
 import { parseRobots, robotsVerdict } from './robots.mjs';
 import { aiAccess, describeAccess } from './agents-ai.mjs';
 import { parseHtml } from './parse.mjs';
-import { schemaNodes, seriesOf, paginatedCanonical } from './checks.mjs';
+import { schemaNodes, seriesOf, paginatedCanonical, hreflangSource } from './checks.mjs';
 import { similarity } from './dupes.mjs';
 import {
   resolve as resolveDns, certificateNames, collapseFleets, rankHosts, looksLikeStaging, NXDOMAIN,
@@ -638,9 +638,13 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
   }
   for (const [source, dead] of deadByPage) {
     const shown = dead.slice(0, 3).join(', ');
+    // Same reason as the page-level hreflang findings: a set adopted from the
+    // sitemap is fixed in the sitemap, not on the page that carries it.
+    const doc = pages.find((p) => p.url === source)?.doc;
     out.push(f('error', 'hreflang-dead', `${plural(dead.length, 'hreflang target')} do not load`,
       `${shown}${dead.length > 3 ? `, and ${dead.length - 3} more` : ''} — declared on ${source}. Each ` +
-        'version that does not load drops out of the set, and the pages pointing at it lose the annotation.',
+        'version that does not load drops out of the set, and the pages pointing at it lose the annotation.'
+        + hreflangSource(doc),
       source));
   }
 

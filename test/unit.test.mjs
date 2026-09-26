@@ -5,6 +5,7 @@ import { attr, bodyKind, parseHtml, parseSitemap, countWords } from '../src/pars
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite, readSecret } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
+import { adoptSitemapHreflang } from '../src/audit.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
 import { fingerprint, similarity, cluster } from '../src/dupes.mjs';
 import { rebuild, changedSince, describe as describeSitemap } from '../src/sitemap.mjs';
@@ -192,7 +193,7 @@ test('parseSitemap distinguishes an index from a urlset', () => {
   assert.deepEqual(parseSitemap('<urlset><url><loc>https://a.test/</loc></url></urlset>'), {
     urls: ['https://a.test/'],
     sitemaps: [],
-    entries: [{ loc: 'https://a.test/', lastmod: null }],
+    entries: [{ loc: 'https://a.test/', lastmod: null, alternates: [] }],
   });
   assert.deepEqual(
     parseSitemap('<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>'),
@@ -211,9 +212,9 @@ test('lastmod stays attached to its own loc', () => {
      </urlset>`,
   );
   assert.deepEqual(entries, [
-    { loc: 'https://a.test/one/', lastmod: '2026-01-02' },
-    { loc: 'https://a.test/two/', lastmod: null },
-    { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00' },
+    { loc: 'https://a.test/one/', lastmod: '2026-01-02', alternates: [] },
+    { loc: 'https://a.test/two/', lastmod: null, alternates: [] },
+    { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00', alternates: [] },
   ]);
 });
 
@@ -5343,4 +5344,97 @@ test('every flag the engine offers to enable is a flag the CLI parses', () => {
   for (const flag of Object.values(ENABLED_BY)) {
     assert.ok(cli.includes(`arg === '${flag}'`), `${flag} is offered and the CLI does not parse it`);
   }
+});
+
+// --- hreflang declared in the sitemap ---------------------------------------
+// Google reads hreflang from the markup or from the sitemap and treats them the
+// same. Only the markup was ever read here, so a site that chose the sitemap
+// was told "No page declares hreflang" — a sentence about the site that was not
+// true of it, printed under the checks that did not apply.
+
+const sitemapWith = (...urls) =>
+  parseSitemap(
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ' +
+      'xmlns:xhtml="http://www.w3.org/1999/xhtml">' + urls.join('') + '</urlset>',
+  );
+const xurl = (loc, ...links) => `<url><loc>${loc}</loc>${links.join('')}</url>`;
+const xalt = (lang, href) => `<xhtml:link rel="alternate" hreflang="${lang}" href="${href}"/>`;
+
+test('a sitemap that declares hreflang has it read, and its other links ignored', () => {
+  const { entries } = sitemapWith(
+    xurl('https://x.test/en/',
+      xalt('en', 'https://x.test/en/'),
+      xalt('fr', 'https://x.test/fr/'),
+      '<xhtml:link rel="stylesheet" href="https://x.test/s.css"/>',
+      '<xhtml:link rel="alternate" href="https://x.test/no-lang/"/>'),
+    xurl('https://x.test/plain/'),
+  );
+
+  assert.deepEqual(entries[0].alternates, [
+    { lang: 'en', href: 'https://x.test/en/' },
+    { lang: 'fr', href: 'https://x.test/fr/' },
+  ], 'rel="stylesheet" is not an alternate, and half a declaration is not one');
+  assert.deepEqual(entries[1].alternates, [], 'a url block with none gets none');
+
+  // A generator that made the XHTML namespace the default emits a bare <link>.
+  const bare = parseSitemap(
+    '<urlset><url><loc>https://x.test/en/</loc>' +
+      '<link rel="alternate" hreflang="de" href="https://x.test/de/"/></url></urlset>',
+  );
+  assert.deepEqual(bare.entries[0].alternates, [{ lang: 'de', href: 'https://x.test/de/' }]);
+});
+
+test('the pages a sitemap names get the hreflang it declared for them', () => {
+  const doc = (lang, url) =>
+    ({ ...parseHtml(`<html lang="${lang}"><head></head><body></body></html>`, url), hreflang: [] });
+  const pages = [
+    { url: 'https://x.test/en/', res: { ok: true }, doc: doc('en', 'https://x.test/en/') },
+    { url: 'https://x.test/fr/', res: { ok: true }, doc: doc('fr', 'https://x.test/fr/') },
+  ];
+  const set = [
+    xalt('en', 'https://x.test/en/'),
+    xalt('fr', 'https://x.test/fr/'),
+    xalt('x-default', 'https://x.test/en/'),
+  ];
+  const { entries } = sitemapWith(
+    xurl('https://x.test/en/', ...set),
+    xurl('https://x.test/fr/', ...set),
+  );
+
+  adoptSitemapHreflang(pages, entries);
+  assert.equal(pages[0].doc.hreflang.length, 3, 'en, fr and x-default');
+  assert.equal(pages[0].doc.hreflangFrom, 'sitemap', 'where it came from travels with it');
+
+  // The point of the change: these checks now apply to this site at all.
+  const findings = pages.flatMap((p) => pageChecks(p)).concat(crossPageChecks(pages, {}));
+  assert.deepEqual(findings.filter((x) => x.id.startsWith('hreflang')).map((x) => x.id), [],
+    'a set that is complete and reciprocal is not a finding, wherever it was declared');
+});
+
+test('a page that declares its own hreflang keeps it, and a sitemap set says where to fix it', () => {
+  const declared = parseHtml(
+    '<html lang="en"><head><link rel="alternate" hreflang="en" href="https://x.test/en/">' +
+      '</head><body></body></html>', 'https://x.test/en/');
+  const pages = [{ url: 'https://x.test/en/', res: { ok: true }, doc: declared }];
+  const { entries } = sitemapWith(xurl('https://x.test/en/', xalt('de', 'https://x.test/de/')));
+
+  adoptSitemapHreflang(pages, entries);
+  assert.deepEqual(pages[0].doc.hreflang, [{ lang: 'en', href: 'https://x.test/en/' }],
+    'merging a second set in would invent one neither source declares');
+  assert.equal(pages[0].doc.hreflangFrom, undefined);
+
+  // And when it was adopted, a finding sends somebody to the file that has it.
+  const adopted = {
+    url: 'https://x.test/de/',
+    res: { ok: true },
+    doc: { ...parseHtml('<html lang="de"><head></head><body></body></html>', 'https://x.test/de/'), hreflang: [] },
+  };
+  adoptSitemapHreflang([adopted], sitemapWith(
+    xurl('https://x.test/de/', xalt('en_GB', 'https://x.test/en/')),
+  ).entries);
+  const malformed = pageChecks(adopted).find((x) => x.id === 'hreflang-invalid');
+  assert.ok(malformed, 'a malformed code is still a malformed code');
+  assert.match(malformed.detail, /declared in the sitemap/,
+    'the template it names has no annotation in it — the sitemap does');
 });

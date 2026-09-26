@@ -364,11 +364,18 @@ export function parseHtml(rawHtml, pageUrl) {
 
 /** URLs from a sitemap or sitemap index. Returns {urls, sitemaps, entries}.
  *
- *  `entries` pairs each <loc> with its own <lastmod>, read from inside the
- *  <url> block so a date cannot drift onto a neighbouring URL. It is additional
- *  rather than a replacement: `urls` stays a plain list of strings, because
- *  every caller wants exactly that and changing it would ripple through
- *  discovery for no gain. */
+ *  `entries` pairs each <loc> with its own <lastmod> and its own hreflang
+ *  alternates, read from inside the <url> block so neither can drift onto a
+ *  neighbouring URL. It is additional rather than a replacement: `urls` stays a
+ *  plain list of strings, because every caller wants exactly that and changing
+ *  it would ripple through discovery for no gain.
+ *
+ *  `alternates` is the same `{ lang, href }` shape `parseHtml` returns for
+ *  `<link rel="alternate" hreflang>`, because the sitemap is the other place
+ *  Google reads hreflang from and the checks should not care which one a site
+ *  chose. A site that declares them here and not in its markup was previously
+ *  told "no page declares hreflang" — a sentence about the site that was not
+ *  true of it. */
 export function parseSitemap(xml) {
   const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => decode(m[1]));
   const isIndex = /<sitemapindex/i.test(xml);
@@ -378,10 +385,28 @@ export function parseSitemap(xml) {
     .map((m) => ({
       loc: decode(m[1].match(/<loc>\s*([^<\s]+)\s*<\/loc>/i)?.[1] ?? ''),
       lastmod: m[1].match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i)?.[1] ?? null,
+      alternates: sitemapAlternates(m[1]),
     }))
     .filter((entry) => entry.loc);
 
   return { urls: locs, sitemaps: [], entries };
+}
+
+/** The hreflang alternates declared inside one <url> block.
+ *
+ *  The prefix is whatever the file bound the XHTML namespace to — `xhtml:link`
+ *  is the convention Google documents, and a bare `<link>` is what a generator
+ *  that declared the namespace as the default emits. Matching any prefix costs
+ *  nothing here: a `<url>` block has no other kind of link in it.
+ *
+ *  `rel` is required to be `alternate` rather than assumed, and an entry with
+ *  no `hreflang` or no `href` is dropped — half a declaration is not one. */
+function sitemapAlternates(block) {
+  return [...block.matchAll(/<(?:[a-z0-9]+:)?link\b[^>]*>/gi)]
+    .map((m) => m[0])
+    .filter((tag) => (attr(tag, 'rel') ?? '').toLowerCase() === 'alternate')
+    .map((tag) => ({ lang: attr(tag, 'hreflang'), href: decode(attr(tag, 'href') ?? '') }))
+    .filter((alt) => alt.lang && alt.href);
 }
 
 /**
