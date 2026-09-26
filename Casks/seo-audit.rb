@@ -7,8 +7,8 @@
 # a tag is pushed, so this file is never edited by hand and can never describe a
 # build that does not exist.
 cask "seo-audit" do
-  version "1.40.1"
-  sha256 "fa209b7cb1cbc2c1fe6b0dc3c209ded63fa587c613b304583c3139f0d06c648e"
+  version "1.41.0"
+  sha256 "22b287869bd715580b489d7ba44dc545d625203c37b357238e5fbd7c9d6d5277"
 
   # No `verified:`. It used to be here to stop Homebrew warning that the URL and
   # the homepage were different hosts, and Homebrew now deprecates the parameter
