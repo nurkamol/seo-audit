@@ -55,10 +55,11 @@ professional-tool plan queued has shipped: grouping, ordering by reach, a report
 that prints, a local server, a macOS window, two readers compared, and Search
 Console.
 
-The one thing waiting is not a feature. **`--search-console` has never made a
-live call** — its request shape, token exchange and date window are covered by
-tests against a fake API, and nobody here has a property to point it at. The
-first person who does should run it before trusting it.
+That includes the one thing this section used to hold back: **`--search-console`
+has made live calls**, against `sc-domain:nurkamol.com`, and the sentence it got
+wrong is fixed above. The line saying it never had survived the run that made it
+false, which is its own small lesson — a caveat costs nothing to write and
+nothing to leave, and the leaving is what makes a file stop being worth reading.
 
 What filled this section before, and is worth keeping in mind when it fills
 again: not more checks. There are about ninety, and the ninety-first adds a row

@@ -49,6 +49,14 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a release.
 
 ### Fixed
+- **Two files said Search Console had never run against the live API.** It has,
+  since 1.36.0, and the extension has shipped the checkbox and the property
+  field since. `raycast/README.md` listed it under "Not here, and why" — the
+  Store listing text contradicting the extension's own settings — and
+  `ROADMAP.md` carried a paragraph saying the same beside the entry marking the
+  live run done. Both now say what is true. A caveat that outlives what it was
+  about is how a file stops being worth reading.
+
 - **A site that declared hreflang in its sitemap was told it declared none.**
   Google reads hreflang from the markup **or** from the XML sitemap and treats
   them the same; this read only the markup. So all six hreflang checks were

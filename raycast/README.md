@@ -149,7 +149,12 @@ in a static manifest cannot read the engine's list at runtime.
 screen rather than a preference. `--compare-as` fetches a sample twice.
 `--settle` waits out a deploy. `--redirects` and `--config` are files a
 repository commits. `--fail-on` needs an exit code a launcher does not have.
-`--search-console` needs an OAuth client and has never run against the live API.
+
+`--search-console` **is** here — the checkbox and the property field under
+Settings. Signing in stays a terminal errand
+(`npx @nurkamol/seo-audit --search-console-login`, once), because it opens a
+browser and writes a credential to disk; without it the report names what is
+missing rather than going quiet.
 
 All of them are in the command line: `npx @nurkamol/seo-audit example.com`.
 
