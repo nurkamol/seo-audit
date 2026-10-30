@@ -50,6 +50,7 @@ const CATEGORY_OF = {
 
   // Links
   'broken-link': 'Links', 'orphan-page': 'Links', 'no-editorial-links': 'Links',
+  'fragment-missing': 'Links',
   'deep-page': 'Links', 'deep-page-more': 'Links', 'no-path-from-home': 'Links',
   'click-depth-skipped': 'Links', 'orphan-check-skipped': 'Links', 'link-no-text': 'Links', 'link-no-text-more': 'Links',
   'anchor-generic': 'Links', 'anchor-generic-more': 'Links',

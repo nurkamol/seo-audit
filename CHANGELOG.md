@@ -5,6 +5,29 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Links to a section inside a page are checked against what is there.**
+  `/guide#installing` resolves perfectly when `installing` has been renamed:
+  the page loads and the reader is left at the top of it, having asked for
+  something specific. Neither page is wrong on its own, which is why it
+  survives — it takes something holding the link and the target at once, and a
+  renamed heading breaks every link to it across the site in one go. Same-page
+  links are checked the same way, because a table of contents breaks exactly
+  like this.
+
+  Two guards, because a false positive here would be cheap to produce and
+  expensive to have: a target the crawl never fetched is not judged at all, and
+  a target that declares **no** ids anywhere is a page that builds them after
+  load — a single-page app — so nothing pointing into it is reported either.
+  `#top` needs no element, `#:~:text=` names words rather than an id, and both
+  are dropped before anything is counted. A percent-encoded fragment is matched
+  against the decoded id, the way a browser does.
+
+  Ran clean against jekyllrb.com, 11ty.dev and eslint.org — the check applied
+  on all three and found nothing, which is the result a conservative check
+  should give on sites that get this right.
+
+
 ## [1.41.0] — 2026-09-26
 
 ### Added

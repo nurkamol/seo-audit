@@ -904,6 +904,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | `hreflang` is reciprocal — Google drops one-way pairs | error |
 | Something in the `hreflang` set is an `x-default` | note |
 | Pages carry the schema types `expect` says they should | error |
+| Links to a section inside a page find it — `/guide#installing` resolves even when `installing` was renamed, leaving the reader at the top. Not reported for a target the crawl never fetched, or one whose ids are built after load | warning |
 | No page is an orphan — in the sitemap but linked from nowhere | warning |
 | Orphans are only looked for when the crawl actually saw the site — a run cut short by `--limit`, or with pages that never loaded, says so instead of calling a fragment full of orphans | note |
 | Every page is within four clicks of the homepage, counted over the links actually in the HTML | note |

@@ -5438,3 +5438,71 @@ test('a page that declares its own hreflang keeps it, and a sitemap set says whe
   assert.match(malformed.detail, /declared in the sitemap/,
     'the template it names has no annotation in it — the sitemap does');
 });
+
+// --- links to a place inside a page ------------------------------------------
+// `/guide#installing` still resolves when `installing` is gone: the page loads
+// and the reader is left at the top. Neither page is wrong on its own, which is
+// why it survives a single-page grader and why it is checked across the crawl.
+
+const withBody = (url, body) => ({
+  url,
+  res: { ok: true, status: 200 },
+  doc: parseHtml(`<html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`, url),
+});
+
+test('a link to a section that is not there is reported, with the page that links it', () => {
+  const pages = [
+    withBody('https://x.test/guide/', '<h2 id="installing">Installing</h2>'),
+    withBody('https://x.test/start/', '<a href="/guide/#installing">install</a><a href="/guide/#removing">remove</a>'),
+  ];
+  const found = crossPageChecks(pages, {}).filter((x) => x.id === 'fragment-missing');
+  assert.equal(found.length, 1, 'one row for the page doing the linking, not one per link');
+  assert.match(found[0].detail, /#removing/);
+  assert.ok(!found[0].detail.includes('#installing'), 'the link that resolves is not in it');
+  assert.equal(found[0].url, 'https://x.test/start/');
+});
+
+test('a link to a section of the page it is on is checked the same way', () => {
+  const pages = [withBody('https://x.test/p/', '<h2 id="one">One</h2><a href="#one">a</a><a href="#two">b</a>')];
+  const ids = crossPageChecks(pages, {}).filter((x) => x.id === 'fragment-missing');
+  assert.equal(ids.length, 1);
+  assert.match(ids[0].detail, /#two/);
+});
+
+test('nothing is reported where the answer cannot be known', () => {
+  const quiet = (pages) =>
+    assert.deepEqual(crossPageChecks(pages, {}).filter((x) => x.id === 'fragment-missing'), []);
+
+  // Every link resolves.
+  quiet([
+    withBody('https://x.test/guide/', '<h2 id="installing">x</h2>'),
+    withBody('https://x.test/start/', '<a href="/guide/#installing">go</a>'),
+  ]);
+  // The old <a name> form browsers still honour.
+  quiet([
+    withBody('https://x.test/guide/', '<a name="installing"></a>'),
+    withBody('https://x.test/start/', '<a href="/guide/#installing">go</a>'),
+  ]);
+  // A target the crawl never fetched: unknown, not broken.
+  quiet([withBody('https://x.test/start/', '<a href="/never-crawled/#anything">go</a>')]);
+  // A target that declares no ids at all builds them after load — a single-page
+  // app — and its markup cannot answer. Reporting it would cry wolf on a site
+  // where every one of these links works.
+  quiet([
+    withBody('https://x.test/app/', '<p>built after load</p>'),
+    withBody('https://x.test/start/', '<a href="/app/#section">go</a>'),
+  ]);
+  // #top needs no element, a text fragment names words rather than an id, and
+  // another site's anchors are not this crawl's business.
+  quiet([
+    withBody('https://x.test/guide/', '<h2 id="real">x</h2>'),
+    withBody('https://x.test/start/',
+      '<a href="/guide/#top">t</a><a href="/guide/#:~:text=hello">w</a><a href="https://else.test/p#x">e</a>'),
+  ]);
+  // A percent-encoded fragment is resolved against the decoded id, as a browser
+  // does, so an accented heading is not reported as missing.
+  quiet([
+    withBody('https://x.test/guide/', '<h2 id="caf\u00e9">x</h2>'),
+    withBody('https://x.test/start/', '<a href="/guide/#caf%C3%A9">go</a>'),
+  ]);
+});

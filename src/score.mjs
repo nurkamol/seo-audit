@@ -117,6 +117,11 @@ const CHECKLIST = {
 
   // --- Links ----------------------------------------------------------------
   'broken-link': { worst: 'error', scope: 'page', pass: 'Every internal link resolves' },
+  // `multipage` is not the requirement: a page linking to a section of itself is
+  // checkable on a one-page site. `anchors` is — a run where no crawled page
+  // links to a fragment at all has not passed this, it was never asked.
+  'fragment-missing': { worst: 'warn', scope: 'page', needs: 'anchors',
+    pass: 'Every link to a section finds it' },
   'external-broken': { worst: 'warn', scope: 'page', needs: 'external', pass: 'Every outbound link resolves' },
   'orphan-page': { worst: 'warn', scope: 'page', needs: 'sitemap', pass: 'No page is linked from nowhere' },
   'no-path-from-home': { worst: 'warn', scope: 'page', needs: 'multipage', pass: 'Every page is reachable from the homepage' },
@@ -378,6 +383,7 @@ const round = (n) => (n > 0 && n < 0.1 ? 0.1 : Math.round(n * 10) / 10);
 const WHY_SKIPPED = {
   images: 'No page carries an image.',
   hreflang: 'No page declares hreflang.',
+  anchors: 'No crawled page links to a section inside another crawled page.',
   jsonld: 'No page carries structured data.',
   expect: 'No schema expectations are configured.',
   psi: 'PageSpeed was not asked — run with --psi.',

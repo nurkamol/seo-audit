@@ -173,6 +173,42 @@ export function parseHtml(rawHtml, pageUrl) {
   const origin = new URL(pageUrl).origin;
   const internal = (list) => hrefs(list).filter((h) => h.startsWith(origin));
 
+  // Every id this page defines, plus the old `<a name>` form browsers still
+  // honour. Collected so another page's link to `#installing` can be checked
+  // against what is actually there — the fragment is thrown away everywhere
+  // else in this file, deliberately, because no other check has a use for it.
+  const anchorIds = [
+    ...[...markup.matchAll(/<[a-z][^>]*\bid\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)]
+      .map((m) => m[1].replace(/^['"]|['"]$/g, '')),
+    ...[...markup.matchAll(/<a\b[^>]*\bname\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)]
+      .map((m) => m[1].replace(/^['"]|['"]$/g, '')),
+  ].filter(Boolean);
+
+  // Internal links that name a place *within* a page: `/guide#installing`, and
+  // `#installing` on the page itself. Both are checkable against `anchorIds`
+  // once the crawl holds every page, and both break the same way — a heading
+  // gets renamed and the link still resolves, landing silently at the top.
+  //
+  // Dropped here rather than reported later: `#top` is honoured by browsers
+  // with no element to match, and `#:~:text=` is a text fragment, which names
+  // words rather than an id.
+  const fragmentLinks = anchors
+    .map((tag) => attr(tag, 'href'))
+    .filter((href) => href && !/^(mailto:|tel:|javascript:|data:)/i.test(href) && href.includes('#'))
+    .map((href) => {
+      const whole = href.startsWith('#') ? `${pageUrl.split('#')[0]}${href}` : abs(href);
+      if (!whole?.startsWith(origin)) return null;
+      const [to, ...rest] = whole.split('#');
+      const raw = rest.join('#');
+      if (!raw || raw.toLowerCase() === 'top' || raw.startsWith(':~:')) return null;
+      // A browser resolves a percent-encoded fragment against the decoded id,
+      // so `#caf%C3%A9` finds `id="café"`. Undecodable is taken as written.
+      let id = raw;
+      try { id = decodeURIComponent(raw); } catch { /* as written */ }
+      return { to, id };
+    })
+    .filter(Boolean);
+
   // Anchors paired with the words attached to them. Google reads those words as
   // a description of the destination — they are the one signal a page gets from
   // outside itself — and until now they were parsed and thrown away.
@@ -331,6 +367,8 @@ export function parseHtml(rawHtml, pageUrl) {
       .map((icon) => icon.href)
       .filter((href, i, all) => all.indexOf(href) === i),
     jsonld,
+    // The ids this page offers for anything else to link to.
+    anchorIds: [...new Set(anchorIds)],
     links: {
       internal: [...new Set(internal(anchors))],
       inMain: [...new Set(internal(mainAnchors))],
@@ -344,6 +382,8 @@ export function parseHtml(rawHtml, pageUrl) {
       // a withheld path that leads nowhere new.
       // Every internal link with the words attached to it — see above.
       anchorTexts,
+      // Links that name a place inside a page, kept whole — see above.
+      fragments: fragmentLinks,
       nofollowInternal: [
         ...new Set(
           internal(anchors.filter((t) => /(^|\s)nofollow(\s|$)/i.test(attr(t, 'rel') ?? '')))

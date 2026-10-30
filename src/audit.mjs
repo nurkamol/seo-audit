@@ -692,6 +692,13 @@ export async function audit(target, opts = {}) {
   const applicable = {
     images: some((d) => d.images.length > 0),
     hreflang: some((d) => d.hreflang.length > 0),
+    // A link into a page the crawl holds, pointing at a named place in it.
+    // Both halves are needed: a link to a fragment on a page nobody fetched
+    // cannot be judged, and saying the check passed would be a free point.
+    anchors: (() => {
+      const held = new Set(pages.filter((p) => p.doc && p.res.ok).map((p) => p.url.replace(/\/$/, '')));
+      return some((d) => (d.links?.fragments ?? []).some((l) => held.has(l.to.replace(/\/$/, ''))));
+    })(),
     jsonld: some((d) => d.jsonld.length > 0),
     ogImage: some((d) => Boolean(d.og['og:image'])),
     twitterImage: some((d) => Boolean(d.twitter['twitter:image'])),

@@ -38,6 +38,17 @@ test('the broken internal link is found by the site-wide sweep', () => {
   assert.match(broken[0].detail, /\/gone\//);
 });
 
+test('a link to a section that is not on the target page is found', () => {
+  // The home page links to /about/#team, which exists, and /about/#pricing,
+  // which does not. Both resolve as URLs — only the crawl holding both pages
+  // can tell them apart, which is the whole reason this check is here.
+  const found = result.findings.filter((f) => f.id === 'fragment-missing');
+  assert.equal(found.length, 1, 'one row for the page doing the linking');
+  assert.match(found[0].detail, /#pricing/);
+  assert.ok(!found[0].detail.includes('#team'), 'the anchor that exists is not reported');
+  assert.match(found[0].url, /\/$/, 'reported against the home page, which carries the link');
+});
+
 test('the second h1 on /about/ is reported', () => {
   assert.ok(forUrl('/about/').includes('h1-multiple'));
 });

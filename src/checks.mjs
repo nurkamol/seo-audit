@@ -1282,6 +1282,37 @@ export function crossPageChecks(pages, opts = {}) {
     }
   }
 
+  // --- links to a place inside a page ---------------------------------------
+  // `/guide#installing` resolves perfectly when `installing` is gone: the
+  // browser loads the page and silently stays at the top. Nothing on either
+  // page is wrong on its own, which is why it survives — it is only visible to
+  // something holding the link and the target at the same time, and a renamed
+  // heading breaks every link to it across the site at once.
+  //
+  // Two guards against crying wolf, because a false positive here would be
+  // easy. A target outside the crawl cannot be judged at all. A target that
+  // declares no ids whatsoever is a page whose anchors are built after load —
+  // single-page apps do this — and its ids cannot be read from the markup, so
+  // no link into it is reported either.
+  const docFor = new Map(live.map((p) => [p.url.replace(/\/$/, ''), p.doc]));
+  for (const p of live) {
+    const missing = [];
+    for (const link of p.doc.links?.fragments ?? []) {
+      const target = docFor.get(link.to.replace(/\/$/, ''));
+      if (!target || !target.anchorIds?.length) continue;
+      if (target.anchorIds.includes(link.id)) continue;
+      const where = link.to.replace(/\/$/, '') === p.url.replace(/\/$/, '') ? '' : link.to;
+      missing.push(`${where}#${link.id}`);
+    }
+    if (!missing.length) continue;
+    const shown = [...new Set(missing)].slice(0, 3).join(', ');
+    out.push(f('warn', 'fragment-missing',
+      `${plural(missing.length, 'link')} to a section that is not there`,
+      `${shown}${missing.length > 3 ? `, and ${missing.length - 3} more` : ''} — the page loads and the ` +
+        'reader is left at the top of it. Usually a heading that was renamed, or an id a template stopped ' +
+        'emitting; the link keeps working well enough to go unnoticed.', p.url));
+  }
+
   // hreflang has to point both ways, or Google ignores the pair.
   const byUrl = new Map(live.map((p) => [p.url.replace(/\/$/, ''), p]));
   for (const p of live) {
