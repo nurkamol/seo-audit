@@ -235,6 +235,15 @@ GITHUB_TOKEN=<the token> komac new Nurkamol.SeoAudit \
   --submit
 ```
 
+**Use the manifest schema version winget currently accepts.** The repository
+deprecates older ones and a bot rejects the submission when it meets one — 1.41.0
+went in as `1.12.0`, copied from the 1.38.1 manifests, and was told to move to
+`1.28.0` five weeks later. The version is in `ManifestVersion` and in the
+`$schema` comment of all three files, and the field names have not changed
+between them. The current one is whatever a freshly merged manifest in
+`microsoft/winget-pkgs` carries; komac emits it for itself, so this only bites a
+hand-written submission.
+
 **komac needs a real terminal.** It reads the NSIS script and stops on any
 aborting entry it finds — ours says *"Failed to install WebView2!"*, which is
 the installer's own error path and not a problem — then asks whether to carry
