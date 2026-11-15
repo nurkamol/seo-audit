@@ -24,6 +24,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { parseSignature } from './signature.mjs';
 
 /**
  * One secret, environment first, then `~/.config/seo-audit/.env`.
@@ -36,6 +37,38 @@ import { join } from 'node:path';
  * fallback had therefore never worked, and nothing said so because the only
  * tests it had used a fake API and injected credentials.
  */
+/** Where a host's crawler signature lives, when nobody named a file for it.
+ *
+ *  `~/.config/seo-audit/signatures/<host>.txt` — beside the PageSpeed key and
+ *  outside every repository. One file per host because Shopify ties a
+ *  signature to one domain: `www.` and the bare domain each need their own. A
+ *  file found this way is used by every front end on the machine, which is how
+ *  the window gets a signature without a field for pasting credentials into. */
+export const signaturePath = (host) => join(homedir(), '.config', 'seo-audit', 'signatures', `${host}.txt`);
+
+/** The text of a host's signature file, or null when there is none. */
+export function readSignatureFile(path, read = readFileSync) {
+  try {
+    return read(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** A host's signature, parsed — or `{ error }` naming the file and what is wrong
+ *  with it, or null when there is none. One function for every front end, so
+ *  the command line and the window cannot disagree about which file counts. */
+export function signatureForHost(host, read = readFileSync) {
+  const path = signaturePath(host);
+  const text = readSignatureFile(path, read);
+  if (text === null) return null;
+  try {
+    return parseSignature(text);
+  } catch (err) {
+    return { error: `${path}: ${err.message}` };
+  }
+}
+
 export function readSecret(name, env = process.env, read = readFileSync) {
   if (env[name]) return env[name];
   let text;

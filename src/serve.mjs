@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 
 import { handle } from '../worker/index.mjs';
 import { library } from './library.mjs';
+import { signatureForHost } from './config.mjs';
 
 /** Start the local UI. Returns `{ url, close }`.
  *
@@ -65,6 +66,13 @@ export async function serve({ port = 4321, host = '127.0.0.1', maxPages, allowed
   // right answer for a shared host — keeping strangers' crawls is a thing
   // nobody asked for.
   env.STORE = library();
+
+  // Crawler signatures, the same way: read here, where there is a filesystem,
+  // and handed to the Worker as a function. Per host only — the window audits
+  // whatever is typed into it, so a signature has to be found by the host it
+  // was made for or not at all. Read on each run, so a file saved while the
+  // window is open is used by the next audit without a restart.
+  env.signatureFor = (host) => signatureForHost(host);
 
   const server = createServer(async (incoming, outgoing) => {
     try {

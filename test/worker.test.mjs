@@ -389,6 +389,26 @@ test('a stream carries the progress and then the report', async () => {
   assert.equal(record.opts.limit, 25);
 });
 
+test('a long crawl keeps the stream alive while it waits', async () => {
+  // A strict host asking for a sixty-second pause left this stream silent for
+  // a minute, and the macOS window — reading it through URLSession, which gives
+  // up after sixty idle seconds — reported "The request timed out." on a run
+  // the engine was patiently waiting out.
+  const slow = async (url) => {
+    await new Promise((r) => setTimeout(r, 120));
+    return { findings: [], meta: { origin: new URL(url).origin, pages: 1, requests: 1, ms: 120, date: '2026-11-15', ignored: 0 } };
+  };
+  const res = await handle(
+    get('/stream?url=https://example.com', { token: SECRET }),
+    env({ HEARTBEAT_MS: '20' }),
+    null,
+    { audit: slow, report: () => '<!doctype html>done' },
+  );
+  const body = await read(res);
+  assert.match(body, /^: still working$/m, 'something crosses the connection while the crawl is quiet');
+  assert.match(body, /event: done/, 'and the stream still ends with the report');
+});
+
 test('the report says the certificate was not checked, rather than dropping it', async () => {
   // A hosted report with two checks fewer than the CLI's, and no note saying
   // so, is a report that lies by omission: a missing finding reads exactly

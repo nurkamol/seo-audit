@@ -171,7 +171,7 @@ export function buildSchema(pages, context = {}) {
   }
   if (rateLimited > 0) {
     return refuse(
-      `${plural(rateLimited, 'page')} were never read because the server was rate limiting, so the trails ` +
+      `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so the trails ` +
         'through them cannot be built. Run again with a lower --concurrency.',
     );
   }

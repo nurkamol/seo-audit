@@ -54,7 +54,7 @@ export function rebuild(pages, findings = [], context = {}) {
   }
   if (rateLimited > 0) {
     return refuse(
-      `${plural(rateLimited, 'page')} were never read because the server was rate limiting, so whether they ` +
+      `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so whether they ` +
         'belong in a sitemap is not known. Run again with a lower --concurrency.',
     );
   }

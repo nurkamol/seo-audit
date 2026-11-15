@@ -74,6 +74,7 @@ export const NOT_SCORED = {
   'crawl-rate-limited': 'The server rate-limited the crawl. That is a fact about the run.',
   'sitemap-not-checked': 'The sitemap could not be reached to be read, which says nothing about it.',
   'since-not-usable': 'The sitemap could not answer --since. A refusal, not a fault.',
+  'signature-unusable': 'The crawler signature could not be sent. A fact about this run, not the site.',
 };
 
 const CHECKLIST = {

@@ -12,6 +12,7 @@ import { buildLlms } from './llms.mjs';
 import { buildSchema } from './schema.mjs';
 import { searchConsole } from './console.mjs';
 import { applyIgnores, expectationChecks, matchGlob } from './config.mjs';
+import { signatureState } from './signature.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 import { sectionOf } from './causes.mjs';
 import { rebuild, changedSince } from './sitemap.mjs';
@@ -199,7 +200,25 @@ export function adoptSitemapHreflang(pages, entries = []) {
 
 export async function audit(target, opts = {}) {
   const started = Date.now();
-  const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6, userAgent: opts.userAgent });
+  const fetcher = new Fetcher({
+    concurrency: opts.concurrency ?? 6,
+    userAgent: opts.userAgent,
+    // A pause can last minutes on a strict host. Said as it starts, so a run
+    // that has gone quiet reads as waiting rather than as stuck — and so the
+    // event stream a window is reading has something on it.
+    onWait: ({ seconds, status }) =>
+      opts.onProgress?.({
+        phase: 'wait',
+        detail: `HTTP ${status} — the site asked for a slower crawl, waiting ${seconds}s`,
+      }),
+    onPace: ({ platform }) =>
+      opts.onProgress?.({
+        phase: 'pace',
+        detail: platform === 'shopify'
+          ? 'Shopify store — one page at a time, a second apart, because Shopify throttles crawlers'
+          : `${platform} — crawling one page at a time`,
+      }),
+  });
 
   const url = new URL(target);
   const findings = [];
@@ -217,6 +236,48 @@ export async function audit(target, opts = {}) {
   // Referrer-Policy verdict came from a redirect's headers. Three findings,
   // none of them true, on any site that lives at www.
   let origin = url.origin;
+
+  // The store's own permission for this crawl, when there is one. Looked up by
+  // host and adopted for exactly one origin; see signature.mjs for why. A
+  // signature that exists but cannot be used says so, because a crawl that
+  // went out unsigned looks exactly like one that was refused while signed.
+  const trySign = (at) => {
+    const found = opts.signatureFor?.(new URL(at).host) ?? null;
+    if (!found) return null;
+    if (found.error) {
+      findings.push({
+        level: 'warn',
+        id: 'signature-unusable',
+        title: 'The crawler signature could not be used',
+        detail: `${found.error} This run went ahead without it.`,
+        url: at,
+      });
+      return null;
+    }
+    const state = signatureState(found);
+    if (state.expired) {
+      findings.push({
+        level: 'warn',
+        id: 'signature-unusable',
+        title: 'The crawler signature has expired',
+        detail:
+          `It stopped working on ${found.expires.toISOString().slice(0, 10)}. Shopify signatures last at most ` +
+          'three months and cannot be renewed — create a new one under Online Store → Preferences → ' +
+          'Crawler access. This run went ahead without it.',
+        url: at,
+      });
+      return null;
+    }
+    fetcher.sign({ origin: at, headers: found.headers });
+    opts.onProgress?.({
+      phase: 'sign',
+      detail: `sending a crawler signature to ${new URL(at).origin} and nowhere else` +
+        (state.days !== null ? ` — it expires in ${plural(state.days, 'day')}` : ''),
+    });
+    return { origin: new URL(at).origin, expires: found.expires };
+  };
+  let signed = trySign(origin);
+
   const landing = await fetcher.chain(`${url.origin}/`);
   if (landing.final.ok) {
     const settled = new URL(landing.final.url).origin;
@@ -233,6 +294,23 @@ export async function audit(target, opts = {}) {
         url: origin,
       });
       opts.onNote?.(`${origin} redirects to ${settled} — auditing there`);
+      // The signature follows the crawl, or does not: Shopify ties one to a
+      // single domain, so one made for the bare domain does nothing on www.
+      const before = signed;
+      signed = trySign(settled);
+      if (!signed) fetcher.sign(null);
+      if (before && !signed && !findings.some((f) => f.id === 'signature-unusable' && f.url === settled)) {
+        findings.push({
+          level: 'warn',
+          id: 'signature-unusable',
+          title: 'The crawler signature is for the host this one redirects away from',
+          detail:
+            `There is a signature for ${new URL(origin).host}, but it redirects to ${new URL(settled).host}, ` +
+            'which is where the crawl happened. Shopify ties a signature to one domain, so it was not sent. ' +
+            `Create one for ${new URL(settled).host} — the www and bare domains each need their own.`,
+          url: settled,
+        });
+      }
       origin = settled;
     }
   }
@@ -568,10 +646,23 @@ export async function audit(target, opts = {}) {
       id: 'rate-limit-slowed',
       title: 'The crawl was slowed down to get through',
       detail:
-        `The server answered HTTP 429 — asking for a slower crawl — ${plural(fetcher.rateLimited, 'time')}, so ` +
-        `requests were paused and the concurrency came down to ${fetcher.concurrency}. This is not a ` +
-        'finding about the site — it explains the elapsed time, and any page reported as rate-limited ' +
-        'was not read at all. Pass a lower --concurrency to get through cleanly.',
+        `The server asked for a slower crawl ${plural(fetcher.rateLimited, 'time')}, so requests were ` +
+        `paused for as long as it asked and the concurrency came down to ${fetcher.concurrency}. This is not ` +
+        'a finding about the site — it explains the elapsed time, and any page reported as rate-limited ' +
+        'was not read at all. ' +
+        // On Shopify a lower --concurrency is advice that cannot help: the crawl
+        // is already at one. Since 30 May 2026 Shopify limits unsigned crawlers
+        // most strictly, and the sanctioned way past that is a signature the
+        // store creates for its own audits.
+        (fetcher.platform === 'shopify' && fetcher.signed
+          ? 'A crawler signature was sent and the store still refused. Shopify says that means it is not ' +
+            'valid here: expired, made for the other one of the www and bare domains, or not copied whole.'
+          : fetcher.platform === 'shopify'
+            ? 'This is a Shopify store, and Shopify limits unsigned crawlers strictly however slowly they ' +
+              'go. If the store is yours, a crawler signature lifts that: create one under Online Store → ' +
+              `Preferences → Crawler access and save it as ~/.config/seo-audit/signatures/${new URL(origin).host}.txt, ` +
+              'or pass it with --signature <file>.'
+            : 'Pass a lower --concurrency to get through cleanly.'),
       url: origin,
     });
   }
@@ -677,7 +768,7 @@ export async function audit(target, opts = {}) {
     sitemap = rebuild(pages, kept, {
       entries,
       truncated,
-      rateLimited: kept.filter((f) => f.id === 'rate-limited').length,
+      rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length,
       allowed: (url) => robotsVerdict(groups, new URL(url).pathname).allowed,
     });
   }
@@ -733,14 +824,14 @@ export async function audit(target, opts = {}) {
   // same rule as the sitemap: nothing invented, and a refusal rather than a
   // file built from a fraction of the site.
   const llms = opts.writeLlms
-    ? buildLlms(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited').length })
+    ? buildLlms(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length })
     : null;
 
   // The structured data this site could add, from what it already says and
   // nothing else. Same refusals, and a fourth rule of its own: every value is
   // a string this crawl read off this site.
   const schema = opts.writeSchema
-    ? buildSchema(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited').length })
+    ? buildSchema(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length })
     : null;
 
   return {
@@ -762,6 +853,9 @@ export async function audit(target, opts = {}) {
       ms: Date.now() - started,
       date: new Date().toISOString().slice(0, 10),
       sitemap: source,
+      // Whether the crawl carried the store's signature, and until when. The
+      // values themselves never leave the fetcher.
+      ...(signed && fetcher.signed ? { signed: { expires: signed.expires?.toISOString() ?? null } } : {}),
       // The inventory behind the host findings. Absent unless --hosts asked
       // for it, so a report that does not mention other hosts is one that was
       // never asked to look rather than one that looked and found none.
@@ -784,7 +878,25 @@ export async function audit(target, opts = {}) {
  *  different crawl from the one that runs is worse than no preview. */
 export async function preview(target, opts = {}) {
   const started = Date.now();
-  const fetcher = new Fetcher({ concurrency: opts.concurrency ?? 6, userAgent: opts.userAgent });
+  const fetcher = new Fetcher({
+    concurrency: opts.concurrency ?? 6,
+    userAgent: opts.userAgent,
+    // A pause can last minutes on a strict host. Said as it starts, so a run
+    // that has gone quiet reads as waiting rather than as stuck — and so the
+    // event stream a window is reading has something on it.
+    onWait: ({ seconds, status }) =>
+      opts.onProgress?.({
+        phase: 'wait',
+        detail: `HTTP ${status} — the site asked for a slower crawl, waiting ${seconds}s`,
+      }),
+    onPace: ({ platform }) =>
+      opts.onProgress?.({
+        phase: 'pace',
+        detail: platform === 'shopify'
+          ? 'Shopify store — one page at a time, a second apart, because Shopify throttles crawlers'
+          : `${platform} — crawling one page at a time`,
+      }),
+  });
   const asked = new URL(target);
 
   let origin = asked.origin;

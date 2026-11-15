@@ -13,6 +13,8 @@ import { describeLlms } from '../src/llms.mjs';
 import { describeSchema } from '../src/schema.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 import { userAgentFor, BROWSER_NAMES, OS_NAMES, thisPlatform } from '../src/agents.mjs';
+import { parseSignature } from '../src/signature.mjs';
+import { readSignatureFile, signatureForHost } from '../src/config.mjs';
 
 const HELP = `
   seo-audit — crawl a site's sitemap and check every page
@@ -75,6 +77,12 @@ const HELP = `
     --limit <n>        maximum pages to check (default 200)
     --concurrency <n>  parallel requests (default 6)
     --sitemap <url>    sitemap location, if not declared in robots.txt
+    --signature <file> a crawler signature from the store's own Shopify admin
+                       (Online Store → Preferences → Crawler access): the
+                       Signature-Input and Signature values, one per line with
+                       their names. Sent to the audited host and nowhere else.
+                       Without this, ~/.config/seo-audit/signatures/<host>.txt
+                       is used when it exists
     --redirects <file> a migration's redirect map (Netlify _redirects shape:
                        "/old /new 301" per line). Every old URL is asked for,
                        and what actually happens is reported
@@ -186,6 +194,7 @@ function parseArgs(argv) {
     else if (arg === '--limit') opts.limit = Number(value());
     else if (arg === '--concurrency') opts.concurrency = Number(value());
     else if (arg === '--sitemap') opts.sitemap = value();
+    else if (arg === '--signature') opts.signature = value();
     else if (arg === '--redirects') opts.redirects = value();
     else if (arg === '--check-external') opts.checkExternal = true;
     else if (arg === '--hosts') opts.hosts = true;
@@ -287,6 +296,32 @@ if (opts.compareAs) {
   opts.compareAs = { ua, label: opts.compareAs };
 }
 
+// The store's permission for this crawl. A file named on the command line is
+// read now and refused loudly: a signature that silently failed to load would
+// send the run out unsigned, and an unsigned Shopify crawl being refused looks
+// exactly like a signed one being refused. Otherwise each host is looked up
+// where every front end on this machine looks, and a broken file there is
+// reported in the run rather than stopping it.
+if (opts.signature) {
+  const text = readSignatureFile(opts.signature);
+  if (text === null) {
+    console.error(`  --signature: cannot read ${opts.signature}`);
+    process.exit(2);
+  }
+  let parsed;
+  try {
+    parsed = parseSignature(text);
+  } catch (err) {
+    console.error(`  --signature: ${err.message}`);
+    process.exit(2);
+  }
+  opts.signatureFor = () => parsed;
+  opts.explicitSignature = true;
+} else {
+  opts.signatureFor = (host) => signatureForHost(host);
+}
+delete opts.signature;
+
 if (opts.failOn === 'new' && !opts.baseline) {
   console.error('  --fail-on new needs --baseline <file> to compare against.');
   process.exit(2);
@@ -317,6 +352,20 @@ const live = (origin) =>
 // One site or twenty: the same options, resolved the same way. A site entry in
 // the config may carry its own overrides, which land on top of the shared ones.
 let sites = resolveSites(cli.targets ?? [], file);
+
+// A named signature file answers for whichever host is audited, which is right
+// for one store and wrong for anything that audits several: a portfolio would
+// send one store's credential to every site in it, and the local server to
+// every site anybody types into the window. Per-host files have no such
+// problem — each is looked up by the host it is named for.
+if (opts.explicitSignature && (sites.length > 1 || opts.serve !== undefined)) {
+  console.error(
+    '  --signature is for one store. For several, or for the window, save each as\n' +
+      '  ~/.config/seo-audit/signatures/<host>.txt and it is used for that host only.',
+  );
+  process.exit(2);
+}
+delete opts.explicitSignature;
 
 // The runs kept on this machine. Also a different program: it reads the same
 // folder the window and `--serve` read, and crawls nothing.

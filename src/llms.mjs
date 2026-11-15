@@ -61,7 +61,7 @@ export function buildLlms(pages, context = {}) {
   }
   if (rateLimited > 0) {
     return refuse(
-      `${plural(rateLimited, 'page')} were never read because the server was rate limiting, so what belongs ` +
+      `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so what belongs ` +
         'in this file is not known. Run again with a lower --concurrency.',
     );
   }

@@ -15,6 +15,7 @@ import { linkGraph, key as graphKey } from './graph.mjs';
 import { attr, bodyKind, stripMarkupInAttributes } from './parse.mjs';
 import { cluster } from './dupes.mjs';
 import { plural } from './text.mjs';
+import { throttled } from './http.mjs';
 
 // Defaults, overridable per site under `limits` in the config file. A
 // documentation site and a shop disagree about what "thin" means, and the tool
@@ -267,10 +268,28 @@ export function pageChecks(page, limits = DEFAULT_LIMITS) {
   // A rate limit is the server describing the crawl, not the page. Reported at
   // info and never as a page that failed, because those two look identical in
   // a report and only one of them is the site's problem.
-  if (res.status === 429) {
+  // Bot protection answering instead of the page. The same reasoning as a rate
+  // limit, and more so: visitors and Google are served this page normally, so
+  // "did not return 200" would be a sentence about the site that is false.
+  if (res.blocked) {
+    out.push(f('info', 'crawler-blocked', 'Page was not checked — bot protection refused the crawler',
+      `HTTP ${res.status} and ${res.blocked === 'challenge'
+        ? 'a challenge asking the client to prove it is a browser'
+        : 'a refusal'} instead of the page. Nothing on it was read, so its absence from the rest of this ` +
+        'report means nothing either. If the site is yours, its bot protection can usually be told to let an ' +
+        'audit through — on Shopify that is a crawler signature, under Online Store → Preferences → Crawler ' +
+        'access.', url));
+    return out;
+  }
+  if (throttled(res)) {
     out.push(f('info', 'rate-limited', 'Page was not checked — the server is rate limiting',
-      'HTTP 429, after retries and a slower crawl. Nothing on this page was read, so its absence from ' +
-        'the rest of this report means nothing either. Run again with a lower --concurrency.', url));
+      res.gaveUp
+        ? 'Not asked: the host had refused the crawl several times in a row, so it stopped asking rather ' +
+          'than wait out a limit that was not lifting. Nothing on this page was read, so its absence from ' +
+          'the rest of this report means nothing either.'
+        : `HTTP ${res.status}, after waiting as long as the server asked and crawling one page at a time. ` +
+          'Nothing on this page was read, so its absence from the rest of this report means nothing either.',
+      url));
     return out;
   }
   if (!res.ok) {

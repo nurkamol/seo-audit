@@ -1319,10 +1319,27 @@ export async function handle(request, env, ctx, deps = {}) {
     const send = (event, data) =>
       writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
 
+    // A comment line while the crawl runs. EventSource ignores it; what it is
+    // for is the connection carrying it. The macOS window reads this stream
+    // through URLSession, which gives up after sixty seconds without a byte —
+    // and a strict host asking for a sixty-second pause produced exactly that
+    // silence, so a run the engine was patiently waiting out ended in the
+    // window as "The request timed out." Fifteen seconds is well inside every
+    // client's idle limit. HEARTBEAT_MS exists so a test does not wait for it.
+    const heartbeat = setInterval(() => {
+      writer.write(encoder.encode(': still working\n\n')).catch(() => {});
+    }, Number(env.HEARTBEAT_MS) || 15000);
+
     const origin = new URL(target.url).origin;
     const work = (async () => {
       try {
         const { findings, meta, sitemap, llms, schema, score } = await run(target.url, {
+          // A store's crawler signatures, looked up by host from files on this
+          // machine. Handed in by the local server; a deployed Worker has no
+          // files and no business holding anybody's credentials, so it is
+          // never given this and crawls unsigned. Never a query parameter: a
+          // credential in a URL ends up in logs and history.
+          signatureFor: env.signatureFor,
           limit: pageLimit(url.searchParams.get('limit'), env),
           concurrency: crawlConcurrency(url.searchParams.get('concurrency'), env),
           checkExternal: url.searchParams.get('external') === '1',
@@ -1407,6 +1424,7 @@ export async function handle(request, env, ctx, deps = {}) {
       } catch (err) {
         await send('failed', `The audit stopped: ${err.message}`);
       } finally {
+        clearInterval(heartbeat);
         await writer.close();
       }
     })();

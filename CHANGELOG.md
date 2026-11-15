@@ -5,7 +5,90 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A Shopify store's bot protection was reported as the store being broken.**
+  Since 30 May 2026 Shopify gives unsigned crawlers its strictest limits, and a
+  product page this tool asked for came back `403`, from Cloudflare, titled
+  "Access denied". That went through the ordinary check as *error: Page did not
+  return 200* — a sentence about a page every visitor and Google are served
+  normally. Bot protection is now recognised by its own evidence and reported
+  as **not checked** (`crawler-blocked`): Cloudflare's documented
+  `cf-mitigated: challenge` header, Shopify's "Your connection needs to be
+  verified" interstitial, a Cloudflare "Access denied" or "you have been
+  blocked" page, and Shopify's `430` Security Rejection. A site's own `403`
+  without those is still a finding. A `200` is never classified from its body,
+  because Cloudflare puts challenge scripts into ordinary pages on sites
+  running bot detection, and skipping those would hide real pages.
+
+  The corrected sitemap, llms.txt and structured data now refuse when pages
+  were blocked, as they already did when pages were rate limited. Without that,
+  the sitemap — which leaves out anything that did not answer 200 — would have
+  been written with every blocked product deleted from it.
+
+- **It came back too soon after a `429`.** Shopify now sends `Retry-After: 60`
+  (body `local_rate_limited`) and this capped every wait at 30 seconds, which
+  only guaranteed being refused again — the comment beside the cap said
+  Shopify sent no header at all, which stopped being true. Retry-After is now a
+  minimum: honoured in full, doubled if a request after it is refused too,
+  capped at five minutes.
+
+- **A throttled crawl spent its retries in a single second, then gave up.** A
+  retry ran inside the slot it already held, so after a pause every request in
+  flight retried at once and was refused at once, and after twenty refusals in
+  the whole run every remaining page was handed back unread. Now a refusal
+  drops the concurrency to one and spaces request starts a second apart, which
+  is what actually keeps retries from leaving together; being asked to wait no
+  longer uses up a page's ordinary retries; and the crawl stops asking a host
+  only after four refusals **in a row**, at which point the rest of its pages
+  report themselves as not checked straight away, so a run ends with what it
+  read instead of timing out with nothing.
+
+  A Shopify store is crawled one page at a time, a second apart, from the first
+  response that says it is Shopify — the home page and the sitemaps are
+  answered normally, so this happens before the product pages are asked for.
+  When a Shopify crawl is still refused, the report says the honest thing:
+  Shopify limits unsigned crawlers however slowly they go, and the store's
+  owner can lift that with a crawler signature (Online Store → Preferences →
+  Crawler access), which this tool cannot send yet. It no longer advises a
+  lower `--concurrency` that is already one.
+
+- **The macOS window said "The request timed out." on a run that was only
+  waiting.** It reads the engine's progress through `URLSession`, which gives up
+  after sixty seconds without a byte, and the engine sent nothing while it sat
+  out a sixty-second pause. The event stream now carries a heartbeat every
+  fifteen seconds, and every pause is announced as it starts — "the site asked
+  for a slower crawl, waiting 60s" — so a quiet run reads as waiting in every
+  front end rather than as stuck in one.
+
 ### Added
+- **A Shopify store's owner can let its own audit through.** Since 30 May 2026
+  Shopify gives unsigned crawlers its strictest limits, and slowing down does
+  not get a full product crawl past them. The sanctioned way is Web Bot Auth: a
+  signature the owner creates under Online Store → Preferences → Crawler
+  access. Save its two values as `~/.config/seo-audit/signatures/<host>.txt`
+  and every front end on the machine uses it for that host — the window
+  included, without a field for pasting credentials into — or name a file for
+  one run with `--signature`. The Action takes it as a `signature` input, from a
+  secret, written to a file only the runner can read and deleted afterwards.
+
+  It is a credential and is handled as one. It goes to the one origin it was
+  made for and nowhere else: not to outbound links, the CDN, the same host over
+  `http`, or the bare domain when it was made for `www.`. It never appears in a
+  report, a kept run or a progress line; the report records only that the crawl
+  was signed and until when. An expired signature is not sent and the run says
+  so; one made for the host a store redirects away from is not sent either, and
+  the run says that too, because a crawl that went out unsigned looks exactly
+  like a signed one being refused. A named `--signature` file is refused for a
+  portfolio or `--serve`, where it would reach every site audited. The file
+  holds the three signature headers and nothing else — this is not a way to send
+  arbitrary headers.
+
+  A signed crawl is not slowed down up front the way an unsigned Shopify crawl
+  is, because the store has asked for it and Shopify gives signed traffic
+  higher limits; every back-off still applies the moment anything is refused.
+  The crawler still sends its own user agent: a signature is permission, not a
+  disguise.
+
 - **Links to a section inside a page are checked against what is there.**
   `/guide#installing` resolves perfectly when `installing` has been renamed:
   the page loads and the reader is left at the top of it, having asked for

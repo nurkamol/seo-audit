@@ -16,13 +16,24 @@ export async function startFixtureSite({
   // Paths that answer 429 the first N times they are asked for, so a test can
   // prove the crawler slows down and comes back rather than reporting the site.
   rateLimit = {},
-  // Seconds to ask for in Retry-After. Shopify sends none, which is the case
-  // the default backoff exists for.
+  // Seconds to ask for in Retry-After. Null sends none, which is the case the
+  // default backoff exists for. Shopify used to send none and now sends 60.
   retryAfter = null,
+  // Paths answered the way bot protection answers a crawler: 403, from
+  // Cloudflare, with an "Access denied" page — what a Shopify store sent this
+  // tool in November 2026 — instead of the page itself.
+  blocked = [],
+  // Called with every request, so a test can see what the crawler sent.
+  onRequest = null,
 } = {}) {
   const seen = new Map();
   const server = createServer((req, res) => {
     const host = req.headers.host;
+    onRequest?.(req);
+    if (blocked.includes(req.url)) {
+      res.writeHead(403, { 'content-type': 'text/html; charset=UTF-8', server: 'cloudflare' });
+      return res.end('<!doctype html><html><head><title>Access denied</title></head><body>Access denied</body></html>');
+    }
     const limited = rateLimit[req.url];
     if (limited !== undefined) {
       const so_far = seen.get(req.url) ?? 0;

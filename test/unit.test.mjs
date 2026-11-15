@@ -21,7 +21,9 @@ import {
 import { parseRobots, robotsVerdict } from '../src/robots.mjs';
 import { parseRedirectMap, redirectChecks } from '../src/redirects.mjs';
 import { audit } from '../src/audit.mjs';
-import { Fetcher } from '../src/http.mjs';
+import { Fetcher, blockedBy, waitFor } from '../src/http.mjs';
+import { parseSignature, signatureState, SIGNATURE_AGENT } from '../src/signature.mjs';
+import { signatureForHost } from '../src/config.mjs';
 import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
 import { plural } from '../src/text.mjs';
@@ -1019,9 +1021,12 @@ test('a 429 is waited out and retried, not reported', async () => {
     const res = await fetcher.get(`${site.origin}/about/`);
     assert.equal(res.status, 200, 'the second attempt should have been let through');
     assert.equal(fetcher.rateLimited, 1);
-    // The concurrency stays down: retrying a rate limit at the speed that
-    // caused it just spends the budget again.
-    assert.equal(fetcher.concurrency, 3);
+    // The concurrency comes down to one and stays there, and starts are spaced
+    // from then on: retrying a rate limit at the speed that caused it just
+    // spends the budget again. It used to halve, which left the requests
+    // already in flight to retry together and be refused together.
+    assert.equal(fetcher.concurrency, 1);
+    assert.ok(fetcher.interval >= 1000, 'requests are spaced after a refusal');
   } finally {
     await site.stop();
   }
@@ -1056,6 +1061,221 @@ test('Retry-After is believed where it is sent', async () => {
   } finally {
     await site.stop();
   }
+});
+
+test('Retry-After is a minimum: honoured in full, then doubled if it was not enough', () => {
+  // Shopify asks for 60 seconds. This used to cap the wait at 30, which only
+  // guaranteed being refused again; and a request made at 75 seconds can still
+  // be refused, so a refusal after a wait asks for a longer one.
+  assert.equal(waitFor('60', 1), 60);
+  assert.equal(waitFor('60', 2), 120);
+  assert.equal(waitFor('60', 4), 300, 'capped at five minutes');
+  assert.equal(waitFor('3600', 1), 300, 'an hour is asking for a different tool');
+  // Without the header the concurrency does most of the work.
+  assert.deepEqual([1, 2, 3, 5].map((n) => waitFor(null, n)), [2, 4, 8, 8]);
+});
+
+// Bot protection answering instead of the page. A Shopify store sent this tool
+// exactly this in November 2026: 403, server: cloudflare, "Access denied".
+const headersOf = (o) => new Headers(o);
+
+test('bot protection is recognised by its own evidence, and only by that', () => {
+  const denied = '<!doctype html><html><head><title>Access denied</title></head><body>x</body></html>';
+  assert.equal(blockedBy(403, headersOf({ server: 'cloudflare' }), denied), 'denied');
+  assert.equal(blockedBy(200, headersOf({ 'cf-mitigated': 'challenge' }), '<html></html>'), 'challenge',
+    "Cloudflare's documented marker counts whatever the status");
+  assert.equal(blockedBy(403, headersOf({}), '<p>Your connection needs to be verified before you can proceed</p>'),
+    'challenge', "Shopify's own interstitial");
+  assert.equal(blockedBy(503, headersOf({}), '<title>Just a moment...</title>'), 'challenge');
+  assert.equal(blockedBy(430, headersOf({}), ''), 'denied', "Shopify's Security Rejection");
+
+  // A site's own 403 is a real finding, not bot protection.
+  assert.equal(blockedBy(403, headersOf({ server: 'nginx' }), '<title>Forbidden</title>'), null);
+  assert.equal(blockedBy(403, headersOf({ server: 'cloudflare' }), '<title>Members only</title>'), null);
+  // Cloudflare puts challenge-platform scripts into ordinary pages on sites
+  // running bot detection. Reading a 200 by its body would skip real pages.
+  assert.equal(
+    blockedBy(200, headersOf({ server: 'cloudflare' }),
+      '<title>Selenite tower</title><script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>'),
+    null,
+  );
+});
+
+test('a page bot protection refused is not checked, and is never a page that failed', () => {
+  const blocked = {
+    url: 'https://x.test/products/a', doc: null,
+    res: { status: 403, ok: false, blocked: 'denied', headers: new Headers() },
+  };
+  const found = pageChecks(blocked);
+  assert.deepEqual(ids(found), ['crawler-blocked']);
+  assert.equal(found[0].level, 'info');
+
+  // A genuine 403 is still reported as one.
+  const forbidden = { url: 'https://x.test/a', doc: null, res: { status: 403, ok: false, headers: new Headers() } };
+  assert.deepEqual(ids(pageChecks(forbidden)), ['page-status']);
+});
+
+// A stand-in for fetch, for the cases a fixture server cannot produce cheaply:
+// a header saying the site is Shopify, and a host that never stops refusing.
+const withFetch = async (respond, fn) => {
+  const real = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => { calls.push(String(url)); return respond(String(url)); };
+  try { return await fn(calls); } finally { globalThis.fetch = real; }
+};
+const noWait = async () => {};
+
+test('a Shopify store is crawled one page at a time from its first response', async () => {
+  const paced = [];
+  await withFetch(
+    () => new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html', 'powered-by': 'Shopify' } }),
+    async () => {
+      const fetcher = new Fetcher({ concurrency: 6, sleep: noWait, onPace: (e) => paced.push(e) });
+      await fetcher.get('https://store.test/');
+      assert.equal(fetcher.platform, 'shopify');
+      assert.equal(fetcher.concurrency, 1, 'six at once is refused nearly every time');
+      assert.ok(fetcher.interval >= 1000);
+      assert.deepEqual(paced, [{ platform: 'shopify' }], 'said once, so a front end can explain the pace');
+    },
+  );
+  // Anything else keeps its concurrency until it asks for less.
+  await withFetch(
+    () => new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } }),
+    async () => {
+      const fetcher = new Fetcher({ concurrency: 6, sleep: noWait });
+      await fetcher.get('https://plain.test/');
+      assert.equal(fetcher.platform, null);
+      assert.equal(fetcher.concurrency, 6);
+    },
+  );
+});
+
+test('a host that keeps refusing is given up on, so the run ends instead of timing out', async () => {
+  const waits = [];
+  await withFetch(
+    () => new Response('local_rate_limited', { status: 429, headers: { 'content-type': 'text/plain', 'retry-after': '60' } }),
+    async (calls) => {
+      const fetcher = new Fetcher({ sleep: noWait, onWait: (e) => waits.push(e.seconds) });
+      const first = await fetcher.get('https://store.test/products/a');
+      assert.equal(first.status, 429);
+      assert.deepEqual(waits, [60, 120, 240, 300], 'each wait honoured, then doubled, then capped');
+      assert.equal(calls.length, 4);
+
+      // Every page after that answers for itself, without a request and
+      // without another five minutes of waiting.
+      const next = await fetcher.get('https://store.test/products/b');
+      assert.equal(next.gaveUp, true);
+      assert.equal(calls.length, 4, 'the host was not asked again');
+      const found = pageChecks({ url: next.url, res: next, doc: null });
+      assert.deepEqual(ids(found), ['rate-limited']);
+      assert.match(found[0].detail, /stopped asking/);
+
+      // Another host is not punished for this one.
+      assert.equal(fetcher.givenUp.has('elsewhere.test'), false);
+    },
+  );
+});
+
+test('one real answer between refusals resets the count', async () => {
+  let n = 0;
+  await withFetch(
+    () => (++n % 2
+      ? new Response('slow down', { status: 429, headers: { 'content-type': 'text/plain' } })
+      : new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } })),
+    async () => {
+      const fetcher = new Fetcher({ sleep: noWait });
+      for (const p of ['a', 'b', 'c', 'd', 'e']) {
+        const res = await fetcher.get(`https://x.test/${p}`);
+        assert.equal(res.status, 200, `${p} got through on its second try`);
+      }
+      assert.equal(fetcher.givenUp.size, 0, 'a host that keeps answering is never given up on');
+    },
+  );
+});
+
+// --- crawler signatures ----------------------------------------------------
+// The store owner's own permission for a crawl: two values copied from the
+// Shopify admin, sent unchanged for up to three months. A credential, so the
+// tests that matter most here are about where it does *not* go.
+
+const inDays = (d) => Math.floor(Date.now() / 1000) + d * 86400;
+const signatureFile = (expires = inDays(30)) =>
+  '# Maison — crawler access, made 2026-11-15\n' +
+  `Signature-Input: sig1=("@authority" "signature-agent");created=${inDays(-1)};expires=${expires};keyid="k1";alg="ed25519";tag="web-bot-auth"\n` +
+  'Signature: sig1=:c2VjcmV0LXNpZ25hdHVyZS12YWx1ZQ==:\n';
+
+test('a signature file is read as the admin gives it, and its expiry is known', () => {
+  const sig = parseSignature(signatureFile());
+  assert.match(sig.headers['Signature-Input'], /^sig1=\(/);
+  assert.equal(sig.headers.Signature, 'sig1=:c2VjcmV0LXNpZ25hdHVyZS12YWx1ZQ==:');
+  assert.equal(sig.headers['Signature-Agent'], SIGNATURE_AGENT, 'the fixed third header is supplied');
+  assert.equal(SIGNATURE_AGENT, '"https://shopify.com"', 'quotes included, as Shopify documents it');
+  const state = signatureState(sig);
+  assert.equal(state.expired, false);
+  assert.ok(state.days >= 29 && state.days <= 30);
+
+  assert.equal(signatureState(parseSignature(signatureFile(inDays(-2)))).expired, true);
+});
+
+test('a signature that was copied wrong is refused with a sentence, never sent half-made', () => {
+  assert.throws(() => parseSignature('Signature: sig1=:YQ==:\n'), /no Signature-Input/);
+  assert.throws(() => parseSignature('Signature-Input: sig1=("@authority")\n'), /no Signature/);
+  assert.throws(() => parseSignature('Cookie: session=1\nSignature: sig1=:YQ==:\n'), /not a line this file can hold/,
+    'only the three signature headers — this is not a way to send arbitrary headers');
+  assert.throws(() => parseSignature('Signature-Input: (cut off\nSignature: sig1=:YQ==:\n'), /copied whole/);
+  assert.throws(() => parseSignature('Signature-Input: sig1=("@authority")\nSignature: sig1=:YQ=\n'), /copied whole/);
+});
+
+test('a host with no signature file has none, and a broken one says which file', () => {
+  const missing = () => { throw new Error('ENOENT'); };
+  assert.equal(signatureForHost('www.store.test', missing), null);
+  const broken = signatureForHost('www.store.test', () => 'Signature: nope');
+  assert.match(broken.error, /signatures\/www\.store\.test\.txt/);
+  const good = signatureForHost('www.store.test', () => signatureFile());
+  assert.ok(good.headers.Signature);
+});
+
+test('a signature is sent to the store it was made for and to nothing else', async () => {
+  const seen = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    seen.push({ url: String(url), headers: init.headers });
+    return new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  };
+  try {
+    const fetcher = new Fetcher({ sleep: async () => {} });
+    fetcher.sign({ origin: 'https://www.store.test', headers: parseSignature(signatureFile()).headers });
+    await fetcher.get('https://www.store.test/products/a');
+    await fetcher.get('https://store.test/');                 // the bare domain is another origin
+    await fetcher.get('https://cdn.shopify.test/image.jpg');  // so is everything it links to
+    await fetcher.get('http://www.store.test/');              // and so is the same host over http
+
+    const signed = seen.filter((r) => r.headers.Signature);
+    assert.deepEqual(signed.map((r) => r.url), ['https://www.store.test/products/a']);
+    assert.equal(signed[0].headers['Signature-Agent'], '"https://shopify.com"');
+    assert.ok(seen.every((r) => r.headers['User-Agent'].startsWith('seo-audit')),
+      'the crawler still says what it is — a signature is permission, not a disguise');
+
+    fetcher.sign(null);
+    await fetcher.get('https://www.store.test/products/b');
+    assert.equal(seen.at(-1).headers.Signature, undefined, 'and it can be withdrawn');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('a signed Shopify crawl is not slowed down before anything is refused', async () => {
+  await withFetch(
+    () => new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html', 'powered-by': 'Shopify' } }),
+    async () => {
+      const fetcher = new Fetcher({ concurrency: 4, sleep: noWait });
+      fetcher.sign({ origin: 'https://store.test', headers: parseSignature(signatureFile()).headers });
+      await fetcher.get('https://store.test/');
+      assert.equal(fetcher.platform, 'shopify');
+      assert.equal(fetcher.concurrency, 4, 'Shopify gives signed crawls higher limits');
+      assert.equal(fetcher.interval, 0);
+    },
+  );
 });
 
 // --- pagination -----------------------------------------------------------

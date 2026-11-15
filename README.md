@@ -408,6 +408,45 @@ and nothing here can know that. They are close enough for a server deciding
 whether to answer, and `--user-agent` still takes a literal string for anything
 that has to be exact. It outranks `--browser` when both are given.
 
+### Shopify stores
+
+Since 30 May 2026 Shopify gives crawlers it cannot identify its strictest
+limits, and how a crawl behaves does not get it through: one request a second
+is still refused. A run against a Shopify store slows itself to one page at a
+time from the first response that says it is Shopify, waits as long as it is
+asked, and reports what it could not read as **not checked** — never as a
+broken page — but on most stores that still leaves most of the products unread.
+
+The way through is the store's own permission. If the store is yours:
+
+1. In the Shopify admin, **Online Store → Preferences → Crawler access → Create
+   signature**. Pick the domain the store is actually served from — `www.` and
+   the bare domain each need their own — and a validity of up to three months.
+2. Copy the two values into a file, each on a line with its name:
+
+   ```
+   Signature-Input: sig1=("@authority" "signature-agent");created=…;expires=…;keyid="…";tag="web-bot-auth"
+   Signature: sig1=:…:
+   ```
+
+3. Save it as `~/.config/seo-audit/signatures/<host>.txt` — for example
+   `~/.config/seo-audit/signatures/www.example.com.txt` — and every run against
+   that host uses it, from the terminal, the window or the local server. Or
+   name it for one run with `--signature <file>`.
+
+It is a credential, and treated as one. It is sent to the one origin it was
+made for and to nothing else — not to outbound links, not to the CDN, not to
+the bare domain when it was made for `www.` — and it is never written into a
+report, a kept run or a progress line; the report says only that the crawl was
+signed and when the signature expires. An expired one is not sent, and the run
+says so. A signature made for the host a store redirects away from is not sent
+either, and the run says that too, because a crawl that went out unsigned looks
+exactly like a signed one being refused.
+
+In CI, keep it in a repository secret and pass it to the Action's `signature`
+input. A named `--signature` file is refused for a portfolio or `--serve`, where
+it would reach every site audited; per-host files have no such problem.
+
 ### Checking outbound links
 
 Off by default, and that's a judgement rather than an omission:
@@ -629,8 +668,9 @@ reason.
 | `--baseline <file>` | — | Compare against a previous `--json` run; show only what changed |
 | `--update-baseline` | — | Rewrite the baseline after comparing |
 | `--limit <n>` | 200 | Maximum pages to check |
-| `--concurrency <n>` | 6 | Parallel requests. Comes down on its own if the server answers `429` |
+| `--concurrency <n>` | 6 | Parallel requests. Drops to one, with starts spaced a second apart, the first time the server answers `429` — or from the first response, on a Shopify store |
 | `--sitemap <url>` | auto | If `robots.txt` doesn't declare one and it isn't at a usual path. Without any sitemap, the crawl follows links instead |
+| `--signature <file>` | `~/.config/seo-audit/signatures/<host>.txt` | A crawler signature from the store's own Shopify admin, sent to the audited host and nowhere else — see [Shopify stores](#shopify-stores) |
 | `--redirects <file>` | — | Check a migration's redirect map against the live site (see below) |
 | `--check-external` | — | Also check links pointing off the site (see below) |
 | `--browser <name>` | — | Crawl as `chrome`, `firefox`, `safari`, `edge`, `googlebot`, `googlebot-desktop` or `bingbot` |
@@ -848,6 +888,7 @@ Findings come at three levels: **error** (wrong, and costing traffic), **warning
 | Page returns 200 and is not a redirect listed in the sitemap | error |
 | The body is actually HTML — an XML or JSON file served as `text/html` is crawled and indexed as a page | warning |
 | A page the server answers `429` to is reported as rate limited, never as a page that failed — the crawl waits, slows down and comes back first | note |
+| A page bot protection answers instead of — a Cloudflare challenge, Shopify's "verify your connection" page, `403 Access denied`, Shopify's `430` — is reported as **not checked**, never as broken: visitors and Google are served it normally. A site's own `403` without those markers is still reported | note |
 | `noindex` on a page the sitemap advertises | error |
 | `X-Robots-Tag: noindex` — the same instruction as a header, invisible in the HTML | error |
 | `nofollow` on the page — Google follows none of its links, navigation included | warning |

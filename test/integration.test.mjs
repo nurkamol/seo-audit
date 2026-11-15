@@ -4,6 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startFixtureSite } from './server.mjs';
+import { parseSignature } from '../src/signature.mjs';
 import { audit, preview } from '../src/audit.mjs';
 import { markdown, html } from '../src/report.mjs';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
@@ -47,6 +48,103 @@ test('a link to a section that is not on the target page is found', () => {
   assert.match(found[0].detail, /#pricing/);
   assert.ok(!found[0].detail.includes('#team'), 'the anchor that exists is not reported');
   assert.match(found[0].url, /\/$/, 'reported against the home page, which carries the link');
+});
+
+test('a page bot protection refuses is not checked, and is not dropped from the sitemap', async () => {
+  // What a Shopify store sent this tool in November 2026: 403 from Cloudflare,
+  // "Access denied", on a product page every visitor and Google are served
+  // normally. Reported as "did not return 200" that is a false error; worse,
+  // the corrected sitemap leaves out anything that did not answer 200, so a
+  // blocked crawl would have written a sitemap with the products deleted.
+  const blockedSite = await startFixtureSite({ blocked: ['/about/'] });
+  try {
+    const run = await audit(blockedSite.origin, { writeSitemap: true });
+    const about = run.findings.filter((f) => f.url?.endsWith('/about/')).map((f) => f.id);
+    assert.ok(about.includes('crawler-blocked'), 'said to be not checked');
+    assert.ok(!about.includes('page-status'), 'never said to be broken');
+    assert.equal(run.sitemap.xml, null, 'no sitemap is written from a crawl that could not read every page');
+    assert.match(run.sitemap.refused, /refusing the crawler/);
+  } finally {
+    await blockedSite.stop();
+  }
+});
+
+// --- crawler signatures, through the whole audit ------------------------------
+
+const inDays = (d) => Math.floor(Date.now() / 1000) + d * 86400;
+const SECRET_VALUE = 'c2VjcmV0LXNpZ25hdHVyZS12YWx1ZQ==';
+const sigText = (expires = inDays(30)) =>
+  `Signature-Input: sig1=("@authority" "signature-agent");created=${inDays(-1)};expires=${expires};keyid="k1";tag="web-bot-auth"\n` +
+  `Signature: sig1=:${SECRET_VALUE}:\n`;
+
+test('a signed audit sends the signature on every request to the store, and writes it nowhere', async () => {
+  const received = [];
+  const site = await startFixtureSite({ onRequest: (req) => received.push(req.headers.signature ?? null) });
+  try {
+    const progress = [];
+    const run = await audit(site.origin, {
+      signatureFor: () => parseSignature(sigText()),
+      onProgress: (e) => progress.push(e),
+    });
+    assert.ok(received.length > 3);
+    assert.ok(received.every((v) => v === `sig1=:${SECRET_VALUE}:`), 'every request to the store carried it');
+    assert.ok(run.meta.signed?.expires, 'the report says the crawl was signed, and until when');
+
+    // A credential does not belong in a report, a kept run or a log line.
+    assert.ok(!JSON.stringify(run).includes(SECRET_VALUE), 'not in the result');
+    assert.ok(!JSON.stringify(progress).includes(SECRET_VALUE), 'not in the progress either');
+    assert.ok(progress.some((e) => e.phase === 'sign' && /and nowhere else/.test(e.detail)));
+  } finally {
+    await site.stop();
+  }
+});
+
+test('an expired signature is not sent, and the run says so rather than going quiet', async () => {
+  const received = [];
+  const site = await startFixtureSite({ onRequest: (req) => received.push(req.headers.signature ?? null) });
+  try {
+    const run = await audit(site.origin, { signatureFor: () => parseSignature(sigText(inDays(-3))) });
+    assert.ok(received.every((v) => v === null), 'nothing was sent');
+    const note = run.findings.find((f) => f.id === 'signature-unusable');
+    assert.match(note.title, /expired/);
+    assert.match(note.detail, /cannot be renewed/);
+    assert.equal(run.meta.signed, undefined);
+  } finally {
+    await site.stop();
+  }
+});
+
+test('a signature made for the bare domain is not sent to the www it redirects to', async () => {
+  // Shopify ties a signature to one domain. A store at www whose owner made
+  // the signature for the bare domain would otherwise crawl "signed", be
+  // refused, and be told the signature is invalid with no idea why.
+  const signedRequests = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const u = new URL(String(url));
+    if (init?.headers?.Signature) signedRequests.push(u.origin);
+    if (u.origin === 'https://store.test' && u.pathname === '/') {
+      return new Response('', { status: 301, headers: { location: 'https://www.store.test/' } });
+    }
+    if (u.origin === 'https://www.store.test' && u.pathname === '/') {
+      return new Response('<!doctype html><html lang="en"><head><title>Store</title></head><body><main><h1>Store</h1></main></body></html>',
+        { status: 200, headers: { 'content-type': 'text/html' } });
+    }
+    return new Response('not found', { status: 404, headers: { 'content-type': 'text/plain' } });
+  };
+  try {
+    const run = await audit('https://store.test', {
+      signatureFor: (host) => (host === 'store.test' ? parseSignature(sigText()) : null),
+      readCertificateExpiry: async () => null,
+    });
+    assert.ok(!signedRequests.includes('https://www.store.test'), 'www never received it');
+    const note = run.findings.find((f) => f.id === 'signature-unusable');
+    assert.match(note.title, /redirects away from/);
+    assert.match(note.detail, /www\.store\.test/);
+    assert.equal(run.meta.signed, undefined);
+  } finally {
+    globalThis.fetch = real;
+  }
 });
 
 test('the second h1 on /about/ is reported', () => {
@@ -358,6 +456,42 @@ test('the bare command never waits for input when nothing is a terminal', async 
 
   assert.equal(code, 2, 'expected the help exit code, not a hang');
   assert.match(stdout, /Usage/);
+});
+
+test('a named signature file is refused wherever it would reach more than one site', async () => {
+  // A file named with --signature answers for whatever host is audited. Right
+  // for one store; for a portfolio or the window's server it would hand one
+  // store's credential to every other site audited.
+  const { execFile } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'seo-audit.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'seo-audit-sig-'));
+  const file = join(dir, 'sig.txt');
+  writeFileSync(file, sigText());
+  const run = (args) => new Promise((resolve) => {
+    const child = execFile(process.execPath, [bin, ...args], { timeout: 10000 }, (err, stdout, stderr) =>
+      resolve({ code: err?.code ?? 0, stderr }));
+    child.stdin.end();
+  });
+  try {
+    const portfolio = await run(['https://one.test', 'https://two.test', '--signature', file]);
+    assert.equal(portfolio.code, 2);
+    assert.match(portfolio.stderr, /--signature is for one store/);
+
+    const served = await run(['--serve', '0', '--signature', file]);
+    assert.equal(served.code, 2);
+    assert.match(served.stderr, /signatures\/<host>\.txt/);
+
+    // And a file that is not a signature stops the run before it goes out
+    // unsigned and gets refused for reasons nobody could see.
+    writeFileSync(file, 'Signature: nope\n');
+    const broken = await run(['https://one.test', '--signature', file]);
+    assert.equal(broken.code, 2);
+    assert.match(broken.stderr, /--signature:/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a host that never answers is reported as unreachable, not as missing a sitemap', async () => {

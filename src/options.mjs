@@ -96,6 +96,7 @@ export const OPTIONS = [
 
 
   // --- not yet, and that is a decision rather than an oversight ------------
+  { flag: '--signature', query: null, app: 'no — a credential belongs in a file, not a field: the engine reads ~/.config/seo-audit/signatures/<host>.txt on its own, so the window already uses a store\'s signature when one is saved there' },
   { flag: '--search-console-login', query: null, app: 'no — it opens a browser and writes a credential to disk, which is a terminal errand, not a control in a window' },
   { flag: '--against', query: null, app: 'not yet — the window compares two kept runs instead of two live deployments' },
   { flag: '--compare-as', query: null, app: 'not yet — it fetches a sample of pages a second time, and the window has no control for spending that' },
