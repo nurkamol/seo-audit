@@ -49,8 +49,12 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   When a Shopify crawl is still refused, the report says the honest thing:
   Shopify limits unsigned crawlers however slowly they go, and the store's
   owner can lift that with a crawler signature (Online Store → Preferences →
-  Crawler access), which this tool cannot send yet. It no longer advises a
-  lower `--concurrency` that is already one.
+  Crawler access). Nothing in a Shopify report advises a lower `--concurrency`
+  any more — seven places did, across the orphan and host-variant notes, the
+  refused sitemap, llms.txt and structured data, the "nothing was read" note
+  and the preview — because the crawl is already at one, and that advice sent
+  people round a loop with no end. One sentence now gives the advice
+  everywhere, and on a Shopify store it points at the signature instead.
 
 - **The macOS window said "The request timed out." on a run that was only
   waiting.** It reads the engine's progress through `URLSession`, which gives up

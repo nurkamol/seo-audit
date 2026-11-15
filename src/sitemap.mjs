@@ -11,7 +11,7 @@
 // So this refuses to write anything from a run that did not see the whole site,
 // and says which run would.
 
-import { plural } from './text.mjs';
+import { plural, slowerAdvice } from './text.mjs';
 
 /** The five characters XML cannot carry raw. `&` first, or the others get
  *  their own ampersands escaped a second time. */
@@ -43,7 +43,7 @@ const REASONS = {
  * @param context   `{ entries, truncated, rateLimited, allowed }`
  */
 export function rebuild(pages, findings = [], context = {}) {
-  const { entries = [], truncated = 0, rateLimited = 0, allowed = () => true } = context;
+  const { entries = [], truncated = 0, rateLimited = 0, allowed = () => true, platform = null } = context;
 
   // --- when not to write anything ----------------------------------------
   if (truncated > 0) {
@@ -55,7 +55,7 @@ export function rebuild(pages, findings = [], context = {}) {
   if (rateLimited > 0) {
     return refuse(
       `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so whether they ` +
-        'belong in a sitemap is not known. Run again with a lower --concurrency.',
+        'belong in a sitemap is not known. ' + slowerAdvice(platform),
     );
   }
   // More linked-but-missing pages than the report enumerates. It says how many

@@ -14,7 +14,7 @@ import { linkGraph, key as graphKey } from './graph.mjs';
 
 import { attr, bodyKind, stripMarkupInAttributes } from './parse.mjs';
 import { cluster } from './dupes.mjs';
-import { plural } from './text.mjs';
+import { plural, slowerAdvice } from './text.mjs';
 import { throttled } from './http.mjs';
 
 // Defaults, overridable per site under `limits` in the config file. A
@@ -1049,7 +1049,10 @@ export function crossPageChecks(pages, opts = {}) {
     out.push(f('info', 'orphan-check-skipped', 'Orphan pages were not looked for',
       `A page is an orphan when nothing on the site links to it, and ${partial} — so the links that ` +
         'would prove otherwise may simply not have been read. Every page in a fragment of a site looks ' +
-        'unlinked. Raise --limit, or lower --concurrency if the pages were refused, and run it again.',
+        'unlinked. Raise --limit to read more of it.' +
+        (opts.platform === 'shopify'
+          ? ` If pages were refused: ${slowerAdvice('shopify')}`
+          : ' If pages were refused, lower --concurrency too, and run it again.'),
       anchorUrl));
   }
   // One graph, built once, read by the orphan check below, by click depth

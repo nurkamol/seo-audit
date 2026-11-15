@@ -16,7 +16,7 @@ import { signatureState } from './signature.mjs';
 import { psiChecks, psiTargets, estimateSeconds } from './psi.mjs';
 import { sectionOf } from './causes.mjs';
 import { rebuild, changedSince } from './sitemap.mjs';
-import { plural } from './text.mjs';
+import { plural, slowerAdvice } from './text.mjs';
 
 /** Sitemap URLs, following a sitemap index one level down.
  *
@@ -512,7 +512,7 @@ export async function audit(target, opts = {}) {
               `Tried: ${tried.join(', ')}. The server answered HTTP 429 — "ask later" — so this run ` +
               'never saw whether a sitemap is there, and followed links from the homepage instead, ' +
               `reaching ${plural(pages.length, 'page')}. This is a fact about the crawl, not about the site. ` +
-              'Run it again with a lower --concurrency, or pass --sitemap <url>.',
+              `${slowerAdvice(fetcher.platform)} Or pass --sitemap <url>.`,
             url: origin,
           }
         : {
@@ -537,7 +537,7 @@ export async function audit(target, opts = {}) {
               title: 'Nothing was read — the server rate limited this run',
               detail:
                 'Every request came back HTTP 429, so no page was read and nothing below is a ' +
-                'statement about the site. Wait, then run it again with a lower --concurrency. ' +
+                `statement about the site. Wait, then try again. ${slowerAdvice(fetcher.platform)} ` +
                 'Two runs back to back against the same host will do this on their own.',
               url: origin,
             }
@@ -574,7 +574,7 @@ export async function audit(target, opts = {}) {
   // far it is from the homepage, is the difference between a list of problems
   // and a list of work worth doing.
   const graph = linkGraph(pages.filter((p) => p.doc && p.res.ok), home);
-  findings.push(...crossPageChecks(pages, { limits: opts.limits, truncated, home, graph }));
+  findings.push(...crossPageChecks(pages, { limits: opts.limits, truncated, home, graph, platform: fetcher.platform }));
   // The same pages, asked for by somebody else. Only when asked for: it doubles
   // the request cost of every page it looks at.
   if (opts.compareAs) {
@@ -769,6 +769,7 @@ export async function audit(target, opts = {}) {
       entries,
       truncated,
       rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length,
+      platform: fetcher.platform,
       allowed: (url) => robotsVerdict(groups, new URL(url).pathname).allowed,
     });
   }
@@ -824,14 +825,14 @@ export async function audit(target, opts = {}) {
   // same rule as the sitemap: nothing invented, and a refusal rather than a
   // file built from a fraction of the site.
   const llms = opts.writeLlms
-    ? buildLlms(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length })
+    ? buildLlms(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length, platform: fetcher.platform })
     : null;
 
   // The structured data this site could add, from what it already says and
   // nothing else. Same refusals, and a fourth rule of its own: every value is
   // a string this crawl read off this site.
   const schema = opts.writeSchema
-    ? buildSchema(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length })
+    ? buildSchema(pages, { origin, truncated, rateLimited: kept.filter((f) => f.id === 'rate-limited' || f.id === 'crawler-blocked').length, platform: fetcher.platform })
     : null;
 
   return {
@@ -951,6 +952,8 @@ export async function preview(target, opts = {}) {
     redirected,
     reachable: fetcher.reachable,
     rateLimited: Boolean(rateLimited),
+    // So the advice for a refused preview can be the right one for the host.
+    platform: fetcher.platform,
     sitemap: source,
     tried,
     listed: urls.length,

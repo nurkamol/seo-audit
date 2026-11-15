@@ -10,7 +10,7 @@ import { similarity } from './dupes.mjs';
 import {
   resolve as resolveDns, certificateNames, collapseFleets, rankHosts, looksLikeStaging, NXDOMAIN,
 } from './dns.mjs';
-import { plural } from './text.mjs';
+import { plural, slowerAdvice } from './text.mjs';
 
 // Two weeks is enough to renew by hand if the automation has quietly stopped,
 // which is the failure this is for — nobody is short of warning about a
@@ -303,7 +303,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       // because it is the one the crawl has already been hammering.
       out.push(f('info', 'host-variant-not-checked', `${variant} was not checked`,
         'The server answered HTTP 429 — asking for a slower crawl — so whether this variant reaches ' +
-          'a page is not known. Run it again with a lower --concurrency.', variant));
+          `a page is not known. ${slowerAdvice(fetcher.platform)}`, variant));
     } else if (!final.ok) {
       out.push(f('warn', 'host-variant-dead', `${variant} does not resolve to a page`,
         final.error ? `Request failed: ${final.error}` : `Ends at HTTP ${final.status}`, variant));

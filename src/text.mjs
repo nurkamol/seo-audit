@@ -19,3 +19,17 @@ export function plural(n, one, many = `${one}s`) {
 export function noun(n, one, many = `${one}s`) {
   return n === 1 ? one : many;
 }
+
+/** What to do about a crawl the server refused — one sentence, used everywhere
+ *  that advice is given, and the right one for the platform.
+ *
+ *  On Shopify, "go slower" cannot help: the crawl is already at one page a
+ *  second the moment the store identifies itself, and Shopify limits unsigned
+ *  crawlers however slowly they go. Telling somebody to lower a concurrency
+ *  that is already one sends them round a loop that does not end. */
+export function slowerAdvice(platform) {
+  return platform === 'shopify'
+    ? 'On a Shopify store going slower does not help — the crawl already is. A crawler signature from ' +
+        "the store's own admin does: Online Store → Preferences → Crawler access."
+    : 'Run it again with a lower --concurrency.';
+}

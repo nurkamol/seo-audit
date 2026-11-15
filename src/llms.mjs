@@ -19,7 +19,7 @@
 // need a parser.
 
 import { sectionOf } from './causes.mjs';
-import { plural } from './text.mjs';
+import { plural, slowerAdvice } from './text.mjs';
 
 /** Markdown's structural characters, inside text that came off a page.
  *
@@ -51,7 +51,7 @@ const HOME = '/';
  * @param context   `{ origin, truncated, rateLimited, title, summary }`
  */
 export function buildLlms(pages, context = {}) {
-  const { origin = '', truncated = 0, rateLimited = 0 } = context;
+  const { origin = '', truncated = 0, rateLimited = 0, platform = null } = context;
 
   if (truncated > 0) {
     return refuse(
@@ -62,7 +62,7 @@ export function buildLlms(pages, context = {}) {
   if (rateLimited > 0) {
     return refuse(
       `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so what belongs ` +
-        'in this file is not known. Run again with a lower --concurrency.',
+        'in this file is not known. ' + slowerAdvice(platform),
     );
   }
 

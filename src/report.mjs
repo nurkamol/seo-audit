@@ -3,7 +3,7 @@
 
 import { byCause, causeScope, sectionOf } from './causes.mjs';
 import { CATEGORIES, categoryOf } from './areas.mjs';
-import { plural } from './text.mjs';
+import { slowerAdvice, plural } from './text.mjs';
 
 const COLOR = process.env.NO_COLOR === undefined && process.stdout.isTTY;
 const c = (code, s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : s);
@@ -1525,7 +1525,7 @@ export function dryRunReport(plan) {
 
   if (!plan.reachable) {
     out.push('', `  ${red('Nothing answered.')} ${plan.rateLimited
-      ? 'Every request came back HTTP 429 — wait, then try a lower --concurrency.'
+      ? `Every request came back HTTP 429. Wait, then try again. ${slowerAdvice(plan.platform)}`
       : 'The host did not return a single response.'}`);
     out.push('');
     return out.join('\n');

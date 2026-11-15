@@ -27,7 +27,7 @@
 //     prettified slug.
 
 import { GENERIC_ANCHORS, anchorPhrase } from './checks.mjs';
-import { plural } from './text.mjs';
+import { plural, slowerAdvice } from './text.mjs';
 
 const SCHEMA = 'https://schema.org';
 
@@ -160,7 +160,7 @@ function trail(page, byPath, anchors) {
  * @param context  `{ origin, truncated, rateLimited }`
  */
 export function buildSchema(pages, context = {}) {
-  const { origin = '', truncated = 0, rateLimited = 0 } = context;
+  const { origin = '', truncated = 0, rateLimited = 0, platform = null } = context;
 
   if (truncated > 0) {
     return refuse(
@@ -172,7 +172,7 @@ export function buildSchema(pages, context = {}) {
   if (rateLimited > 0) {
     return refuse(
       `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so the trails ` +
-        'through them cannot be built. Run again with a lower --concurrency.',
+        'through them cannot be built. ' + slowerAdvice(platform),
     );
   }
 

@@ -26,7 +26,7 @@ import { parseSignature, signatureState, SIGNATURE_AGENT } from '../src/signatur
 import { signatureForHost } from '../src/config.mjs';
 import { startFixtureSite } from './server.mjs';
 import { askForSite, isInteractive, invocation } from '../src/prompt.mjs';
-import { plural } from '../src/text.mjs';
+import { plural, slowerAdvice } from '../src/text.mjs';
 import {
   sinceWhen, keptSince, sortKept, sortAsked, rememberView, rememberedView,
 } from '../src/kept.mjs';
@@ -961,6 +961,23 @@ const linked = (path, targets = []) => linksWith(
   `https://depth.test${path}`,
   `<main>${targets.map((t) => `<a href="${t}">a link</a>`).join('')}</main>`,
 );
+
+test('advice for a refused crawl is the right advice for the platform', () => {
+  // A Shopify run drops to one page a second the moment the store identifies
+  // itself. Telling somebody to lower a concurrency that is already one sent
+  // them round a loop with no end — seven places said it.
+  assert.match(slowerAdvice(null), /lower --concurrency/);
+  assert.doesNotMatch(slowerAdvice('shopify'), /--concurrency/);
+  assert.match(slowerAdvice('shopify'), /Crawler access/);
+
+  const pages = [linked('/', ['/a/']), linked('/a/'), linked('/b/')];
+  const shopify = crossPageChecks(pages, { truncated: 125, platform: 'shopify' })
+    .find((f) => f.id === 'orphan-check-skipped');
+  assert.doesNotMatch(shopify.detail, /--concurrency/);
+  assert.match(shopify.detail, /Crawler access/);
+  const anywhere = crossPageChecks(pages, { truncated: 125 }).find((f) => f.id === 'orphan-check-skipped');
+  assert.match(anywhere.detail, /lower --concurrency/);
+});
 
 test('orphans are not looked for across a crawl that stopped early', () => {
   // The Shopify report that started this: 200 of 325 URLs crawled and 122
