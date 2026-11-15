@@ -128,6 +128,11 @@ test('every file that carries the version agrees about it', () => {
     'desktop/src-tauri/tauri.conf.json': JSON.parse(read('desktop/src-tauri/tauri.conf.json')).version,
     'desktop/src-tauri/Cargo.toml':
       read('desktop/src-tauri/Cargo.toml').match(/^version\s*=\s*"([^"]+)"/m)?.[1],
+    // The lock records the package's own version as well. Cargo rewrites it on
+    // build, so a stale one does not break anything — it shows up instead as a
+    // diff nobody made, and 1.41.0 shipped with this saying 1.40.1.
+    'desktop/src-tauri/Cargo.lock':
+      read('desktop/src-tauri/Cargo.lock').match(/name = "seo-audit"\nversion = "([^"]+)"/)?.[1],
   };
 
   const disagreeing = Object.entries(elsewhere)

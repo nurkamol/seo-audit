@@ -5,6 +5,58 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.0] — 2026-11-15
+
+### Added
+- **A Shopify store's owner can let its own audit through.** Since 30 May 2026
+  Shopify gives unsigned crawlers its strictest limits, and slowing down does
+  not get a full product crawl past them. The sanctioned way is Web Bot Auth: a
+  signature the owner creates under Online Store → Preferences → Crawler
+  access. Save its two values as `~/.config/seo-audit/signatures/<host>.txt`
+  and every front end on the machine uses it for that host — the window
+  included, without a field for pasting credentials into — or name a file for
+  one run with `--signature`. The Action takes it as a `signature` input, from a
+  secret, written to a file only the runner can read and deleted afterwards.
+
+  It is a credential and is handled as one. It goes to the one origin it was
+  made for and nowhere else: not to outbound links, the CDN, the same host over
+  `http`, or the bare domain when it was made for `www.`. It never appears in a
+  report, a kept run or a progress line; the report records only that the crawl
+  was signed and until when. An expired signature is not sent and the run says
+  so; one made for the host a store redirects away from is not sent either, and
+  the run says that too, because a crawl that went out unsigned looks exactly
+  like a signed one being refused. A named `--signature` file is refused for a
+  portfolio or `--serve`, where it would reach every site audited. The file
+  holds the three signature headers and nothing else — this is not a way to send
+  arbitrary headers.
+
+  A signed crawl is not slowed down up front the way an unsigned Shopify crawl
+  is, because the store has asked for it and Shopify gives signed traffic
+  higher limits; every back-off still applies the moment anything is refused.
+  The crawler still sends its own user agent: a signature is permission, not a
+  disguise.
+
+- **Links to a section inside a page are checked against what is there.**
+  `/guide#installing` resolves perfectly when `installing` has been renamed:
+  the page loads and the reader is left at the top of it, having asked for
+  something specific. Neither page is wrong on its own, which is why it
+  survives — it takes something holding the link and the target at once, and a
+  renamed heading breaks every link to it across the site in one go. Same-page
+  links are checked the same way, because a table of contents breaks exactly
+  like this.
+
+  Two guards, because a false positive here would be cheap to produce and
+  expensive to have: a target the crawl never fetched is not judged at all, and
+  a target that declares **no** ids anywhere is a page that builds them after
+  load — a single-page app — so nothing pointing into it is reported either.
+  `#top` needs no element, `#:~:text=` names words rather than an id, and both
+  are dropped before anything is counted. A percent-encoded fragment is matched
+  against the decoded id, the way a browser does.
+
+  Ran clean against jekyllrb.com, 11ty.dev and eslint.org — the check applied
+  on all three and found nothing, which is the result a conservative check
+  should give on sites that get this right.
+
 ### Fixed
 - **A Shopify store's bot protection was reported as the store being broken.**
   Since 30 May 2026 Shopify gives unsigned crawlers its strictest limits, and a
@@ -63,57 +115,6 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fifteen seconds, and every pause is announced as it starts — "the site asked
   for a slower crawl, waiting 60s" — so a quiet run reads as waiting in every
   front end rather than as stuck in one.
-
-### Added
-- **A Shopify store's owner can let its own audit through.** Since 30 May 2026
-  Shopify gives unsigned crawlers its strictest limits, and slowing down does
-  not get a full product crawl past them. The sanctioned way is Web Bot Auth: a
-  signature the owner creates under Online Store → Preferences → Crawler
-  access. Save its two values as `~/.config/seo-audit/signatures/<host>.txt`
-  and every front end on the machine uses it for that host — the window
-  included, without a field for pasting credentials into — or name a file for
-  one run with `--signature`. The Action takes it as a `signature` input, from a
-  secret, written to a file only the runner can read and deleted afterwards.
-
-  It is a credential and is handled as one. It goes to the one origin it was
-  made for and nowhere else: not to outbound links, the CDN, the same host over
-  `http`, or the bare domain when it was made for `www.`. It never appears in a
-  report, a kept run or a progress line; the report records only that the crawl
-  was signed and until when. An expired signature is not sent and the run says
-  so; one made for the host a store redirects away from is not sent either, and
-  the run says that too, because a crawl that went out unsigned looks exactly
-  like a signed one being refused. A named `--signature` file is refused for a
-  portfolio or `--serve`, where it would reach every site audited. The file
-  holds the three signature headers and nothing else — this is not a way to send
-  arbitrary headers.
-
-  A signed crawl is not slowed down up front the way an unsigned Shopify crawl
-  is, because the store has asked for it and Shopify gives signed traffic
-  higher limits; every back-off still applies the moment anything is refused.
-  The crawler still sends its own user agent: a signature is permission, not a
-  disguise.
-
-- **Links to a section inside a page are checked against what is there.**
-  `/guide#installing` resolves perfectly when `installing` has been renamed:
-  the page loads and the reader is left at the top of it, having asked for
-  something specific. Neither page is wrong on its own, which is why it
-  survives — it takes something holding the link and the target at once, and a
-  renamed heading breaks every link to it across the site in one go. Same-page
-  links are checked the same way, because a table of contents breaks exactly
-  like this.
-
-  Two guards, because a false positive here would be cheap to produce and
-  expensive to have: a target the crawl never fetched is not judged at all, and
-  a target that declares **no** ids anywhere is a page that builds them after
-  load — a single-page app — so nothing pointing into it is reported either.
-  `#top` needs no element, `#:~:text=` names words rather than an id, and both
-  are dropped before anything is counted. A percent-encoded fragment is matched
-  against the decoded id, the way a browser does.
-
-  Ran clean against jekyllrb.com, 11ty.dev and eslint.org — the check applied
-  on all three and found nothing, which is the result a conservative check
-  should give on sites that get this right.
-
 
 ## [1.41.0] — 2026-09-26
 
@@ -3624,7 +3625,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.41.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.42.0...HEAD
+[1.42.0]: https://github.com/nurkamol/seo-audit/compare/v1.41.0...v1.42.0
 [1.41.0]: https://github.com/nurkamol/seo-audit/compare/v1.40.1...v1.41.0
 [1.38.2]: https://github.com/nurkamol/seo-audit/compare/v1.38.1...v1.38.2
 [1.38.1]: https://github.com/nurkamol/seo-audit/compare/v1.38.0...v1.38.1

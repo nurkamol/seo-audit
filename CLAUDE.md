@@ -152,7 +152,9 @@ Bump the version in **four** files, not one — `package.json`,
 `desktop/src-tauri/Cargo.toml`. The shell refuses to start when its version and
 the engine's disagree, so a half-finished bump ships bundles that cannot run.
 `npm test` fails on the disagreement, which is the only reason that is a note
-rather than an outage.
+rather than an outage. `desktop/src-tauri/Cargo.lock` carries the package's own
+version too: Cargo rewrites it on build, so a stale one breaks nothing, but
+1.41.0 shipped with it saying 1.40.1, and `npm test` now checks it as well.
 
 That is the whole procedure. Pushing the version tag runs three workflows and
 none of them needs a hand:
