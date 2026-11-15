@@ -111,6 +111,12 @@ export class Fetcher {
     this.queue = [];
     this.active = 0;
     this.concurrency = concurrency;
+    /** What was asked for, so a slow-down applied only on suspicion can be
+     *  undone when the store turns out to have given its permission. */
+    this.initialConcurrency = concurrency;
+    /** True while the crawl is slow because of the platform rather than because
+     *  anything was refused. */
+    this.pacedUpFront = false;
     this.count = 0;
   }
 
@@ -121,6 +127,18 @@ export class Fetcher {
    *  follows a redirect from the bare domain to `www.`. */
   sign(signature) {
     this.signed = signature?.headers ? { origin: new URL(signature.origin).origin, headers: signature.headers } : null;
+    // A store usually serves its bare domain as a redirect to www, and Shopify
+    // answers that redirect — so the slow-down for an unsigned Shopify crawl
+    // was applied on the first response, before the signature for www could be
+    // adopted, and a signed crawl went at one page a second anyway. Lifted
+    // here, but only while nothing has been refused: a slow-down earned by a
+    // 429 stays, signed or not.
+    if (this.signed && this.pacedUpFront && this.rateLimited === 0) {
+      this.concurrency = this.initialConcurrency;
+      this.interval = 0;
+      this.pacedUpFront = false;
+      this.onPace?.({ platform: this.platform, lifted: true });
+    }
   }
 
   /** Wait out a rate limit, if one is in force. */
@@ -176,6 +194,7 @@ export class Fetcher {
     if (this.signed) return;
     this.concurrency = 1;
     this.interval = Math.max(this.interval, 1000);
+    this.pacedUpFront = true;
     this.onPace?.({ platform });
   }
 

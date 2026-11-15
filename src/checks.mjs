@@ -957,6 +957,9 @@ export function crossPageChecks(pages, opts = {}) {
   const LIMITS = { ...DEFAULT_LIMITS, ...(opts.limits ?? {}) };
   const out = [];
   const live = pages.filter((p) => p.doc && p.res.ok);
+  // Pages the server would not hand over — rate limited, or answered by bot
+  // protection. Advice about a refused crawl is only given when there was one.
+  const refusedPages = pages.filter((p) => p.res?.status === 429 || p.res?.blocked).length;
 
   const groupBy = (key) => {
     const map = new Map();
@@ -1050,9 +1053,13 @@ export function crossPageChecks(pages, opts = {}) {
       `A page is an orphan when nothing on the site links to it, and ${partial} — so the links that ` +
         'would prove otherwise may simply not have been read. Every page in a fragment of a site looks ' +
         'unlinked. Raise --limit to read more of it.' +
-        (opts.platform === 'shopify'
-          ? ` If pages were refused: ${slowerAdvice('shopify')}`
-          : ' If pages were refused, lower --concurrency too, and run it again.'),
+        // Only when it happened. Advice about refused pages on a run where none
+        // were refused told a store that had just signed its crawl to go and
+        // get a signature.
+        (refusedPages
+          ? ` ${plural(refusedPages, 'page was', 'pages were')} refused as well. ` +
+            slowerAdvice(opts.platform, { signed: opts.signed })
+          : ''),
       anchorUrl));
   }
   // One graph, built once, read by the orphan check below, by click depth

@@ -5,6 +5,23 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A signed Shopify crawl still went at one page a second.** A store's bare
+  domain is usually a redirect to `www.`, and Shopify answers that redirect —
+  so the slow-down for an unsigned Shopify crawl began on the very first
+  response, before the signature for `www.` could be adopted, and nothing
+  lifted it afterwards. Adopting a signature now lifts a slow-down that was
+  applied on suspicion, and says so; one earned by an actual refusal stays,
+  signed or not. Found on the first real signed run: 6 pages in 14.7 seconds
+  before, 10 in 4.5 after.
+
+- **A signed run with nothing refused was told to go and get a signature.** The
+  note on a crawl too short to look for orphans appended advice about refused
+  pages whether or not any were — and, on a Shopify store, that advice said to
+  create a crawler signature to a store that had just used one. It now speaks
+  only when pages were refused, says how many, and on a signed Shopify run says
+  the true thing: the signature was not accepted.
+
 ## [1.42.0] — 2026-11-15
 
 ### Added

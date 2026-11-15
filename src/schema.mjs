@@ -160,7 +160,7 @@ function trail(page, byPath, anchors) {
  * @param context  `{ origin, truncated, rateLimited }`
  */
 export function buildSchema(pages, context = {}) {
-  const { origin = '', truncated = 0, rateLimited = 0, platform = null } = context;
+  const { origin = '', truncated = 0, rateLimited = 0, platform = null, signed = false } = context;
 
   if (truncated > 0) {
     return refuse(
@@ -172,7 +172,7 @@ export function buildSchema(pages, context = {}) {
   if (rateLimited > 0) {
     return refuse(
       `${plural(rateLimited, 'page')} were never read because the server was rate limiting or refusing the crawler, so the trails ` +
-        'through them cannot be built. ' + slowerAdvice(platform),
+        'through them cannot be built. ' + slowerAdvice(platform, { signed }),
     );
   }
 

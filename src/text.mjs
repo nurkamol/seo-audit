@@ -27,7 +27,14 @@ export function noun(n, one, many = `${one}s`) {
  *  second the moment the store identifies itself, and Shopify limits unsigned
  *  crawlers however slowly they go. Telling somebody to lower a concurrency
  *  that is already one sends them round a loop that does not end. */
-export function slowerAdvice(platform) {
+export function slowerAdvice(platform, { signed = false } = {}) {
+  if (platform === 'shopify' && signed) {
+    // The store gave its permission and was still refused, which Shopify says
+    // means it did not accept the signature. Telling somebody holding one to
+    // go and create one would be advice for a different situation.
+    return 'A crawler signature was sent, so on a Shopify store a refusal means it was not accepted — ' +
+      'expired, made for the other one of the www and bare domains, or not copied whole.';
+  }
   return platform === 'shopify'
     ? 'On a Shopify store going slower does not help — the crawl already is. A crawler signature from ' +
         "the store's own admin does: Online Store → Preferences → Crawler access."

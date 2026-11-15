@@ -303,7 +303,7 @@ export async function siteChecks(origin, fetcher, pages, opts = {}) {
       // because it is the one the crawl has already been hammering.
       out.push(f('info', 'host-variant-not-checked', `${variant} was not checked`,
         'The server answered HTTP 429 — asking for a slower crawl — so whether this variant reaches ' +
-          `a page is not known. ${slowerAdvice(fetcher.platform)}`, variant));
+          `a page is not known. ${slowerAdvice(fetcher.platform, { signed: Boolean(fetcher.signed) })}`, variant));
     } else if (!final.ok) {
       out.push(f('warn', 'host-variant-dead', `${variant} does not resolve to a page`,
         final.error ? `Request failed: ${final.error}` : `Ends at HTTP ${final.status}`, variant));

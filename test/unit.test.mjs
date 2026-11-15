@@ -970,13 +970,58 @@ test('advice for a refused crawl is the right advice for the platform', () => {
   assert.doesNotMatch(slowerAdvice('shopify'), /--concurrency/);
   assert.match(slowerAdvice('shopify'), /Crawler access/);
 
+  assert.match(slowerAdvice('shopify', { signed: true }), /not accepted/,
+    'a store that signed its crawl is not told to go and sign it');
+  assert.doesNotMatch(slowerAdvice('shopify', { signed: true }), /Crawler access/);
+
   const pages = [linked('/', ['/a/']), linked('/a/'), linked('/b/')];
-  const shopify = crossPageChecks(pages, { truncated: 125, platform: 'shopify' })
-    .find((f) => f.id === 'orphan-check-skipped');
-  assert.doesNotMatch(shopify.detail, /--concurrency/);
-  assert.match(shopify.detail, /Crawler access/);
-  const anywhere = crossPageChecks(pages, { truncated: 125 }).find((f) => f.id === 'orphan-check-skipped');
-  assert.match(anywhere.detail, /lower --concurrency/);
+  const orphanNote = (list, opts) =>
+    crossPageChecks(list, { truncated: 125, ...opts }).find((f) => f.id === 'orphan-check-skipped').detail;
+
+  // Nothing refused: no advice about refusals at all. This is the run that
+  // found it — a signed crawl, every page 200, told to go and get a signature.
+  for (const opts of [{}, { platform: 'shopify' }, { platform: 'shopify', signed: true }]) {
+    const quiet = orphanNote(pages, opts);
+    assert.doesNotMatch(quiet, /refused|--concurrency|Crawler access/, JSON.stringify(opts));
+  }
+
+  // Something refused: the advice for the platform, and whether it was signed.
+  const refused = [...pages, { url: 'https://depth.test/c/', res: { status: 429, ok: false }, doc: null }];
+  assert.match(orphanNote(refused, {}), /1 page was refused as well\. Run it again with a lower --concurrency/);
+  assert.match(orphanNote(refused, { platform: 'shopify' }), /Crawler access/);
+  assert.match(orphanNote(refused, { platform: 'shopify', signed: true }), /not accepted/);
+});
+
+test('a signature lifts a slow-down applied on suspicion, but not one a refusal earned', async () => {
+  // A store's bare domain is a redirect Shopify answers, so the unsigned
+  // slow-down began on the first response — before the signature for www was
+  // adopted — and a signed crawl went at one page a second anyway.
+  const paced = [];
+  await withFetch(
+    () => new Response('', { status: 301, headers: { location: 'https://www.store.test/', 'powered-by': 'Shopify' } }),
+    async () => {
+      const fetcher = new Fetcher({ concurrency: 6, sleep: noWait, onPace: (e) => paced.push(e) });
+      await fetcher.get('https://store.test/');
+      assert.equal(fetcher.concurrency, 1, 'unsigned so far, so slowed');
+      fetcher.sign({ origin: 'https://www.store.test', headers: parseSignature(signatureFile()).headers });
+      assert.equal(fetcher.concurrency, 6, 'the store gave its permission');
+      assert.equal(fetcher.interval, 0);
+      assert.deepEqual(paced.at(-1), { platform: 'shopify', lifted: true }, 'and the front end is told why');
+    },
+  );
+
+  let n = 0;
+  await withFetch(
+    () => (++n === 1
+      ? new Response('slow down', { status: 429, headers: { 'content-type': 'text/plain', 'powered-by': 'Shopify' } })
+      : new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } })),
+    async () => {
+      const fetcher = new Fetcher({ concurrency: 6, sleep: noWait });
+      await fetcher.get('https://store.test/');
+      fetcher.sign({ origin: 'https://store.test', headers: parseSignature(signatureFile()).headers });
+      assert.equal(fetcher.concurrency, 1, 'a refusal is evidence; a signature does not argue with it');
+    },
+  );
 });
 
 test('orphans are not looked for across a crawl that stopped early', () => {
