@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.42.1] — 2026-11-15
+
 ### Fixed
 - **A signed Shopify crawl still went at one page a second.** A store's bare
   domain is usually a redirect to `www.`, and Shopify answers that redirect —
@@ -3642,7 +3644,8 @@ First working version.
 - Performance is out of scope on purpose — see the README.
 - Zero dependencies: Node 18+ and nothing else, so `npx` works on a bare machine.
 
-[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.42.0...HEAD
+[Unreleased]: https://github.com/nurkamol/seo-audit/compare/v1.42.1...HEAD
+[1.42.1]: https://github.com/nurkamol/seo-audit/compare/v1.42.0...v1.42.1
 [1.42.0]: https://github.com/nurkamol/seo-audit/compare/v1.41.0...v1.42.0
 [1.41.0]: https://github.com/nurkamol/seo-audit/compare/v1.40.1...v1.41.0
 [1.38.2]: https://github.com/nurkamol/seo-audit/compare/v1.38.1...v1.38.2
