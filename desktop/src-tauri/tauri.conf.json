@@ -40,6 +40,11 @@
     "publisher": "Nurkamol Vakhidov",
     "homepage": "https://github.com/nurkamol/seo-audit",
     "license": "MIT",
-    "copyright": "MIT licensed"
+    "copyright": "MIT licensed",
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/hooks.nsh"
+      }
+    }
   }
 }
