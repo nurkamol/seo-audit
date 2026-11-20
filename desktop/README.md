@@ -276,14 +276,57 @@ is that results are never sent to the publisher, so that is what it says now.
 `winget-releaser` carries the locale manifest forward on every later release,
 so wording fixed here is wording fixed once.
 
-A maintainer reviews the pull request. First submissions take a few days and
-can come back with questions; the installer being unsigned is allowed and is
-not on its own a reason for refusal.
+A maintainer reviews the pull request. The first one, 1.41.0, was opened on
+26 September 2026 and merged on 20 November, with no blockers and one optional
+note: the installer carries no Authenticode signature, and signing it would
+speed review. Unsigned is allowed and is not on its own a reason for refusal.
 
-**Until that merges, no Windows copy is a winget install**, so `winget upgrade`
-has nothing to move and the shell sends those copies to the release page. That
-is the correct behaviour, not a fallback — see [Updates](#updates) — but it
-means the winget row of that table is unreachable rather than untested.
+**Until a version has merged, no Windows copy is a winget install**, so
+`winget upgrade` has nothing to move and the shell sends those copies to the
+release page. That is the correct behaviour, not a fallback — see
+[Updates](#updates).
+
+## Versions tagged while winget was not ready
+
+The `winget` job exits cleanly when the package is not in `microsoft/winget-pkgs`
+yet, so a release tagged before the first submission merged was never sent.
+1.42.0 and 1.42.1 were. To send one now, re-run **only that run's `winget`
+job**:
+
+```bash
+gh run list -w "Desktop shell" --json databaseId,headBranch   # the tag's run
+gh run view <run id> --json jobs --jq '.jobs[] | "\(.databaseId) \(.name)"'
+gh run rerun <run id> --job <winget job id>
+```
+
+Never a `workflow_dispatch` with `tag` for this: that rebuilds the bundles and
+uploads the installer again, which is exactly the provenance problem that got
+1.38.1 refused. Re-running the one job reuses what the tag build attached.
+
+## Keep the fork synced
+
+winget-releaser starts by syncing your `winget-pkgs` fork with
+`microsoft/winget-pkgs`. When upstream has added or changed a workflow file
+since the last sync, GitHub refuses that from a token without the `workflow`
+scope, and `WINGET_TOKEN` only has `public_repo`. The job then fails with:
+
+```
+while merging 45866 upstream commits from microsoft/winget-pkgs into nurkamol/winget-pkgs
+Status 422: refusing to allow a Personal Access Token to create or update workflow
+`.github/workflows/…` without `workflow` scope
+```
+
+That is what happened to 1.42.1 on 20 November 2026. Sync the fork with your own
+login, which has the scope, and re-run the job as above:
+
+```bash
+gh repo sync nurkamol/winget-pkgs --source microsoft/winget-pkgs --branch master
+```
+
+Doing the same before tagging prevents it. Giving `WINGET_TOKEN` the `workflow`
+scope would also prevent it, but that lets a secret stored in this repository
+rewrite workflows in every public repository you own, so it is deliberately not
+done.
 
 [wr]: https://github.com/vedantmgoyal9/winget-releaser
 
@@ -293,12 +336,12 @@ All five phases. A version tag builds the three bundles, installs and runs each
 one on its runner, and attaches them to that release.
 
 The winget row of that table is the one thing that is not fully self-serving:
-submitting a manifest opens a pull request against `microsoft/winget-pkgs` and
-needs a `WINGET_TOKEN` secret this repository does not carry. Without it the
-release still ships a `setup.exe` — it is just not a winget install, so that
-copy is sent to the release page rather than offered `winget upgrade`. The job
-warns rather than passing quietly, because a release that did not publish looks
-exactly like one that did.
+each version is a pull request against `microsoft/winget-pkgs` that a moderator
+has to approve, and the job needs the `WINGET_TOKEN` secret and a synced fork
+(see above). Without the secret the release still ships a `setup.exe`; it is
+just not a winget install, so that copy is sent to the release page rather than
+offered `winget upgrade`. The job warns rather than passing quietly, because a
+release that did not publish looks exactly like one that did.
 
 ## A note on running it
 
