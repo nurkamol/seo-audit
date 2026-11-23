@@ -5,7 +5,7 @@ import { attr, bodyKind, parseHtml, parseSitemap, countWords } from '../src/pars
 import { matchGlob, applyIgnores, expectationChecks, resolveSites, optionsForSite, readSecret } from '../src/config.mjs';
 import { diff, serialize, parse as parseBaseline } from '../src/baseline.mjs';
 import { pageChecks, crossPageChecks, sitemapChecks, seriesOf } from '../src/checks.mjs';
-import { adoptSitemapHreflang } from '../src/audit.mjs';
+import { adoptSitemapHreflang, discover } from '../src/audit.mjs';
 import { byCause, causeScope, sectionOf } from '../src/causes.mjs';
 import { fingerprint, similarity, cluster } from '../src/dupes.mjs';
 import { rebuild, changedSince, describe as describeSitemap } from '../src/sitemap.mjs';
@@ -195,7 +195,7 @@ test('parseSitemap distinguishes an index from a urlset', () => {
   assert.deepEqual(parseSitemap('<urlset><url><loc>https://a.test/</loc></url></urlset>'), {
     urls: ['https://a.test/'],
     sitemaps: [],
-    entries: [{ loc: 'https://a.test/', lastmod: null, alternates: [] }],
+    entries: [{ loc: 'https://a.test/', lastmod: null, alternates: [], media: false }],
   });
   assert.deepEqual(
     parseSitemap('<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>'),
@@ -214,9 +214,9 @@ test('lastmod stays attached to its own loc', () => {
      </urlset>`,
   );
   assert.deepEqual(entries, [
-    { loc: 'https://a.test/one/', lastmod: '2026-01-02', alternates: [] },
-    { loc: 'https://a.test/two/', lastmod: null, alternates: [] },
-    { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00', alternates: [] },
+    { loc: 'https://a.test/one/', lastmod: '2026-01-02', alternates: [], media: false },
+    { loc: 'https://a.test/two/', lastmod: null, alternates: [], media: false },
+    { loc: 'https://a.test/three/', lastmod: '2026-03-04T10:00:00+00:00', alternates: [], media: false },
   ]);
 });
 
@@ -5787,4 +5787,43 @@ test('nothing is reported where the answer cannot be known', () => {
     withBody('https://x.test/guide/', '<h2 id="caf\u00e9">x</h2>'),
     withBody('https://x.test/start/', '<a href="/guide/#caf%C3%A9">go</a>'),
   ]);
+});
+
+// An image sitemap in the other standard shape — one entry per page, its photos inside — lists pages the page
+// sitemap already lists. Seen on an EmDash site (sitemap-pages.xml + sitemap/media.xml): the pages were crawled twice
+// and each was reported as a duplicate title, description and content of itself.
+const IMG = 'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"';
+const smUrlset = (entries) => `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" ${IMG}>${entries.join('')}</urlset>`;
+const smPage = (loc, extra = '') => `<url><loc>${loc}</loc>${extra}</url>`;
+const smPic = (src) => `<image:image><image:loc>${src}</image:loc></image:image>`;
+
+test('parseSitemap marks image and video entries', () => {
+  const { entries } = parseSitemap(smUrlset([smPage('https://x.test/', smPic('https://x.test/a.jpg')), smPage('https://x.test/b/')]));
+  assert.deepEqual(entries.map((e) => e.media), [true, false]);
+  assert.deepEqual(parseSitemap(smUrlset([smPage('https://x.test/', smPic('https://x.test/a.jpg'))])).urls, ['https://x.test/'], 'image:loc is not a page');
+});
+
+test('a page listed in a page sitemap and an image sitemap is crawled once and is not a duplicate listing', async () => {
+  const files = {
+    'https://x.test/robots.txt': 'Sitemap: https://x.test/sitemap.xml',
+    'https://x.test/sitemap.xml': '<sitemapindex><sitemap><loc>https://x.test/pages.xml</loc></sitemap><sitemap><loc>https://x.test/media.xml</loc></sitemap></sitemapindex>',
+    'https://x.test/pages.xml': smUrlset([smPage('https://x.test/', '<lastmod>2026-11-01</lastmod>'), smPage('https://x.test/about/', '<lastmod>2026-11-02</lastmod>'), smPage('https://x.test/faq/')]),
+    'https://x.test/media.xml': smUrlset([smPage('https://x.test/', smPic('https://x.test/1.webp') + smPic('https://x.test/2.webp')), smPage('https://x.test/about/', smPic('https://x.test/3.webp'))]),
+  };
+  const res = (url) => (files[url] ? { ok: true, status: 200, body: files[url] } : { ok: false, status: 404, body: '' });
+  const fetcher = { get: async (url) => res(url), chain: async (url) => ({ final: res(url) }) };
+  const found = await discover('https://x.test', fetcher);
+  assert.deepEqual(found.urls, ['https://x.test/', 'https://x.test/about/', 'https://x.test/faq/']);
+  assert.equal(found.entries.find((e) => e.loc === 'https://x.test/').lastmod, '2026-11-01', 'the dated entry wins over the image entry');
+  const dupes = sitemapChecks(found.entries, found.source, Date.parse('2026-11-23'), found.files).filter((x) => x.id === 'sitemap-duplicate-url');
+  assert.equal(dupes.length, 0);
+});
+
+test('a post sitemap that carries images is still a list of pages: a post also in another file is reported', () => {
+  const file = (url, locs, mediaOnly) => ({ url, urls: locs.length, bytes: 100, locs, mediaOnly });
+  const dupes = (files) => sitemapChecks([], 'https://x.test/sitemap.xml', Date.parse('2026-06-01'), files).filter((x) => x.id === 'sitemap-duplicate-url');
+  // Every post has an image (Yoast), and only one of them is also in the category sitemap.
+  assert.equal(dupes([file('https://x.test/post-sitemap.xml', ['https://x.test/p1/', 'https://x.test/p2/'], true), file('https://x.test/category-sitemap.xml', ['https://x.test/p1/'], false)]).length, 1);
+  // The image sitemap shape: every entry has media and every page is in the page sitemap.
+  assert.equal(dupes([file('https://x.test/pages.xml', ['https://x.test/', 'https://x.test/a/'], false), file('https://x.test/media.xml', ['https://x.test/'], true)]).length, 0);
 });

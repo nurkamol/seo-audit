@@ -5,6 +5,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **A page in both a page sitemap and an image sitemap was audited twice.** The
+  image sitemap that lists one entry per page with its photos inside (EmDash's
+  `sitemap/media.xml`) repeats pages the page sitemap already lists. Each was
+  crawled twice and reported as a duplicate title, description and content of
+  itself, plus "listed more than once". URLs from all files of an index are now
+  crawled once (the dated entry wins), and a file whose every entry carries
+  `<image:image>`/`<video:video>` and whose every page is listed elsewhere is
+  read as an image sitemap. A post sitemap with images (Yoast) is still a list
+  of pages and its duplicates are still reported.
+
 ## [1.42.1] — 2026-11-15
 
 ### Fixed

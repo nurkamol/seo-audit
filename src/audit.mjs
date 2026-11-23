@@ -24,7 +24,7 @@ import { plural, slowerAdvice } from './text.mjs';
  *  sitemap and guessing filenames only works for the conventions you thought
  *  of — Yoast writes `/sitemap_index.xml`, Astro writes `/sitemap-index.xml`,
  *  and both are wrong to assume. */
-async function discover(origin, fetcher, explicit) {
+export async function discover(origin, fetcher, explicit) {
   const tried = [];
   // A 429 is the server saying "ask later", which is not the same as "there is
   // no sitemap here". Reporting absence from a refusal to answer is a false
@@ -57,7 +57,7 @@ async function discover(origin, fetcher, explicit) {
     // rather than per site — a flattened total would report the wrong thing.
     // `locs` as well as the count, because a URL listed in two files of one
     // index cannot be seen from a flattened total.
-    const stat = (url, body, locs) => ({ url, urls: locs.length, bytes: Buffer.byteLength(body), locs });
+    const stat = (url, body, locs, entries = []) => ({ url, urls: locs.length, bytes: Buffer.byteLength(body), locs, mediaOnly: entries.length > 0 && entries.every((e) => e.media) });
 
     if (urls.length) {
       return {
@@ -74,13 +74,21 @@ async function discover(origin, fetcher, explicit) {
       const sub = (await fetcher.chain(child)).final;
       if (!sub.ok) return { urls: [], entries: [], files: [] };
       const parsed = parseSitemap(sub.body);
-      return { ...parsed, files: [stat(child, sub.body, parsed.urls)] };
+      return { ...parsed, files: [stat(child, sub.body, parsed.urls, parsed.entries)] };
     });
-    const all = nested.flatMap((n) => n.urls);
+    // A page listed in two files (a page sitemap and an image sitemap carrying its photos) is one page: crawled
+    // once, or every check that compares pages reports it as a copy of itself. The entry kept is the one with a
+    // lastmod, so an image sitemap's undated copy does not hide the date.
+    const all = [...new Set(nested.flatMap((n) => n.urls))];
     if (all.length) {
+      const byLoc = new Map();
+      for (const e of nested.flatMap((n) => n.entries)) {
+        const had = byLoc.get(e.loc);
+        if (!had || (!had.lastmod && e.lastmod)) byLoc.set(e.loc, e);
+      }
       return {
         urls: all,
-        entries: nested.flatMap((n) => n.entries),
+        entries: [...byLoc.values()],
         files: nested.flatMap((n) => n.files),
         source: candidate,
         tried,

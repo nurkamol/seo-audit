@@ -890,8 +890,15 @@ export function sitemapChecks(entries, source, now = Date.now(), files = []) {
   // image — wordpress.org's image-sitemap-1.xml has 681 entries for 28 pages,
   // repeating `/` more than forty times. A file whose locs are mostly repeats
   // is not listing pages, so it is not compared.
+  //
+  // The other image-sitemap shape is one entry per page with its images inside (`<image:image>` in every entry),
+  // repeating pages a page sitemap already lists. It is recognised by both at once — every entry carries media and
+  // every page is listed in another file — because an ordinary post sitemap carries images too (Yoast) and is a list
+  // of pages in its own right.
+  const elsewhere = (file) => (file.locs ?? []).every((loc) => files.some((other) => other !== file && (other.locs ?? []).includes(loc)));
   const listsPages = (file) => {
     const locs = file.locs ?? [];
+    if (file.mediaOnly && locs.length && elsewhere(file)) return false;
     return locs.length < 2 || new Set(locs).size > locs.length / 2;
   };
 

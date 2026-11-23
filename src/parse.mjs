@@ -426,6 +426,8 @@ export function parseSitemap(xml) {
       loc: decode(m[1].match(/<loc>\s*([^<\s]+)\s*<\/loc>/i)?.[1] ?? ''),
       lastmod: m[1].match(/<lastmod>\s*([^<\s]+)\s*<\/lastmod>/i)?.[1] ?? null,
       alternates: sitemapAlternates(m[1]),
+      // An image or video extension entry (`<image:image>`, `<video:video>`, any prefix bound to them).
+      media: /<[a-z0-9]+:(image|video)\b/i.test(m[1]),
     }))
     .filter((entry) => entry.loc);
 
